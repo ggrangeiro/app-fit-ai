@@ -1,0 +1,5 @@
+{
+  "name": "FitAI Analyzer",
+  "description": "Uma plataforma inteligente para análise de exercícios físicos utilizando a API do Gemini para correção de postura e contagem de repetições.",
+  "requestFramePermissions": []
+}
