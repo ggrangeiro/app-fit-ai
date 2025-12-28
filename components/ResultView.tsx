@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { AnalysisResult, ExerciseType } from '../types';
+import { AnalysisResult, ExerciseType, ExerciseRecord } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, ChevronRight, X, AlertTriangle, ThumbsUp, Info, Dumbbell } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, ChevronRight, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import MuscleMap from './MuscleMap';
-import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
+import { generateDietPlan, generateWorkoutPlan, generateProgressInsight } from '../services/geminiService';
+import { MockDataService } from '../services/mockDataService';
 
 interface ResultViewProps {
   result: AnalysisResult;
@@ -40,6 +41,13 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
     gender: 'masculino'
   });
 
+  // History / Evolution State
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false); // Loading state for the button
+  const [historyRecords, setHistoryRecords] = useState<ExerciseRecord[]>([]);
+  const [comparisonInsight, setComparisonInsight] = useState<string | null>(null);
+  const [loadingInsight, setLoadingInsight] = useState(false); // Loading state for the internal AI text
+
   const isHighPerformance = result.score > 80;
   const isPostureAnalysis = exercise === ExerciseType.POSTURE_ANALYSIS;
   const isBodyCompAnalysis = exercise === ExerciseType.BODY_COMPOSITION;
@@ -59,6 +67,37 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
       setWorkoutFormData(prev => ({ ...prev, gender: detectedGender }));
     }
   }, [result.gender]);
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true); // Start loading feedback on button
+    const user = MockDataService.getCurrentUser();
+    
+    if (user) {
+        // Fetch previous records
+        const allRecords = MockDataService.getHistoryByExercise(user.id, exercise);
+        const pastRecords = allRecords.filter(r => Math.abs(r.timestamp - Date.now()) > 2000); 
+        
+        setHistoryRecords(pastRecords);
+
+        if (pastRecords.length > 0) {
+            setLoadingInsight(true);
+            try {
+                // Generate insight before opening modal to ensure content is ready
+                const insight = await generateProgressInsight(result, pastRecords[0].result, exercise);
+                setComparisonInsight(insight);
+            } catch (e) {
+                console.error("Failed to generate insight");
+            } finally {
+                setLoadingInsight(false);
+            }
+        } else {
+             setComparisonInsight(null);
+        }
+    }
+    
+    setHistoryLoading(false); // Stop loading
+    setShowHistoryModal(true); // Open modal
+  };
 
   const handleGenerateDiet = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,7 +199,6 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
     );
   };
 
-  // Helper to render HTML content (used for both Diet and Workout)
   const renderGeneratedPlan = (htmlContent: string, title: string, icon: React.ReactNode, onClose: () => void, isDiet: boolean) => (
     <div className="w-full max-w-7xl mx-auto animate-fade-in pb-10">
       <style>{`
@@ -236,6 +274,128 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
   return (
     <div className="w-full max-w-6xl mx-auto animate-fade-in pb-10">
       
+      {/* HISTORY / EVOLUTION MODAL */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
+           <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-2xl relative shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <button onClick={() => setShowHistoryModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white z-10">
+                 <X className="w-6 h-6" />
+              </button>
+
+              <div className="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4">
+                 <div className="p-3 bg-indigo-500/20 text-indigo-400 rounded-full">
+                    <History className="w-6 h-6" />
+                 </div>
+                 <div>
+                    <h3 className="text-2xl font-bold text-white">Sua Evolução</h3>
+                    <p className="text-slate-400 text-sm">Histórico de {exercise}</p>
+                 </div>
+              </div>
+
+              {/* Latest AI Insight */}
+              <div className="mb-6 bg-gradient-to-r from-slate-800 to-slate-800/50 p-5 rounded-2xl border border-slate-700/50 relative">
+                 <div className="absolute -top-3 -right-3">
+                    <Sparkles className="w-8 h-8 text-yellow-500 fill-yellow-500/20 animate-pulse" />
+                 </div>
+                 <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">Análise de Progresso (IA)</h4>
+                 {loadingInsight ? (
+                    <div className="flex items-center gap-2 text-slate-400 text-sm">
+                       <Loader2 className="w-4 h-4 animate-spin" /> Comparando com a última sessão...
+                    </div>
+                 ) : (
+                    <p className="text-white text-lg leading-relaxed font-medium">
+                       "{comparisonInsight || (historyRecords.length === 0 ? "Esta é sua primeira avaliação. Continue assim para vermos seu progresso!" : "Analisando...")}"
+                    </p>
+                 )}
+              </div>
+
+              {/* Comparison List */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
+                 {/* Current Session (Sticky Top) */}
+                 <div className="bg-blue-600/10 border border-blue-500/30 p-4 rounded-xl flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                        <div>
+                           <span className="text-xs text-blue-300 font-bold uppercase">Resultado Atual (Hoje)</span>
+                           <div className="flex items-baseline gap-2">
+                              <span className="text-2xl font-bold text-white">{result.score}</span>
+                              <span className="text-sm text-slate-400">Score</span>
+                           </div>
+                        </div>
+                        <div className="text-right">
+                           <span className="block text-2xl font-bold text-white">
+                              {result.repetitions}{isBodyCompAnalysis && '%'}
+                           </span>
+                           <span className="text-xs text-slate-400 uppercase">{isBodyCompAnalysis ? 'Gordura' : 'Reps'}</span>
+                        </div>
+                    </div>
+                    {/* Items de Avaliação (Feedback List) */}
+                    <div className="border-t border-blue-500/20 pt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                        {result.feedback.map((f, i) => (
+                           <div key={i} className="flex justify-between text-xs">
+                              <span className="text-blue-200/70">{f.message}</span>
+                              <span className={`font-bold ${getScoreTextColor(f.score)}`}>{f.score}</span>
+                           </div>
+                        ))}
+                    </div>
+                 </div>
+
+                 {historyRecords.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500">
+                       <History className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                       <p>Nenhum histórico anterior para comparação.</p>
+                    </div>
+                 ) : (
+                    historyRecords.map((rec, idx) => {
+                       const scoreDiff = result.score - rec.result.score;
+                       const isImprovement = scoreDiff > 0;
+                       const isSame = scoreDiff === 0;
+
+                       return (
+                          <div key={rec.id} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex flex-col gap-3 hover:bg-slate-800 transition-colors">
+                             <div className="flex items-center justify-between">
+                                <div className="flex flex-col">
+                                    <span className="text-xs text-slate-500 font-mono">
+                                    {new Date(rec.timestamp).toLocaleDateString()}
+                                    </span>
+                                    <div className="flex items-center gap-3 mt-1">
+                                    <span className="text-xl font-bold text-slate-300">{rec.result.score}</span>
+                                    
+                                    {/* Comparison Badge vs Current */}
+                                    {idx === 0 && (
+                                        <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-bold border ${isImprovement ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : (isSame ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20')}`}>
+                                            {isImprovement ? <TrendingUp className="w-3 h-3" /> : (isSame ? <Minus className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
+                                            {Math.abs(scoreDiff)} pts {isImprovement ? 'abaixo' : (isSame ? '' : 'acima')} de hoje
+                                        </div>
+                                    )}
+                                    </div>
+                                </div>
+                                
+                                <div className="text-right">
+                                    <span className="block text-xl font-bold text-slate-400">
+                                    {rec.result.repetitions}{isBodyCompAnalysis && '%'}
+                                    </span>
+                                    <span className="text-[10px] text-slate-600 uppercase">{isBodyCompAnalysis ? 'Gordura' : 'Reps'}</span>
+                                </div>
+                             </div>
+
+                             {/* Items de Avaliação Passada */}
+                             <div className="border-t border-slate-700/50 pt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                                {rec.result.feedback.map((f, i) => (
+                                   <div key={i} className="flex justify-between text-xs">
+                                      <span className="text-slate-500">{f.message}</span>
+                                      <span className={`font-medium ${getScoreTextColor(f.score)}`}>{f.score}</span>
+                                   </div>
+                                ))}
+                             </div>
+                          </div>
+                       );
+                    })
+                 )}
+              </div>
+           </div>
+        </div>
+      )}
+
       {/* Modal Form for Diet */}
       {showDietForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
@@ -470,6 +630,15 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
             <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col items-center justify-center gap-2">
                  {renderStatsBox()}
             </div>
+            
+            <button 
+                onClick={fetchHistory}
+                disabled={historyLoading}
+                className="w-full py-3 px-4 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-indigo-500/30 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+                {historyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <History className="w-4 h-4" />}
+                <span>{historyLoading ? "Carregando Histórico..." : "Comparar Evolução"}</span>
+            </button>
             
             {/* ACTION BUTTONS (Only for Body Composition) */}
             {isBodyCompAnalysis && (

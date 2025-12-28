@@ -253,6 +253,45 @@ export const generateWorkoutPlan = async (
   }
 };
 
+export const generateProgressInsight = async (
+  currentResult: AnalysisResult,
+  previousResult: AnalysisResult,
+  exerciseType: string
+): Promise<string> => {
+  const isBodyComp = exerciseType === ExerciseType.BODY_COMPOSITION;
+  
+  const prompt = `
+    Compare dois resultados de análise de ${exerciseType}.
+    
+    DADOS ATUAIS (Hoje):
+    - Score/Qualidade: ${currentResult.score}/100
+    - ${isBodyComp ? '% Gordura' : 'Repetições'}: ${currentResult.repetitions}
+    - Feedback Principal: ${currentResult.formCorrection}
+
+    DADOS ANTERIORES (Passado):
+    - Score/Qualidade: ${previousResult.score}/100
+    - ${isBodyComp ? '% Gordura' : 'Repetições'}: ${previousResult.repetitions}
+
+    TAREFA:
+    Escreva um breve parágrafo (máximo 50 palavras) direto ao usuário comparando a evolução.
+    - Se melhorou, parabenize citando o que mudou.
+    - Se piorou, motive e diga para ter atenção.
+    - Se manteve, incentive a buscar o próximo nível.
+    
+    O tom deve ser de um "Coach Esportivo Parceiro". Use emojis.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+    });
+    return response.text || "Continue treinando para ver sua evolução!";
+  } catch (e) {
+    return "Não foi possível gerar o insight de evolução no momento.";
+  }
+};
+
 export const generateExerciseThumbnail = async (exerciseName: string): Promise<string> => {
   const prompt = `Professional fitness photography of a person performing ${exerciseName}. High resolution, gym environment, cinematic lighting.`;
   try {

@@ -143,6 +143,14 @@ export const MockDataService = {
       .sort((a, b) => b.timestamp - a.timestamp); // Newest first
   },
 
+  // Novo método para pegar histórico filtrado por exercício (ignorando o registro atual se ele acabou de ser salvo)
+  getHistoryByExercise: (userId: string, exercise: ExerciseType): ExerciseRecord[] => {
+    const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
+    return records
+      .filter(r => r.userId === userId && r.exercise === exercise)
+      .sort((a, b) => b.timestamp - a.timestamp); // Mais recente primeiro
+  },
+
   getAllHistory: (): ExerciseRecord[] => {
     const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
     return records.sort((a, b) => b.timestamp - a.timestamp);
