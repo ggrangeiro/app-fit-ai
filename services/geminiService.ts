@@ -32,9 +32,10 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
     Seu trabalho é:
     1. Contar as repetições válidas.
     2. Avaliar a técnica e a forma (postura, amplitude de movimento, cadência).
-    3. Atribuir uma nota de 0 a 100 baseada na qualidade da execução.
-    4. Identificar os principais grupos musculares trabalhados.
-    5. Fornecer feedback construtivo e dicas de correção específicas.
+    3. Atribuir uma nota GERAL de 0 a 100.
+    4. Identificar pontos específicos de feedback (ex: "Coluna alinhada", "Joelho valgo", "Amplitude insuficiente") e dar uma nota de 0 a 100 para CADA ponto específico.
+    5. Fornecer uma correção principal detalhada.
+    6. Listar grupos musculares.
 
     Responda EXCLUSIVAMENTE em formato JSON seguindo o schema fornecido.
   `;
@@ -49,12 +50,19 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          score: { type: Type.NUMBER, description: "Nota de 0 a 100 para a execução." },
+          score: { type: Type.NUMBER, description: "Nota GERAL de 0 a 100 para a execução." },
           repetitions: { type: Type.NUMBER, description: "Número de repetições completas e válidas." },
           feedback: { 
             type: Type.ARRAY, 
-            items: { type: Type.STRING },
-            description: "Lista de pontos positivos e negativos sobre a execução." 
+            items: { 
+              type: Type.OBJECT,
+              properties: {
+                message: { type: Type.STRING, description: "Descrição do aspecto observado (positivo ou negativo)." },
+                score: { type: Type.NUMBER, description: "Nota de 0 a 100 específica para este aspecto." }
+              },
+              required: ["message", "score"]
+            },
+            description: "Lista de pontos observados com suas respectivas notas de qualidade." 
           },
           formCorrection: { type: Type.STRING, description: "Um parágrafo detalhado sobre como corrigir a postura." },
           muscleGroups: { 

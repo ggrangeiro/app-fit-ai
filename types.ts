@@ -6,10 +6,15 @@ export enum ExerciseType {
   PLANK = 'Prancha (Plank)'
 }
 
+export interface FeedbackItem {
+  message: string;
+  score: number;
+}
+
 export interface AnalysisResult {
   score: number;
   repetitions: number;
-  feedback: string[];
+  feedback: FeedbackItem[];
   formCorrection: string;
   muscleGroups: string[];
 }
