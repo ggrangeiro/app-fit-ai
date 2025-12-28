@@ -15,7 +15,11 @@ export enum ExerciseType {
   DEADLIFT = 'Levantamento Terra (Deadlift)',
   TRICEP_DIP = 'Tríceps Banco (Dips)',
   BICEP_CURL = 'Rosca Direta (Bicep Curl)',
-  CABLE_CROSSOVER = 'Crucifixo no Cross Over'
+  CABLE_CROSSOVER = 'Crucifixo no Cross Over',
+  
+  // Special Analysis
+  POSTURE_ANALYSIS = 'Análise de Postura (Biofeedback)',
+  BODY_COMPOSITION = 'Análise Corporal (Biotipo & Gordura)'
 }
 
 export interface FeedbackItem {
@@ -25,7 +29,7 @@ export interface FeedbackItem {
 
 export interface AnalysisResult {
   score: number;
-  repetitions: number;
+  repetitions: number; // For Body Composition, this acts as BF%
   feedback: FeedbackItem[];
   formCorrection: string;
   muscleGroups: string[];

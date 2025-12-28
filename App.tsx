@@ -7,7 +7,7 @@ import ExerciseCard from './components/ExerciseCard';
 import ResultView from './components/ResultView';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Camera, Smartphone, Zap, LogOut, User as UserIcon } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Camera, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Image as ImageIcon, Scale, Activity } from 'lucide-react';
 
 // ============================================================================
 // PARA TROCAR AS FOTOS DOS CARDS:
@@ -33,7 +33,11 @@ const DEFAULT_EXERCISE_IMAGES: Record<ExerciseType, string> = {
   [ExerciseType.DEADLIFT]: "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
   [ExerciseType.TRICEP_DIP]: "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
   [ExerciseType.BICEP_CURL]: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop",
-  [ExerciseType.CABLE_CROSSOVER]: "https://images.unsplash.com/photo-1534367507873-d2d7e24c797f?q=80&w=800&auto=format&fit=crop"
+  [ExerciseType.CABLE_CROSSOVER]: "https://images.unsplash.com/photo-1534367507873-d2d7e24c797f?q=80&w=800&auto=format&fit=crop",
+
+  // Special
+  [ExerciseType.POSTURE_ANALYSIS]: "https://images.unsplash.com/photo-1544367563-12123d8959eb?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.BODY_COMPOSITION]: "https://images.unsplash.com/photo-1518310383802-640c2de311b2?q=80&w=800&auto=format&fit=crop"
 };
 
 const EXERCISE_TIPS: Record<ExerciseType, string[]> = {
@@ -126,6 +130,18 @@ const EXERCISE_TIPS: Record<ExerciseType, string[]> = {
     "Concentre a força no peitoral, imagine que está abraçando uma árvore.",
     "Não deixe os ombros subirem em direção às orelhas.",
     "Controle a fase excêntrica (volta), não deixe o peso despencar."
+  ],
+  [ExerciseType.POSTURE_ANALYSIS]: [
+    "Fique parado em uma posição natural e relaxada.",
+    "Tente mostrar o corpo inteiro (da cabeça aos pés).",
+    "Use roupas que permitam ver o contorno do corpo.",
+    "Tire uma foto (frente/lado) ou grave um vídeo curto."
+  ],
+  [ExerciseType.BODY_COMPOSITION]: [
+    "Use roupas de banho ou justas para melhor precisão.",
+    "Tire fotos de frente, lado e costas em local iluminado.",
+    "Não contraia o abdômen, mantenha a pose natural.",
+    "A análise visual é uma estimativa e não substitui exame clínico."
   ]
 };
 
@@ -133,8 +149,8 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [step, setStep] = useState<AppStep>(AppStep.LOGIN);
   const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
@@ -188,8 +204,8 @@ const App: React.FC = () => {
 
   const resetAnalysis = () => {
     setSelectedExercise(null);
-    setVideoFile(null);
-    setVideoPreview(null);
+    setMediaFile(null);
+    setMediaPreview(null);
     setAnalysisResult(null);
     setError(null);
   };
@@ -197,29 +213,40 @@ const App: React.FC = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.size > 200 * 1024 * 1024) { 
+      const isVideo = file.type.startsWith('video/');
+      const isImage = file.type.startsWith('image/');
+
+      if (!isVideo && !isImage) {
+        setError("Formato de arquivo inválido. Por favor envie vídeo ou imagem.");
+        return;
+      }
+
+      if (isVideo && file.size > 200 * 1024 * 1024) { 
         setError("O vídeo é muito grande (>200MB). Por favor grave um vídeo mais curto.");
         return;
       }
-      setVideoFile(file);
-      setVideoPreview(URL.createObjectURL(file));
+      
+      setMediaFile(file);
+      setMediaPreview(URL.createObjectURL(file));
       setError(null);
     }
   };
 
   const handleAnalysis = async () => {
-    if (!videoFile || !selectedExercise || !currentUser) return;
+    if (!mediaFile || !selectedExercise || !currentUser) return;
 
     try {
-      let finalFile = videoFile;
+      let finalFile = mediaFile;
+      const isVideo = mediaFile.type.startsWith('video/');
 
-      if (videoFile.size > 20 * 1024 * 1024) {
+      // Only compress videos, and only if they are somewhat large
+      if (isVideo && mediaFile.size > 20 * 1024 * 1024) {
          setStep(AppStep.COMPRESSING);
          try {
-           finalFile = await compressVideo(videoFile);
+           finalFile = await compressVideo(mediaFile);
          } catch (compressError: any) {
            console.error("Compression failed:", compressError);
-           setError(compressError.message || "Falha ao otimizar o vídeo. Tente um vídeo menor.");
+           setError(compressError.message || "Falha ao otimizar o vídeo. Tente um arquivo menor.");
            setStep(AppStep.UPLOAD_VIDEO);
            return;
          }
@@ -238,7 +265,7 @@ const App: React.FC = () => {
 
     } catch (err: any) {
       console.error(err);
-      setError("Ocorreu um erro ao processar o vídeo. Tente novamente.");
+      setError("Ocorreu um erro ao processar o arquivo. Tente novamente.");
       setStep(AppStep.UPLOAD_VIDEO);
     }
   };
@@ -256,12 +283,20 @@ const App: React.FC = () => {
 
   // Get visible exercises based on permissions
   const availableExercises = Object.values(ExerciseType).filter(ex => {
-    if (!currentUser || currentUser.role === 'admin') return true; // Admins see all for demo (or none if they don't do exercises)
+    if (!currentUser || currentUser.role === 'admin') return true; // Admins see all for demo
     if (currentUser.assignedExercises && currentUser.assignedExercises.length > 0) {
       return currentUser.assignedExercises.includes(ex);
     }
     return false; // User has no exercises
   });
+
+  // Separate Special Analysis from grid exercises for manual placement
+  const specialExercises = [ExerciseType.POSTURE_ANALYSIS, ExerciseType.BODY_COMPOSITION];
+  const gridExercises = availableExercises.filter(ex => !specialExercises.includes(ex));
+
+  // Helper to determine accepted file types based on mode
+  const isSpecialMode = selectedExercise && specialExercises.includes(selectedExercise);
+  const acceptedFileTypes = isSpecialMode ? "video/*,image/*" : "video/*";
 
   return (
     <div className="min-h-screen flex flex-col font-[Plus Jakarta Sans]">
@@ -310,26 +345,91 @@ const App: React.FC = () => {
         {/* VIEW: EXERCISE SELECTION (User) */}
         {step === AppStep.SELECT_EXERCISE && (
           <div className="w-full max-w-6xl animate-fade-in flex flex-col items-center">
-            <div className="text-center mb-10 max-w-2xl mt-4 md:mt-0">
+            <div className="text-center mb-8 max-w-2xl mt-4 md:mt-0">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4 border border-blue-500/20">
-                <Sparkles className="w-3 h-3" /> Sua Ficha de Treino
+                <Sparkles className="w-3 h-3" /> Sua Área de Treino
               </div>
-              <h2 className="text-3xl md:text-5xl font-bold text-white mb-6 leading-tight">
+              <h2 className="text-3xl md:text-5xl font-bold text-white leading-tight">
                 Olá, {currentUser?.name.split(' ')[0]}! <br/> 
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
-                  Qual o treino de hoje?
+                  O que vamos fazer hoje?
                 </span>
               </h2>
             </div>
             
-            {availableExercises.length === 0 ? (
+            {/* Quick Actions / Mode Selection */}
+            {availableExercises.length > 0 && (
+              <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                {/* Left Column: Workout Mode */}
+                <button 
+                  className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 group hover:bg-blue-600/20 transition-all border-dashed border-2 border-slate-700 hover:border-blue-500/50 relative overflow-hidden h-full min-h-[160px]"
+                  onClick={() => {
+                    const el = document.getElementById('exercise-grid');
+                    if(el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                >
+                   <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg shadow-blue-900/30 group-hover:scale-110 transition-transform relative z-10">
+                      <Video className="w-8 h-8" />
+                   </div>
+                   <div className="text-center relative z-10">
+                      <h3 className="text-white font-bold text-xl group-hover:text-blue-200 transition-colors">Gravar Treino</h3>
+                      <p className="text-slate-400 text-sm">Contagem e correção de exercícios</p>
+                   </div>
+                </button>
+
+                {/* Right Column: Analysis Modes (Stacked) */}
+                <div className="flex flex-col gap-3">
+                  {/* 1. Posture Analysis */}
+                  {availableExercises.includes(ExerciseType.POSTURE_ANALYSIS) && (
+                     <button 
+                      className="glass-panel p-5 rounded-2xl flex items-center justify-start gap-4 group hover:bg-emerald-600/20 transition-all border-2 border-emerald-500/30 hover:border-emerald-500 relative overflow-hidden flex-1"
+                      onClick={() => {
+                          setSelectedExercise(ExerciseType.POSTURE_ANALYSIS);
+                          setStep(AppStep.UPLOAD_VIDEO);
+                      }}
+                    >
+                       <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                       <div className="p-3 bg-emerald-600 rounded-full text-white shadow-lg shadow-emerald-900/30 group-hover:scale-110 transition-transform relative z-10 shrink-0">
+                          <ScanLine className="w-5 h-5" />
+                       </div>
+                       <div className="text-left relative z-10">
+                          <h3 className="text-white font-bold text-lg group-hover:text-emerald-200 transition-colors">Analisar Postura</h3>
+                          <p className="text-slate-400 text-xs">Biofeedback Postural (Foto/Vídeo)</p>
+                       </div>
+                    </button>
+                  )}
+
+                  {/* 2. Body Composition Analysis (New) */}
+                  {availableExercises.includes(ExerciseType.BODY_COMPOSITION) && (
+                     <button 
+                      className="glass-panel p-5 rounded-2xl flex items-center justify-start gap-4 group hover:bg-violet-600/20 transition-all border-2 border-violet-500/30 hover:border-violet-500 relative overflow-hidden flex-1"
+                      onClick={() => {
+                          setSelectedExercise(ExerciseType.BODY_COMPOSITION);
+                          setStep(AppStep.UPLOAD_VIDEO);
+                      }}
+                    >
+                       <div className="absolute inset-0 bg-violet-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                       <div className="p-3 bg-violet-600 rounded-full text-white shadow-lg shadow-violet-900/30 group-hover:scale-110 transition-transform relative z-10 shrink-0">
+                          <Scale className="w-5 h-5" />
+                       </div>
+                       <div className="text-left relative z-10">
+                          <h3 className="text-white font-bold text-lg group-hover:text-violet-200 transition-colors">Análise Corporal</h3>
+                          <p className="text-slate-400 text-xs">Estética, Biotipo & % Gordura</p>
+                       </div>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {gridExercises.length === 0 ? (
               <div className="w-full max-w-md bg-slate-800/50 p-8 rounded-3xl text-center border border-slate-700">
                 <p className="text-slate-300 mb-2">Você ainda não possui exercícios atribuídos.</p>
                 <p className="text-sm text-slate-500">Peça ao seu treinador para atualizar sua ficha.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 w-full mb-12">
-                {availableExercises.map((type) => (
+              <div id="exercise-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 w-full mb-12">
+                {gridExercises.map((type) => (
                   <ExerciseCard
                     key={type}
                     type={type}
@@ -341,18 +441,18 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {availableExercises.length > 0 && (
+            {gridExercises.length > 0 && (
               <button
                 disabled={!selectedExercise}
                 onClick={() => setStep(AppStep.UPLOAD_VIDEO)}
                 className={`
-                  w-full md:w-auto group flex items-center justify-center gap-3 px-10 py-5 rounded-full text-lg font-bold transition-all duration-300
+                  w-full md:w-auto group flex items-center justify-center gap-3 px-10 py-5 rounded-full text-lg font-bold transition-all duration-300 sticky bottom-8 z-40 shadow-2xl
                   ${selectedExercise 
-                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-xl shadow-blue-600/20 hover:shadow-blue-600/40 transform hover:-translate-y-1' 
-                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/40 transform hover:-translate-y-1' 
+                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700 opacity-0 pointer-events-none'}
                 `}
               >
-                Continuar
+                Continuar para Gravação
                 <ArrowRight className={`w-5 h-5 transition-transform ${selectedExercise ? 'group-hover:translate-x-1' : ''}`} />
               </button>
             )}
@@ -365,25 +465,29 @@ const App: React.FC = () => {
             <div className="glass-panel rounded-3xl p-6 md:p-12 shadow-2xl">
               <div className="text-center mb-8">
                 <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Registro de Execução</h2>
-                <p className="text-slate-400 text-sm md:text-base">Grave ou envie um vídeo fazendo: <br className="md:hidden"/><span className="text-blue-400 font-semibold">{selectedExercise}</span></p>
+                <p className="text-slate-400 text-sm md:text-base">
+                  Grave ou envie {isSpecialMode ? "uma foto ou vídeo" : "um vídeo"} de: <br className="md:hidden"/>
+                  <span className="text-blue-400 font-semibold">{selectedExercise}</span>
+                </p>
               </div>
               
               <div className="flex flex-col gap-4 mb-8">
                 {/* 1. Mobile-First Camera Button */}
-                {!videoFile && (
+                {!mediaFile && (
                   <label 
                     htmlFor="camera-upload"
                     className="w-full py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-2xl flex items-center justify-center gap-3 cursor-pointer shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-all border border-blue-400/20"
                   >
                     <div className="bg-white/20 p-2 rounded-full">
-                      <Camera className="w-6 h-6 text-white" />
+                      {isSpecialMode ? <ImageIcon className="w-6 h-6 text-white" /> : <Camera className="w-6 h-6 text-white" />}
                     </div>
-                    <span className="text-white font-bold text-lg">Gravar Agora</span>
+                    <span className="text-white font-bold text-lg">{isSpecialMode ? 'Tirar Foto ou Gravar' : 'Gravar Agora'}</span>
                     <input 
                       id="camera-upload" 
                       type="file" 
-                      accept="video/*" 
-                      capture="user"
+                      accept={acceptedFileTypes}
+                      // For special modes, we default to standard file picker to allow selfie cam switch etc easily
+                      capture={isSpecialMode ? undefined : "user"} 
                       className="hidden" 
                       onChange={handleFileChange} 
                     />
@@ -395,41 +499,51 @@ const App: React.FC = () => {
                   htmlFor="video-upload" 
                   className={`
                     group relative flex flex-col items-center justify-center w-full rounded-2xl cursor-pointer transition-all duration-300 overflow-hidden
-                    ${videoFile 
+                    ${mediaFile 
                       ? 'bg-black border border-slate-700 h-auto aspect-video' 
                       : 'h-48 md:h-64 border-2 border-dashed border-slate-600 bg-slate-800/30 hover:bg-slate-800 hover:border-blue-500'}
                   `}
                 >
-                  {videoPreview ? (
-                    <video 
-                      src={videoPreview} 
-                      className="h-full w-full object-contain" 
-                      controls={false} 
-                      autoPlay 
-                      muted 
-                      loop 
-                      playsInline
-                    />
+                  {mediaPreview ? (
+                    // Logic to render Image or Video tag
+                    mediaFile?.type.startsWith('image/') ? (
+                      <img 
+                        src={mediaPreview} 
+                        className="h-full w-full object-contain" 
+                        alt="Preview"
+                      />
+                    ) : (
+                      <video 
+                        src={mediaPreview} 
+                        className="h-full w-full object-contain" 
+                        controls={false} 
+                        autoPlay 
+                        muted 
+                        loop 
+                        playsInline
+                      />
+                    )
                   ) : (
                     <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
                       <div className="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center mb-3 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors">
                         <UploadCloud className="w-6 h-6 text-slate-300 group-hover:text-blue-400" />
                       </div>
                       <p className="text-slate-200 font-medium">Escolher da Galeria</p>
+                      <p className="text-slate-500 text-xs mt-1">{isSpecialMode ? "Fotos ou Vídeos" : "Apenas Vídeos"}</p>
                     </div>
                   )}
                   <input 
                     id="video-upload" 
                     type="file" 
-                    accept="video/*" 
+                    accept={acceptedFileTypes}
                     className="hidden" 
                     onChange={handleFileChange} 
                   />
                   
-                  {videoFile && (
+                  {mediaFile && (
                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
                       <span className="bg-white/10 backdrop-blur px-4 py-2 rounded-full text-white font-medium border border-white/20 flex items-center gap-2">
-                        <Smartphone className="w-4 h-4" /> Alterar vídeo
+                        <Smartphone className="w-4 h-4" /> Alterar arquivo
                       </span>
                     </div>
                   )}
@@ -450,17 +564,19 @@ const App: React.FC = () => {
                   Voltar
                 </button>
                 <button
-                  disabled={!videoFile}
+                  disabled={!mediaFile}
                   onClick={handleAnalysis}
                   className={`
                     flex-1 px-8 py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-3 text-lg
-                    ${videoFile
+                    ${mediaFile
                       ? 'bg-white text-blue-900 hover:bg-slate-100 shadow-lg transform hover:-translate-y-0.5' 
                       : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}
                   `}
                 >
-                  {videoFile ? <Sparkles className="w-5 h-5 text-blue-600" /> : null}
-                  Analisar Movimento
+                  {mediaFile ? <Sparkles className="w-5 h-5 text-blue-600" /> : null}
+                  {selectedExercise === ExerciseType.POSTURE_ANALYSIS 
+                    ? 'Analisar Postura' 
+                    : (selectedExercise === ExerciseType.BODY_COMPOSITION ? 'Analisar Composição' : 'Analisar Movimento')}
                 </button>
               </div>
             </div>

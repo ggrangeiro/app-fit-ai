@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale } from 'lucide-react';
 import MuscleMap from './MuscleMap';
 
 interface ResultViewProps {
@@ -14,6 +14,10 @@ interface ResultViewProps {
 const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSave }) => {
   const [saved, setSaved] = useState(false);
   const isHighPerformance = result.score > 80;
+  
+  // Feature Flags based on Exercise Type
+  const isPostureAnalysis = exercise === ExerciseType.POSTURE_ANALYSIS;
+  const isBodyCompAnalysis = exercise === ExerciseType.BODY_COMPOSITION;
 
   useEffect(() => {
     // Auto-save logic could go here, but we'll leave it to the parent or explicit action
@@ -32,9 +36,9 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
   ];
 
   const getScoreMessage = (score: number) => {
-    if (score >= 90) return "Execução de Elite!";
+    if (score >= 90) return isPostureAnalysis || isBodyCompAnalysis ? "Excelente!" : "Execução de Elite!";
     if (score >= 70) return "Muito Bom!";
-    if (score >= 50) return "Caminho Certo";
+    if (score >= 50) return isPostureAnalysis ? "Atenção Moderada" : "Caminho Certo";
     return "Precisa de Ajustes";
   };
 
@@ -48,6 +52,43 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
     if (score >= 80) return "text-emerald-400";
     if (score >= 60) return "text-yellow-400";
     return "text-red-400";
+  };
+
+  const renderStatsBox = () => {
+    if (isPostureAnalysis) {
+      return (
+        <>
+            <div className="p-3 bg-blue-500/20 text-blue-400 rounded-full mb-1">
+              <Activity className="w-6 h-6" />
+            </div>
+            <span className="text-xl font-bold text-white">Check-up</span>
+            <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Status da Análise</span>
+        </>
+      );
+    }
+
+    if (isBodyCompAnalysis) {
+      return (
+        <>
+            <div className="p-3 bg-violet-500/20 text-violet-400 rounded-full mb-1">
+              <Scale className="w-6 h-6" />
+            </div>
+            <span className="text-4xl font-bold text-white">{result.repetitions}%</span>
+            <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Gordura Estimada</span>
+        </>
+      );
+    }
+
+    // Default (Workout)
+    return (
+      <>
+          <div className="p-3 bg-blue-500/20 text-blue-400 rounded-full mb-1">
+            <Repeat className="w-6 h-6" />
+          </div>
+          <span className="text-4xl font-bold text-white">{result.repetitions}</span>
+          <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Repetições Válidas</span>
+      </>
+    );
   };
 
   return (
@@ -66,7 +107,9 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
           <span className="px-4 py-1.5 rounded-full bg-slate-700/50 text-slate-300 text-sm font-medium border border-slate-600/50">
             Relatório de Performance
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mt-4 text-white">Análise de {exercise}</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mt-4 text-white">
+            {isBodyCompAnalysis ? 'Avaliação Corporal' : `Análise de ${exercise}`}
+          </h2>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8 relative z-10">
@@ -94,7 +137,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
               )}
               
               <h3 className={`text-lg font-medium mb-2 ${isHighPerformance ? 'text-yellow-100' : 'text-slate-300'}`}>
-                Pontuação Técnica
+                {isPostureAnalysis ? 'Alinhamento Global' : (isBodyCompAnalysis ? 'Estética / Condicionamento' : 'Pontuação Técnica')}
               </h3>
               
               <div className="h-56 w-full relative z-10">
@@ -132,11 +175,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
             </div>
 
             <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col items-center justify-center gap-2">
-                 <div className="p-3 bg-blue-500/20 text-blue-400 rounded-full mb-1">
-                  <Repeat className="w-6 h-6" />
-                </div>
-                <span className="text-4xl font-bold text-white">{result.repetitions}</span>
-                <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Repetições Válidas</span>
+                 {renderStatsBox()}
             </div>
           </div>
 
@@ -144,7 +183,8 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
           <div className="lg:col-span-4 flex flex-col gap-6">
             <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 h-full">
               <h3 className="text-lg font-bold mb-5 flex items-center gap-3 text-white border-b border-slate-700/50 pb-4">
-                <CheckCircle className="text-emerald-400 w-5 h-5" /> Detalhes da Execução
+                <CheckCircle className="text-emerald-400 w-5 h-5" /> 
+                {isBodyCompAnalysis ? 'Detalhes da Avaliação' : 'Detalhes da Execução'}
               </h3>
               <ul className="space-y-4 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
                 {result.feedback.map((item, index) => (
@@ -178,7 +218,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
                    <Activity className="w-24 h-24 text-blue-500" />
                 </div>
                 <h3 className="text-lg font-bold mb-2 flex items-center gap-3 text-white z-10">
-                  <User className="text-blue-400 w-5 h-5" /> Anatomia da Ativação
+                  <User className="text-blue-400 w-5 h-5" /> {isBodyCompAnalysis ? 'Regiões em Destaque' : 'Anatomia da Ativação'}
                 </h3>
                 <div className="flex-grow flex flex-col items-center">
                    <MuscleMap muscles={result.muscleGroups} />
@@ -198,7 +238,8 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
                   <MessageCircleHeart className="w-24 h-24 text-indigo-400" />
                 </div>
                 <h3 className="text-sm font-bold mb-3 flex items-center gap-2 text-indigo-300 uppercase tracking-wider relative z-10">
-                  <MessageCircleHeart className="w-4 h-4" /> Dica do Coach
+                  <MessageCircleHeart className="w-4 h-4" /> 
+                  {isPostureAnalysis ? 'Hábito Saudável' : (isBodyCompAnalysis ? 'Dica Nutricional' : 'Dica do Coach')}
                 </h3>
                 <p className="text-white font-medium text-lg md:text-xl leading-relaxed relative z-10">
                   "{result.formCorrection}"
@@ -219,7 +260,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
             onClick={onReset}
             className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-2xl transition-all shadow-xl shadow-blue-900/20 text-lg tracking-wide hover:scale-[1.01] flex items-center justify-center gap-2"
           >
-            <Repeat className="w-5 h-5" /> Novo Treino
+            <Repeat className="w-5 h-5" /> Nova Análise
           </button>
         </div>
       </div>
