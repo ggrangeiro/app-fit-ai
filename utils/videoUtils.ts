@@ -1,16 +1,11 @@
 /**
  * Compresses a video file by downscaling resolution and reducing bitrate.
- * This runs entirely in the browser using HTML5 Canvas and MediaRecorder.
+ * Optimized for Gemini API limits.
  */
 export const compressVideo = async (file: File): Promise<File> => {
-  // If file is already small enough, return it as is.
-  if (file.size <= 19 * 1024 * 1024) return file;
+  // If file is already small, return it as is.
+  if (file.size <= 10 * 1024 * 1024) return file;
   
-  // Hard limit for browser performance (prevent crashes on mobile)
-  if (file.size > 200 * 1024 * 1024) {
-    throw new Error("O vídeo é muito grande (>200MB) para processamento no navegador. Por favor, grave um vídeo mais curto.");
-  }
-
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.muted = true;
@@ -18,12 +13,12 @@ export const compressVideo = async (file: File): Promise<File> => {
     video.src = URL.createObjectURL(file);
     
     video.onerror = () => {
-      reject(new Error("Não foi possível carregar o vídeo para otimização."));
+      reject(new Error("Não foi possível carregar o vídeo para otimização. Codec não suportado ou arquivo corrompido."));
     };
 
     video.onloadedmetadata = () => {
-      // Calculate new dimensions (Max height 720p to save size)
-      const MAX_HEIGHT = 720;
+      // Lower resolution even further for better reliability (Max height 480p)
+      const MAX_HEIGHT = 480;
       let width = video.videoWidth;
       let height = video.videoHeight;
       
@@ -39,20 +34,22 @@ export const compressVideo = async (file: File): Promise<File> => {
       const ctx = canvas.getContext('2d');
       
       if (!ctx) {
-        reject(new Error("Contexto gráfico não disponível."));
+        reject(new Error("Erro interno: Contexto gráfico (Canvas) indisponível."));
         return;
       }
 
-      // Determine supported mime type
-      const mimeType = MediaRecorder.isTypeSupported('video/mp4') 
-        ? 'video/mp4' 
-        : (MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm');
+      // Detect supported mime types for browser
+      let mimeType = 'video/webm';
+      if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+        mimeType = 'video/webm;codecs=vp9';
+      }
 
-      // Create stream (30fps is enough for exercise analysis)
-      const stream = canvas.captureStream(30);
+      const stream = canvas.captureStream(24); // 24fps is standard and saves space
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType,
-        videoBitsPerSecond: 1500000 // 1.5 Mbps bitrate target (very lightweight)
+        videoBitsPerSecond: 1000000 // 1.0 Mbps is very light but enough for form analysis
       });
 
       const chunks: BlobPart[] = [];
@@ -64,20 +61,15 @@ export const compressVideo = async (file: File): Promise<File> => {
         const blob = new Blob(chunks, { type: mimeType });
         const compressedFile = new File([blob], "optimized_exercise.mp4", { type: mimeType });
         
-        // Clean up
         URL.revokeObjectURL(video.src);
         video.remove();
         canvas.remove();
         
-        console.log(`Compression complete: ${Math.round(file.size/1024/1024)}MB -> ${Math.round(compressedFile.size/1024/1024)}MB`);
+        console.log(`Video compressed: ${Math.round(file.size/1024/1024)}MB -> ${Math.round(compressedFile.size/1024/1024)}MB`);
         resolve(compressedFile);
       };
 
       mediaRecorder.start();
-
-      // Play video at 2x speed to compress faster (Gemini doesn't care about playback speed for static pose analysis, 
-      // but to be safe we'll stick to 1.5x or 1x if audio/timing was critical. 
-      // For pure visual form analysis, slightly faster playback is usually fine, but let's keep 1x to ensure rep counting is accurate).
       video.playbackRate = 1.0; 
       
       video.play().then(() => {
@@ -88,7 +80,7 @@ export const compressVideo = async (file: File): Promise<File> => {
         };
         draw();
       }).catch(e => {
-        reject(new Error("Erro ao reproduzir vídeo para compressão: " + e.message));
+        reject(new Error("Falha ao processar frames do vídeo. Tente um arquivo diferente."));
       });
 
       video.onended = () => {
