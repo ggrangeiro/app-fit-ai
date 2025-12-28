@@ -9,14 +9,30 @@ import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Camera, Smartphone, Zap, LogOut, User as UserIcon } from 'lucide-react';
 
+// ============================================================================
+// PARA TROCAR AS FOTOS DOS CARDS:
+// Altere as URLs abaixo. Você pode usar links do Unsplash, Imgur, ou S3.
+// ============================================================================
 const DEFAULT_EXERCISE_IMAGES: Record<ExerciseType, string> = {
-  // Updated with a reliable working URL (Dynamic athletic movement)
+  // Original Exercises
   [ExerciseType.SQUAT]: "https://images.unsplash.com/photo-1434682881908-b43d0467b798?q=80&w=800&auto=format&fit=crop",
   [ExerciseType.PUSHUP]: "https://images.unsplash.com/photo-1599058945522-28d584b6f0ff?q=80&w=600&auto=format&fit=crop",
   [ExerciseType.LUNGE]: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=600&auto=format&fit=crop",
   [ExerciseType.BURPEE]: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=600&auto=format&fit=crop", 
-  // Updated Plank image to a very stable URL (man doing plank/pushup position)
-  [ExerciseType.PLANK]: "https://images.unsplash.com/photo-1566241440091-ec10de8db2e1?q=80&w=800&auto=format&fit=crop"
+  [ExerciseType.PLANK]: "https://images.unsplash.com/photo-1566241440091-ec10de8db2e1?q=80&w=800&auto=format&fit=crop",
+  
+  // Previous Batch
+  [ExerciseType.JUMPING_JACK]: "https://images.unsplash.com/photo-1544367563-12123d8965cd?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.MOUNTAIN_CLIMBER]: "https://images.unsplash.com/photo-1434608519344-49d77a699ded?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.CRUNCH]: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.PULLUP]: "https://images.unsplash.com/photo-1598971639058-211a73287138?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.BRIDGE]: "https://images.unsplash.com/photo-1574680178050-55c6a6a96e0a?q=80&w=800&auto=format&fit=crop",
+
+  // New Exercises (Latest Batch)
+  [ExerciseType.BULGARIAN_SQUAT]: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.DEADLIFT]: "https://images.unsplash.com/photo-1517963879466-e825c2cbd9ae?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.TRICEP_DIP]: "https://images.unsplash.com/photo-1581009137042-c5529b8583bb?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.BICEP_CURL]: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop" // Placeholder gym image as specific curls are hard to find on open stock
 };
 
 const EXERCISE_TIPS: Record<ExerciseType, string[]> = {
@@ -49,6 +65,60 @@ const EXERCISE_TIPS: Record<ExerciseType, string[]> = {
     "Contraia fortemente o abdômen e os glúteos.",
     "Não prenda a respiração, mantenha o fluxo constante.",
     "Mantenha o pescoço neutro, olhando para o chão."
+  ],
+  [ExerciseType.JUMPING_JACK]: [
+    "Coordene a abertura dos braços e pernas simultaneamente.",
+    "Pouse suavemente na ponta dos pés para reduzir o impacto.",
+    "Mantenha os joelhos levemente flexionados na aterrissagem.",
+    "Toque as mãos acima da cabeça para amplitude completa."
+  ],
+  [ExerciseType.MOUNTAIN_CLIMBER]: [
+    "Mantenha o quadril baixo e alinhado com os ombros.",
+    "Traga o joelho em direção ao peito alternadamente.",
+    "Mantenha os ombros firmes sobre os punhos.",
+    "Contraia o abdômen para estabilizar o tronco."
+  ],
+  [ExerciseType.CRUNCH]: [
+    "Mantenha a lombar colada no chão durante todo o movimento.",
+    "Olhe para o teto para não tensionar o pescoço.",
+    "Concentre a força no abdômen, não no impulso dos braços.",
+    "Solte o ar ao subir e inspire ao descer."
+  ],
+  [ExerciseType.PULLUP]: [
+    "Inicie o movimento ativando as escápulas (costas).",
+    "Passe o queixo da linha da barra.",
+    "Desça controladamente até estender os braços.",
+    "Evite balançar o corpo (kipping) se o foco for força."
+  ],
+  [ExerciseType.BRIDGE]: [
+    "Empurre o chão com os calcanhares para subir.",
+    "Contraia forte os glúteos no topo do movimento.",
+    "Evite arquear excessivamente a lombar.",
+    "Mantenha os joelhos alinhados, não deixe abrir ou fechar."
+  ],
+  [ExerciseType.BULGARIAN_SQUAT]: [
+    "Apoie o peito do pé no banco atrás de você.",
+    "Mantenha o tronco levemente inclinado para frente.",
+    "Desça até o joelho de trás quase tocar o chão.",
+    "A força principal deve estar na perna da frente."
+  ],
+  [ExerciseType.DEADLIFT]: [
+    "Mantenha a barra colada nas pernas durante todo o movimento.",
+    "Coluna neutra sempre! Não curve as costas.",
+    "O movimento é de quadril (hinge), não agachamento.",
+    "Estufe o peito e trave as escápulas antes de puxar."
+  ],
+  [ExerciseType.TRICEP_DIP]: [
+    "Mantenha os cotovelos apontados para trás, não abra.",
+    "Desça até os cotovelos formarem 90 graus.",
+    "Mantenha os ombros longe das orelhas (depressão escapular).",
+    "Mantenha o quadril próximo ao banco/caixa."
+  ],
+  [ExerciseType.BICEP_CURL]: [
+    "Mantenha os cotovelos fixos ao lado do corpo.",
+    "Não balance o tronco para impulsionar o peso.",
+    "Controle a descida (fase excêntrica).",
+    "Estenda o braço quase totalmente embaixo."
   ]
 };
 

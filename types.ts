@@ -3,7 +3,18 @@ export enum ExerciseType {
   PUSHUP = 'Flexão de Braço (Push-up)',
   LUNGE = 'Afundo (Lunge)',
   BURPEE = 'Burpee',
-  PLANK = 'Prancha (Plank)'
+  PLANK = 'Prancha (Plank)',
+  JUMPING_JACK = 'Polichinelo (Jumping Jacks)',
+  MOUNTAIN_CLIMBER = 'Escalador (Mountain Climber)',
+  CRUNCH = 'Abdominal Supra (Crunch)',
+  PULLUP = 'Barra Fixa (Pull-up)',
+  BRIDGE = 'Elevação Pélvica (Glute Bridge)',
+  
+  // New Exercises
+  BULGARIAN_SQUAT = 'Agachamento Búlgaro',
+  DEADLIFT = 'Levantamento Terra (Deadlift)',
+  TRICEP_DIP = 'Tríceps Banco (Dips)',
+  BICEP_CURL = 'Rosca Direta (Bicep Curl)'
 }
 
 export interface FeedbackItem {
