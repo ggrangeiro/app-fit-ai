@@ -165,11 +165,12 @@ export const generateDietPlan = async (
        - Um GRID responsivo (grid-cols-1 md:grid-cols-2 gap-6) para os dias da semana.
        - Cada dia deve ser um "Card" bonito: fundo branco (bg-white), sombra suave (shadow-md), bordas arredondadas (rounded-2xl) e borda sutil (border border-slate-200).
     3. Tipografia e Cores (ALTA LEGIBILIDADE):
-       - Use 'text-slate-800' ou 'text-slate-900' para todo o texto principal. NUNCA use cinza claro para texto.
+       - Use 'text-slate-800' ou 'text-slate-900' para todo o texto principal nos dias comuns.
        - Use cores de destaque suaves para títulos (ex: text-emerald-700, text-blue-700).
-       - Use badges (etiquetas) para as refeições: ex: <span class="px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold">Café da Manhã</span>.
+       - Use badges (etiquetas) para as refeições.
     4. Conteúdo:
        - Organize o conteúdo de forma limpa dentro dos cards. Use listas (<ul>) sem marcadores padrão, mas com espaçamento.
+       - Para o DOMINGO (Sunday): Crie um card especial com fundo escuro (ex: bg-slate-800) para diferenciar (Dia de Descanso ou Livre). IMPORTANTE: Neste card de Domingo, TODO o texto deve ser BRANCO (text-white ou text-slate-100) para garantir leitura perfeita.
     
     O output deve ser APENAS o código HTML do conteúdo interno (sem tags <html> ou <body>).
     Faça parecer um dashboard de aplicativo de nutrição premium.

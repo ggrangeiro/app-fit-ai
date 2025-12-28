@@ -137,11 +137,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
           /* Ensure generated content inherits font properly */
           #diet-plan-content {
             font-family: 'Plus Jakarta Sans', sans-serif;
-          }
-          
-          /* Force text contrast within generated content while allowing colors */
-          #diet-plan-content p, #diet-plan-content li, #diet-plan-content td {
-             color: #1e293b; /* slate-800 default */
+            color: #1e293b; /* Base text color, but allows override by text-white classes */
           }
           
           @media print {
