@@ -32,7 +32,9 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
   const [workoutFormData, setWorkoutFormData] = useState({
     weight: '',
     height: '',
-    goal: 'hipertrofia'
+    goal: 'hipertrofia',
+    level: 'iniciante',
+    frequency: '4'
   });
 
   const isHighPerformance = result.score > 80;
@@ -266,7 +268,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
       {/* Modal Form for Workout */}
       {showWorkoutForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
              <button onClick={() => setShowWorkoutForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
                <X className="w-6 h-6" />
              </button>
@@ -280,16 +282,19 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
              </div>
 
              <form onSubmit={handleGenerateWorkout} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Peso Atual (kg)</label>
-                  <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={workoutFormData.weight} onChange={e => setWorkoutFormData({...workoutFormData, weight: e.target.value})} />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Peso (kg)</label>
+                    <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={workoutFormData.weight} onChange={e => setWorkoutFormData({...workoutFormData, weight: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
+                    <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={workoutFormData.height} onChange={e => setWorkoutFormData({...workoutFormData, height: e.target.value})} />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
-                  <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={workoutFormData.height} onChange={e => setWorkoutFormData({...workoutFormData, height: e.target.value})} />
-                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
                   <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
@@ -300,6 +305,29 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
                     <option value="forca">Força Pura</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Nível de Experiência</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={workoutFormData.level} onChange={e => setWorkoutFormData({...workoutFormData, level: e.target.value})}>
+                    <option value="iniciante">Iniciante (Começando agora)</option>
+                    <option value="intermediario">Intermediário (Já treina)</option>
+                    <option value="avancado">Avançado (Atleta/Experiente)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Dias por Semana</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={workoutFormData.frequency} onChange={e => setWorkoutFormData({...workoutFormData, frequency: e.target.value})}>
+                    <option value="2">2 dias</option>
+                    <option value="3">3 dias</option>
+                    <option value="4">4 dias</option>
+                    <option value="5">5 dias</option>
+                    <option value="6">6 dias</option>
+                  </select>
+                </div>
+
                 <button type="submit" disabled={workoutLoading} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
                   {workoutLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
                   {workoutLoading ? "Gerando..." : "Gerar Treino"}

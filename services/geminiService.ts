@@ -190,7 +190,7 @@ export const generateDietPlan = async (
 };
 
 export const generateWorkoutPlan = async (
-  userData: { weight: string; height: string; goal: string },
+  userData: { weight: string; height: string; goal: string; level: string; frequency: string },
   analysisContext: AnalysisResult
 ): Promise<string> => {
   // Serializar os pontos de melhoria para o prompt
@@ -206,6 +206,8 @@ export const generateWorkoutPlan = async (
     DADOS DO ALUNO:
     - Peso: ${userData.weight}kg | Altura: ${userData.height}cm
     - Objetivo: ${userData.goal} (Hipertrofia, Definição ou Emagrecimento)
+    - Nível de Experiência: ${userData.level}
+    - Frequência Disponível: ${userData.frequency} dias por semana
     - % de Gordura Estimada: ${analysisContext.repetitions}%
     
     CRUCIAL - CORREÇÕES BIOMECÂNICAS:
@@ -216,10 +218,12 @@ export const generateWorkoutPlan = async (
     1. Estrutura Visual: Use o mesmo padrão "Card/Grid" moderno.
        - "Hero Section": Resumo da divisão de treino (ex: ABC, ABCD) e foco principal.
        - Grid responsivo para os dias da semana (Cards).
-    2. Estilo dos Cards:
-       - Fundo branco (bg-white), bordas arredondadas (rounded-2xl), sombra suave.
-       - Use badges coloridas para grupos musculares (ex: <span class="bg-blue-100 text-blue-800...">Peito</span>).
+    2. ESTILO DO CARD DE FREQUÊNCIA (Hero Section):
+       - Ao mostrar a frequência, escreva APENAS o número seguido de 'x' (ex: "4x", "5x"). 
+       - NÃO escreva "semana" ou "vezes". Exemplo correto: <span class="...">4x</span>
     3. Conteúdo do Treino:
+       - Adapte o volume e complexidade para o nível ${userData.level}.
+       - Divida o treino exatamente em ${userData.frequency} dias ativos.
        - Exercício | Séries | Repetições | Intervalo.
        - Inclua uma seção "Aquecimento Específico" em cada dia.
     4. Dia de Descanso (Domingo/Rest Day):
