@@ -22,16 +22,16 @@ const DEFAULT_EXERCISE_IMAGES: Record<ExerciseType, string> = {
   [ExerciseType.PLANK]: "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
   
   // Previous Batch
-  [ExerciseType.JUMPING_JACK]: "https://images.unsplash.com/photo-u76Gd0hP5w4?q=80&w=800&auto=format&fit=crop",
-  [ExerciseType.MOUNTAIN_CLIMBER]: "https://images.unsplash.com/photo-u76Gd0hP5w4?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.JUMPING_JACK]: "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.MOUNTAIN_CLIMBER]: "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
   [ExerciseType.CRUNCH]: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=800&auto=format&fit=crop",
-  [ExerciseType.PULLUP]: "https://images.unsplash.com/photo-u76Gd0hP5w4?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.PULLUP]: "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
   [ExerciseType.BRIDGE]: "https://images.unsplash.com/photo-1574680178050-55c6a6a96e0a?q=80&w=800&auto=format&fit=crop",
 
   // New Exercises (Latest Batch)
   [ExerciseType.BULGARIAN_SQUAT]: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop",
-  [ExerciseType.DEADLIFT]: "https://images.unsplash.com/photo-u76Gd0hP5w4?q=80&w=800&auto=format&fit=crop",
-  [ExerciseType.TRICEP_DIP]: "https://images.unsplash.com/photo-u76Gd0hP5w4?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.DEADLIFT]: "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.TRICEP_DIP]: "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
   [ExerciseType.BICEP_CURL]: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop"
 };
 
