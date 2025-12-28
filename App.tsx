@@ -10,11 +10,13 @@ import AdminDashboard from './components/AdminDashboard';
 import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Camera, Smartphone, Zap, LogOut, User as UserIcon } from 'lucide-react';
 
 const DEFAULT_EXERCISE_IMAGES: Record<ExerciseType, string> = {
-  [ExerciseType.SQUAT]: "https://images.unsplash.com/photo-1574680096141-1cddd32e04ca?q=80&w=600&auto=format&fit=crop",
+  // Updated with a reliable working URL (Dynamic athletic movement)
+  [ExerciseType.SQUAT]: "https://images.unsplash.com/photo-1434682881908-b43d0467b798?q=80&w=800&auto=format&fit=crop",
   [ExerciseType.PUSHUP]: "https://images.unsplash.com/photo-1599058945522-28d584b6f0ff?q=80&w=600&auto=format&fit=crop",
   [ExerciseType.LUNGE]: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=600&auto=format&fit=crop",
   [ExerciseType.BURPEE]: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=600&auto=format&fit=crop", 
-  [ExerciseType.PLANK]: "https://images.unsplash.com/photo-1566241440091-ec10de8db2e1?q=80&w=600&auto=format&fit=crop"
+  // Updated Plank image to a very stable URL (man doing plank/pushup position)
+  [ExerciseType.PLANK]: "https://images.unsplash.com/photo-1566241440091-ec10de8db2e1?q=80&w=800&auto=format&fit=crop"
 };
 
 const EXERCISE_TIPS: Record<ExerciseType, string[]> = {
