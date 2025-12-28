@@ -1,3 +1,4 @@
+
 export enum ExerciseType {
   SQUAT = 'Agachamento (Squat)',
   PUSHUP = 'Flexão de Braço (Push-up)',
@@ -28,12 +29,14 @@ export interface FeedbackItem {
 }
 
 export interface AnalysisResult {
+  isValidContent: boolean; // Indica se passou na validação de humano + categoria
+  validationError?: string; // Mensagem explicando por que falhou na validação
   score: number;
-  repetitions: number; // For Body Composition, this acts as BF%
+  repetitions: number; 
   feedback: FeedbackItem[];
   formCorrection: string;
   muscleGroups: string[];
-  date?: string; // Add date for history
+  date?: string;
 }
 
 export enum AppStep {
@@ -54,7 +57,7 @@ export interface User {
   email: string;
   role: UserRole;
   avatar?: string;
-  assignedExercises: ExerciseType[]; // List of exercises this user is allowed to do
+  assignedExercises: ExerciseType[]; 
 }
 
 export interface ExerciseRecord {

@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ExerciseType } from "../types";
 
@@ -22,40 +23,52 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
 };
 
 export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Promise<AnalysisResult> => {
-  console.log(`Starting analysis for: ${exerciseType}, file size: ${Math.round(file.size / 1024)}KB`);
+  console.log(`Starting rigorous validation for: ${exerciseType}`);
   
-  const videoPart = await fileToGenerativePart(file);
+  const mediaPart = await fileToGenerativePart(file);
+
+  const validationRules = `
+    INSTRUÇÕES CRÍTICAS DE SEGURANÇA E CONTEXTO:
+    Sua primeira e mais importante tarefa é validar o conteúdo. Seja cético.
+    
+    1. PRESENÇA HUMANA: Existe pelo menos um ser humano claramente visível realizando uma atividade? Se for um objeto, animal, paisagem ou ambiente vazio, REJEITE.
+    2. COERÊNCIA DE CATEGORIA: O conteúdo condiz com o que foi selecionado: "${exerciseType}"?
+       - Se o usuário selecionou um exercício específico (ex: Agachamento), ele deve estar tentando realizar ESSE exercício.
+       - Se selecionou "Análise de Postura", deve ser uma foto/vídeo de um humano em pé ou sentado para avaliação.
+       - Se selecionou "Análise Corporal", deve ser um humano em trajes que permitam ver a composição física.
+    
+    SE QUALQUER REGRA FALHAR:
+    - Defina "isValidContent" como false.
+    - No campo "validationError", explique educadamente mas com firmeza por que o conteúdo foi rejeitado (ex: "Não detectamos um humano no vídeo" ou "O vídeo enviado parece ser de um exercício diferente do selecionado").
+    - Zere os outros campos (score: 0, repetitions: 0, etc).
+  `;
 
   let prompt = '';
 
   if (exerciseType === ExerciseType.POSTURE_ANALYSIS) {
     prompt = `
-      Atue como um especialista em biomecânica e fisioterapia.
-      Analise a POSTURA ESTÁTICA desta pessoa.
-      1. Identifique desvios posturais visíveis.
-      2. Avalie a simetria corporal.
-      3. Atribua nota GERAL (0-100).
-      4. Indique uma correção simples.
-      5. Liste músculos envolvidos.
-      Responda EXCLUSIVAMENTE em formato JSON. Repetições = 1.
+      ${validationRules}
+      Se o conteúdo for VÁLIDO:
+      Atue como Especialista em Fisioterapia e Biomecânica. Analise a POSTURA.
+      Identifique desvios laterais ou frontais, simetria de ombros/quadril e dê nota 0-100.
+      Responda EXCLUSIVAMENTE em JSON.
     `;
   } else if (exerciseType === ExerciseType.BODY_COMPOSITION) {
     prompt = `
-      Atue como um nutricionista esportivo. Analise a COMPOSIÇÃO CORPORAL visual.
-      1. Estime % GORDURA (coloque no campo 'repetitions').
-      2. Identifique o BIOTIPO.
-      3. Atribua nota de condicionamento (0-100).
-      4. Dê dicas de foco nutricional e treino.
-      Responda EXCLUSIVAMENTE em formato JSON.
+      ${validationRules}
+      Se o conteúdo for VÁLIDO:
+      Atue como Nutricionista Esportivo. Analise a COMPOSIÇÃO CORPORAL.
+      Estime % de gordura (coloque no campo 'repetitions'), identifique o biotipo e dê nota de condicionamento.
+      Responda EXCLUSIVAMENTE em JSON.
     `;
   } else {
     prompt = `
-      Atue como um Personal Trainer. Analise este vídeo de ${exerciseType}.
-      1. Conte repetições válidas.
-      2. Avalie a técnica e atribua nota GERAL (0-100).
-      3. Dê feedbacks curtos e uma correção principal com emojis.
-      4. Liste músculos ativados.
-      Responda EXCLUSIVAMENTE em formato JSON.
+      ${validationRules}
+      Se o conteúdo for VÁLIDO:
+      Atue como Personal Trainer. Analise o exercício ${exerciseType}.
+      Conte APENAS repetições com técnica aceitável. Atribua nota 0-100 baseada na amplitude e controle.
+      Dê feedbacks curtos com emojis.
+      Responda EXCLUSIVAMENTE em JSON.
     `;
   }
 
@@ -63,13 +76,15 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
-        parts: [videoPart, { text: prompt }],
+        parts: [mediaPart, { text: prompt }],
       },
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
+            isValidContent: { type: Type.BOOLEAN },
+            validationError: { type: Type.STRING },
             score: { type: Type.NUMBER },
             repetitions: { type: Type.NUMBER },
             feedback: { 
@@ -86,22 +101,17 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
             formCorrection: { type: Type.STRING },
             muscleGroups: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
-          required: ["score", "repetitions", "feedback", "formCorrection", "muscleGroups"]
+          required: ["isValidContent", "score", "repetitions", "feedback", "formCorrection", "muscleGroups"]
         }
       }
     });
 
     if (response && response.text) {
-      const cleanedText = response.text.trim();
-      console.log("Gemini Response received.");
-      return JSON.parse(cleanedText) as AnalysisResult;
+      return JSON.parse(response.text.trim()) as AnalysisResult;
     }
-    
-    throw new Error("Resposta vazia ou inválida do servidor de IA.");
-
+    throw new Error("Erro na comunicação com a IA.");
   } catch (error: any) {
-    console.error("Gemini API Error Detail:", error);
-    // Propagate the actual error message
+    console.error("Gemini Error:", error);
     throw error;
   }
 };
@@ -117,7 +127,7 @@ export const generateExerciseThumbnail = async (exerciseName: string): Promise<s
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     }
-    throw new Error("No image data in response.");
+    throw new Error("No image data.");
   } catch (e) {
     console.error("Image generation failed", e);
     throw e;
