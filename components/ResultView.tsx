@@ -1,31 +1,59 @@
+
 import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, ChevronRight, X } from 'lucide-react';
 import MuscleMap from './MuscleMap';
+import { generateDietPlan } from '../services/geminiService';
 
 interface ResultViewProps {
   result: AnalysisResult;
   exercise: ExerciseType;
   onReset: () => void;
-  onSave?: () => void; // New prop to handle saving/exiting
+  onSave?: () => void;
 }
 
 const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSave }) => {
   const [saved, setSaved] = useState(false);
-  const isHighPerformance = result.score > 80;
   
-  // Feature Flags based on Exercise Type
+  // Diet Plan State
+  const [showDietForm, setShowDietForm] = useState(false);
+  const [dietLoading, setDietLoading] = useState(false);
+  const [dietPlanHtml, setDietPlanHtml] = useState<string | null>(null);
+  const [dietFormData, setDietFormData] = useState({
+    weight: '',
+    height: '',
+    goal: 'emagrecer'
+  });
+
+  const isHighPerformance = result.score > 80;
   const isPostureAnalysis = exercise === ExerciseType.POSTURE_ANALYSIS;
   const isBodyCompAnalysis = exercise === ExerciseType.BODY_COMPOSITION;
 
   useEffect(() => {
-    // Auto-save logic could go here, but we'll leave it to the parent or explicit action
     if (onSave && !saved) {
       onSave();
       setSaved(true);
     }
   }, [onSave, saved]);
+
+  const handleGenerateDiet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDietLoading(true);
+    try {
+      const planHtml = await generateDietPlan(dietFormData, result);
+      setDietPlanHtml(planHtml);
+      setShowDietForm(false);
+    } catch (error) {
+      alert("Erro ao gerar dieta. Tente novamente.");
+    } finally {
+      setDietLoading(false);
+    }
+  };
+
+  const handlePrintDiet = () => {
+    window.print();
+  };
 
   const scoreData = [
     { 
@@ -79,7 +107,6 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
       );
     }
 
-    // Default (Workout)
     return (
       <>
           <div className="p-3 bg-blue-500/20 text-blue-400 rounded-full mb-1">
@@ -91,8 +118,134 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
     );
   };
 
+  // Se o plano de dieta estiver visível, renderizamos uma view especial para ele
+  if (dietPlanHtml) {
+    return (
+      <div className="w-full max-w-5xl mx-auto animate-fade-in pb-10">
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            #diet-plan-container, #diet-plan-container * {
+              visibility: visible;
+            }
+            #diet-plan-container {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              margin: 0;
+              padding: 0;
+              background: white;
+              color: black;
+            }
+            .no-print {
+              display: none !important;
+            }
+          }
+        `}</style>
+
+        <div className="flex items-center justify-between mb-6 no-print">
+           <button onClick={() => setDietPlanHtml(null)} className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
+              <ArrowLeft className="w-5 h-5" /> Voltar aos Resultados
+           </button>
+           <button onClick={handlePrintDiet} className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg transition-all">
+              <Printer className="w-5 h-5" /> Imprimir Plano
+           </button>
+        </div>
+
+        <div className="bg-white rounded-2xl p-8 shadow-2xl text-slate-800" id="diet-plan-container">
+           <div className="mb-6 border-b border-slate-200 pb-4 flex justify-between items-center">
+              <div>
+                <h2 className="text-3xl font-bold text-slate-900">Plano Alimentar Personalizado</h2>
+                <p className="text-slate-500">Gerado via IA FitAI Analyzer</p>
+              </div>
+              <div className="text-right text-sm text-slate-500">
+                <p>Objetivo: <span className="font-bold text-slate-800 capitalize">{dietFormData.goal.replace('_', ' ')}</span></p>
+                <p>Peso: {dietFormData.weight}kg | Altura: {dietFormData.height}cm</p>
+              </div>
+           </div>
+           
+           <div 
+             className="prose max-w-none prose-slate prose-headings:text-slate-800 prose-table:border-collapse prose-td:border prose-td:border-slate-300 prose-td:p-2 prose-th:bg-slate-100 prose-th:p-2 prose-th:border prose-th:border-slate-300"
+             dangerouslySetInnerHTML={{ __html: dietPlanHtml }} 
+           />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-6xl mx-auto animate-fade-in pb-10">
+      
+      {/* Modal Form for Diet */}
+      {showDietForm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl">
+             <button onClick={() => setShowDietForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+               <X className="w-6 h-6" />
+             </button>
+             
+             <div className="flex flex-col items-center mb-6">
+               <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-full mb-3">
+                 <Utensils className="w-8 h-8" />
+               </div>
+               <h3 className="text-2xl font-bold text-white">Montar Dieta</h3>
+               <p className="text-slate-400 text-center text-sm">A IA usará sua análise corporal para criar o cardápio ideal.</p>
+             </div>
+
+             <form onSubmit={handleGenerateDiet} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Peso Atual (kg)</label>
+                  <input 
+                    type="number" 
+                    required
+                    step="0.1"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    placeholder="ex: 75.5"
+                    value={dietFormData.weight}
+                    onChange={e => setDietFormData({...dietFormData, weight: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
+                  <input 
+                    type="number" 
+                    required
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    placeholder="ex: 175"
+                    value={dietFormData.height}
+                    onChange={e => setDietFormData({...dietFormData, height: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo Principal</label>
+                  <select 
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={dietFormData.goal}
+                    onChange={e => setDietFormData({...dietFormData, goal: e.target.value})}
+                  >
+                    <option value="emagrecer">Emagrecer (Perder Gordura)</option>
+                    <option value="ganhar_massa">Hipertrofia (Ganhar Massa)</option>
+                    <option value="manutencao">Manutenção (Saúde Geral)</option>
+                    <option value="definicao">Definição Muscular</option>
+                  </select>
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={dietLoading}
+                  className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2"
+                >
+                  {dietLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                  {dietLoading ? "A IA está montando o plano..." : "Gerar Plano Alimentar"}
+                </button>
+             </form>
+          </div>
+        </div>
+      )}
+
       <div className="glass-panel rounded-[2rem] p-6 md:p-10 shadow-2xl relative overflow-hidden">
         
         {/* Confetti / Celebration Background Effect */}
@@ -177,6 +330,18 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
             <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col items-center justify-center gap-2">
                  {renderStatsBox()}
             </div>
+            
+            {/* NEW: DIET PLAN BUTTON (Only for Body Composition) */}
+            {isBodyCompAnalysis && (
+              <button 
+                onClick={() => setShowDietForm(true)}
+                className="w-full py-4 px-6 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl shadow-lg shadow-emerald-900/20 font-bold flex items-center justify-center gap-3 transition-transform hover:scale-[1.02] border border-emerald-500/30"
+              >
+                <Utensils className="w-5 h-5" /> 
+                <span>Gerar Plano Alimentar</span>
+              </button>
+            )}
+
           </div>
 
           {/* Details Column (Middle) - Feedback */}

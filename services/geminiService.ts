@@ -61,7 +61,10 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
     prompt = `
       ${validationRules}
       Contexto: Avaliação Antropométrica Visual.
-      Instrução: Estime o biotipo (ectomorfo, mesomorfo, endomorfo) e a gordura corporal aproximada baseada na definição muscular visível.
+      Instrução: Estime o biotipo (ectomorfo, mesomorfo, endomorfo) e a porcentagem de gordura corporal aproximada baseada na definição muscular visível.
+      
+      IMPORTANTE: Você DEVE preencher o campo "repetitions" no JSON com o valor numérico estimado da gordura corporal (Ex: se for 15%, retorne 15). Não retorne 0 a menos que não seja possível estimar.
+      
       Responda EXCLUSIVAMENTE em JSON.
     `;
   } else {
@@ -114,6 +117,42 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
   } catch (error: any) {
     console.error("Gemini Error:", error);
     throw error;
+  }
+};
+
+export const generateDietPlan = async (
+  userData: { weight: string; height: string; goal: string },
+  analysisContext: AnalysisResult
+): Promise<string> => {
+  const prompt = `
+    Atue como um nutricionista esportivo de elite.
+    
+    Crie um plano alimentar semanal (Segunda a Domingo) personalizado com base nos seguintes dados:
+    - Peso atual: ${userData.weight}kg
+    - Altura: ${userData.height}cm
+    - Objetivo: ${userData.goal}
+    - Biotipo/Contexto observado pela IA: A análise visual indicou ${analysisContext.formCorrection} (considere isso para ajustar macros).
+    
+    REQUISITOS DE FORMATAÇÃO:
+    - Retorne APENAS código HTML limpo (sem tags markdown ou blocos de código).
+    - Use classes do Tailwind CSS para estilização direta no HTML.
+    - O container principal deve ter fundo branco (bg-white) e texto escuro (text-slate-800).
+    - Crie uma tabela para cada dia ou uma lista organizada visualmente agradável.
+    - Inclua um cabeçalho com o resumo dos macronutrientes sugeridos (Proteínas, Carboidratos, Gorduras) e Calorias totais estimadas.
+    - Adicione uma nota de rodapé dizendo "Consulte sempre um médico ou nutricionista presencial."
+    - O design deve ser limpo, profissional e pronto para impressão.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+    });
+
+    return response.text || "<p>Erro ao gerar dieta.</p>";
+  } catch (e) {
+    console.error("Erro ao gerar dieta", e);
+    throw new Error("Não foi possível gerar o plano alimentar no momento.");
   }
 };
 

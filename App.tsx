@@ -133,39 +133,6 @@ const App: React.FC = () => {
     }
   };
 
-  const sendReportEmail = (result: AnalysisResult, exercise: string, user: User) => {
-    const subject = encodeURIComponent(`Relatório FitAI: ${user.name} - ${exercise}`);
-    const body = encodeURIComponent(`
-Olá,
-
-Segue o relatório de performance do aluno.
-
-ALUNO: ${user.name}
-DATA: ${new Date().toLocaleDateString()}
-EXERCÍCIO: ${exercise}
-
---- RESULTADOS ---
-SCORE: ${result.score}/100
-REPETIÇÕES VÁLIDAS: ${result.repetitions}
-
---- FEEDBACK DO COACH IA ---
-${result.formCorrection}
-
---- DETALHES TÉCNICOS ---
-${result.feedback.map(f => `- ${f.message} (${f.score})`).join('\n')}
-
-Atenciosamente,
-Plataforma FitAI
-    `);
-
-    // Abre o cliente de email
-    const mailtoLink = `mailto:ggrangeiro@me.com?subject=${subject}&body=${body}`;
-    
-    // Tenta abrir em uma nova aba/janela para não sair do app, ou apenas dispara
-    window.open(mailtoLink, '_blank');
-    console.log("Relatório enviado para ggrangeiro@me.com");
-  };
-
   const handleAnalysis = async () => {
     if (!mediaFile || !selectedExercise || !currentUser) return;
 
@@ -194,9 +161,6 @@ Plataforma FitAI
       setAnalysisResult(result);
       MockDataService.saveResult(currentUser.id, currentUser.name, selectedExercise, result);
       
-      // Enviar relatório por e-mail automaticamente
-      sendReportEmail(result, selectedExercise, currentUser);
-
       setStep(AppStep.RESULTS);
 
     } catch (err: any) {
