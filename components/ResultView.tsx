@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
@@ -13,7 +12,7 @@ interface ResultViewProps {
   onSave?: () => void;
 }
 
-const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSave }) => {
+export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSave }) => {
   const [saved, setSaved] = useState(false);
   
   // Diet Plan State
@@ -121,8 +120,30 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
   // Se o plano de dieta estiver visível, renderizamos uma view especial para ele
   if (dietPlanHtml) {
     return (
-      <div className="w-full max-w-5xl mx-auto animate-fade-in pb-10">
+      <div className="w-full max-w-7xl mx-auto animate-fade-in pb-10">
         <style>{`
+          /* Custom Scrollbar for Diet View */
+          #diet-plan-container ::-webkit-scrollbar {
+            width: 8px;
+          }
+          #diet-plan-container ::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+          }
+          #diet-plan-container ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+          }
+
+          /* Ensure generated content inherits font properly */
+          #diet-plan-content {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+          }
+          
+          /* Force text contrast within generated content while allowing colors */
+          #diet-plan-content p, #diet-plan-content li, #diet-plan-content td {
+             color: #1e293b; /* slate-800 default */
+          }
+          
           @media print {
             body * {
               visibility: hidden;
@@ -138,7 +159,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
               margin: 0;
               padding: 0;
               background: white;
-              color: black;
+              box-shadow: none;
             }
             .no-print {
               display: none !important;
@@ -155,22 +176,46 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
            </button>
         </div>
 
-        <div className="bg-white rounded-2xl p-8 shadow-2xl text-slate-800" id="diet-plan-container">
-           <div className="mb-6 border-b border-slate-200 pb-4 flex justify-between items-center">
-              <div>
-                <h2 className="text-3xl font-bold text-slate-900">Plano Alimentar Personalizado</h2>
-                <p className="text-slate-500">Gerado via IA FitAI Analyzer</p>
+        {/* Main Container - Changed to slate-50 for modern dashboard feel */}
+        <div className="bg-slate-50 rounded-3xl p-6 md:p-10 shadow-2xl text-slate-900 min-h-[80vh]" id="diet-plan-container">
+           
+           {/* Modern Header */}
+           <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-6 gap-4">
+              <div className="flex items-center gap-4">
+                <div className="p-4 bg-emerald-500 rounded-2xl shadow-lg shadow-emerald-500/20 text-white">
+                   <Utensils className="w-8 h-8" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Plano Nutricional</h2>
+                  <div className="flex items-center gap-2 text-slate-500 text-sm mt-1">
+                    <Sparkles className="w-4 h-4 text-yellow-500" />
+                    <span>Personalizado via IA</span>
+                  </div>
+                </div>
               </div>
-              <div className="text-right text-sm text-slate-500">
-                <p>Objetivo: <span className="font-bold text-slate-800 capitalize">{dietFormData.goal.replace('_', ' ')}</span></p>
-                <p>Peso: {dietFormData.weight}kg | Altura: {dietFormData.height}cm</p>
+              
+              <div className="flex gap-3 text-sm bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+                <div className="px-4 py-2 bg-slate-100 rounded-lg">
+                   <span className="block text-xs text-slate-500 uppercase font-bold">Objetivo</span>
+                   <span className="font-bold text-slate-900 capitalize">{dietFormData.goal.replace('_', ' ')}</span>
+                </div>
+                <div className="px-4 py-2 bg-slate-100 rounded-lg">
+                   <span className="block text-xs text-slate-500 uppercase font-bold">Perfil</span>
+                   <span className="font-bold text-slate-900">{dietFormData.weight}kg • {dietFormData.height}cm</span>
+                </div>
               </div>
            </div>
            
+           {/* Content Injection Area */}
            <div 
-             className="prose max-w-none prose-slate prose-headings:text-slate-800 prose-table:border-collapse prose-td:border prose-td:border-slate-300 prose-td:p-2 prose-th:bg-slate-100 prose-th:p-2 prose-th:border prose-th:border-slate-300"
+             id="diet-plan-content"
+             className="w-full"
              dangerouslySetInnerHTML={{ __html: dietPlanHtml }} 
            />
+           
+           <div className="mt-10 text-center text-slate-400 text-xs border-t border-slate-200 pt-6">
+              <p>Este plano é uma sugestão gerada por inteligência artificial e não substitui uma consulta médica profissional.</p>
+           </div>
         </div>
       </div>
     );
@@ -454,8 +499,6 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
           </button>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 };
-
-export default ResultView;

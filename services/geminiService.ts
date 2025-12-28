@@ -152,22 +152,27 @@ export const generateDietPlan = async (
   analysisContext: AnalysisResult
 ): Promise<string> => {
   const prompt = `
-    Atue como um nutricionista esportivo de elite.
+    Atue como um nutricionista esportivo de elite com foco em UI/UX moderno.
     
-    Crie um plano alimentar semanal (Segunda a Domingo) personalizado com base nos seguintes dados:
-    - Peso atual: ${userData.weight}kg
-    - Altura: ${userData.height}cm
-    - Objetivo: ${userData.goal}
-    - Biotipo/Contexto observado pela IA: A análise visual indicou ${analysisContext.formCorrection} (considere isso para ajustar macros).
+    Crie um plano alimentar semanal visualmente incrível e moderno, baseado nestes dados:
+    - Peso: ${userData.weight}kg | Altura: ${userData.height}cm | Objetivo: ${userData.goal}
+    - Contexto IA: ${analysisContext.formCorrection}
     
-    REQUISITOS DE FORMATAÇÃO:
-    - Retorne APENAS código HTML limpo (sem tags markdown ou blocos de código).
-    - Use classes do Tailwind CSS para estilização direta no HTML.
-    - O container principal deve ter fundo branco (bg-white) e texto escuro (text-slate-800).
-    - Crie uma tabela para cada dia ou uma lista organizada visualmente agradável.
-    - Inclua um cabeçalho com o resumo dos macronutrientes sugeridos (Proteínas, Carboidratos, Gorduras) e Calorias totais estimadas.
-    - Adicione uma nota de rodapé dizendo "Consulte sempre um médico ou nutricionista presencial."
-    - O design deve ser limpo, profissional e pronto para impressão.
+    DIRETRIZES DE DESIGN E HTML (IMPORTANTE):
+    1. NÃO use tabelas HTML padrão (<table>). Use um layout de CARDS (Cartões) modernos usando <div> e classes Tailwind CSS.
+    2. Estrutura sugerida:
+       - Um "Hero Section" no topo com o resumo dos Macros em destaque (Cards coloridos grandes).
+       - Um GRID responsivo (grid-cols-1 md:grid-cols-2 gap-6) para os dias da semana.
+       - Cada dia deve ser um "Card" bonito: fundo branco (bg-white), sombra suave (shadow-md), bordas arredondadas (rounded-2xl) e borda sutil (border border-slate-200).
+    3. Tipografia e Cores (ALTA LEGIBILIDADE):
+       - Use 'text-slate-800' ou 'text-slate-900' para todo o texto principal. NUNCA use cinza claro para texto.
+       - Use cores de destaque suaves para títulos (ex: text-emerald-700, text-blue-700).
+       - Use badges (etiquetas) para as refeições: ex: <span class="px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold">Café da Manhã</span>.
+    4. Conteúdo:
+       - Organize o conteúdo de forma limpa dentro dos cards. Use listas (<ul>) sem marcadores padrão, mas com espaçamento.
+    
+    O output deve ser APENAS o código HTML do conteúdo interno (sem tags <html> ou <body>).
+    Faça parecer um dashboard de aplicativo de nutrição premium.
   `;
 
   try {
