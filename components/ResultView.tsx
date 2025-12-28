@@ -1,24 +1,33 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, AlertTriangle, Repeat, Activity, Trophy, Sparkles, User } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart } from 'lucide-react';
 import MuscleMap from './MuscleMap';
 
 interface ResultViewProps {
   result: AnalysisResult;
   exercise: ExerciseType;
   onReset: () => void;
+  onSave?: () => void; // New prop to handle saving/exiting
 }
 
-const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset }) => {
-  
+const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSave }) => {
+  const [saved, setSaved] = useState(false);
   const isHighPerformance = result.score > 80;
+
+  useEffect(() => {
+    // Auto-save logic could go here, but we'll leave it to the parent or explicit action
+    if (onSave && !saved) {
+      onSave();
+      setSaved(true);
+    }
+  }, [onSave, saved]);
 
   const scoreData = [
     { 
       name: 'Score', 
       value: result.score, 
-      fill: isHighPerformance ? '#fbbf24' : (result.score > 40 ? '#facc15' : '#f87171') // Gold for high score
+      fill: isHighPerformance ? '#fbbf24' : (result.score > 40 ? '#facc15' : '#f87171')
     }
   ];
 
@@ -80,9 +89,6 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset }) =>
                   </div>
                   <div className="absolute bottom-10 right-8 animate-float" style={{ animationDelay: '1.5s' }}>
                     <Sparkles className="w-4 h-4 text-emerald-400 fill-emerald-400/50" />
-                  </div>
-                  <div className="absolute top-1/3 right-4 animate-float" style={{ animationDelay: '0.5s' }}>
-                     <div className="w-2 h-2 rounded-full bg-white blur-[1px]" />
                   </div>
                 </>
               )}
@@ -186,27 +192,36 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset }) =>
                 </div>
              </div>
 
-             {/* Correction Card */}
-             <div className="bg-amber-500/10 rounded-3xl p-6 border border-amber-500/20 relative overflow-hidden flex-1">
-                <div className="absolute top-0 right-0 p-4 opacity-5">
-                  <AlertTriangle className="w-24 h-24 text-amber-500" />
+             {/* Correction Card - Friendlier UI */}
+             <div className="bg-gradient-to-br from-indigo-600/20 to-blue-600/20 rounded-3xl p-6 border border-indigo-500/30 relative overflow-hidden flex-1 flex flex-col justify-center">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                  <MessageCircleHeart className="w-24 h-24 text-indigo-400" />
                 </div>
-                <h3 className="text-lg font-bold mb-3 flex items-center gap-3 text-amber-400 relative z-10">
-                  <AlertTriangle className="w-5 h-5" /> Correção Principal
+                <h3 className="text-sm font-bold mb-3 flex items-center gap-2 text-indigo-300 uppercase tracking-wider relative z-10">
+                  <MessageCircleHeart className="w-4 h-4" /> Dica do Coach
                 </h3>
-                <p className="text-slate-200 leading-relaxed relative z-10 text-sm md:text-base">
-                  {result.formCorrection}
+                <p className="text-white font-medium text-lg md:text-xl leading-relaxed relative z-10">
+                  "{result.formCorrection}"
                 </p>
             </div>
           </div>
         </div>
 
-        <button 
-          onClick={onReset}
-          className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-2xl transition-all shadow-xl shadow-blue-900/20 text-lg tracking-wide hover:scale-[1.01]"
-        >
-          Analisar Novo Exercício
-        </button>
+        <div className="flex gap-4">
+           <button 
+            onClick={onReset}
+            className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-5 rounded-2xl transition-all text-lg tracking-wide flex items-center justify-center gap-2"
+          >
+            <ArrowLeft className="w-5 h-5" /> Voltar ao Menu
+          </button>
+          
+          <button 
+            onClick={onReset}
+            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-2xl transition-all shadow-xl shadow-blue-900/20 text-lg tracking-wide hover:scale-[1.01] flex items-center justify-center gap-2"
+          >
+            <Repeat className="w-5 h-5" /> Novo Treino
+          </button>
+        </div>
       </div>
     </div>
   );

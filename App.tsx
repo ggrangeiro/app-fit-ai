@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { AppStep, ExerciseType, AnalysisResult } from './types';
+import { AppStep, ExerciseType, AnalysisResult, User } from './types';
 import { analyzeVideo } from './services/geminiService';
 import { compressVideo } from './utils/videoUtils';
+import { MockDataService } from './services/mockDataService';
 import ExerciseCard from './components/ExerciseCard';
 import ResultView from './components/ResultView';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Camera, Smartphone, Zap } from 'lucide-react';
+import Login from './components/Login';
+import AdminDashboard from './components/AdminDashboard';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Camera, Smartphone, Zap, LogOut, User as UserIcon } from 'lucide-react';
 
-const EXERCISE_IMAGES: Record<ExerciseType, string> = {
+const DEFAULT_EXERCISE_IMAGES: Record<ExerciseType, string> = {
   [ExerciseType.SQUAT]: "https://images.unsplash.com/photo-1574680096141-1cddd32e04ca?q=80&w=600&auto=format&fit=crop",
   [ExerciseType.PUSHUP]: "https://images.unsplash.com/photo-1599058945522-28d584b6f0ff?q=80&w=600&auto=format&fit=crop",
   [ExerciseType.LUNGE]: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=600&auto=format&fit=crop",
@@ -48,13 +51,34 @@ const EXERCISE_TIPS: Record<ExerciseType, string[]> = {
 };
 
 const App: React.FC = () => {
-  const [step, setStep] = useState<AppStep>(AppStep.SELECT_EXERCISE);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [step, setStep] = useState<AppStep>(AppStep.LOGIN);
   const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  
+  // Custom Images State
+  const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(DEFAULT_EXERCISE_IMAGES);
+
+  // Initial Auth Check and Image Load
+  useEffect(() => {
+    const user = MockDataService.getCurrentUser();
+    if (user) {
+      setCurrentUser(user);
+      setStep(user.role === 'admin' ? AppStep.ADMIN_DASHBOARD : AppStep.SELECT_EXERCISE);
+    }
+    loadCustomImages();
+  }, []);
+
+  const loadCustomImages = () => {
+    const customImages = MockDataService.getExerciseImages();
+    if (Object.keys(customImages).length > 0) {
+      setExerciseImages({ ...DEFAULT_EXERCISE_IMAGES, ...customImages });
+    }
+  };
 
   // Rotate tips while analyzing
   useEffect(() => {
@@ -71,10 +95,29 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [step, selectedExercise]);
 
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+    setStep(user.role === 'admin' ? AppStep.ADMIN_DASHBOARD : AppStep.SELECT_EXERCISE);
+  };
+
+  const handleLogout = () => {
+    MockDataService.logout();
+    setCurrentUser(null);
+    setStep(AppStep.LOGIN);
+    resetAnalysis();
+  };
+
+  const resetAnalysis = () => {
+    setSelectedExercise(null);
+    setVideoFile(null);
+    setVideoPreview(null);
+    setAnalysisResult(null);
+    setError(null);
+  };
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Soft limit for immediate feedback, but we will allow processing
       if (file.size > 200 * 1024 * 1024) { 
         setError("O vídeo é muito grande (>200MB). Por favor grave um vídeo mais curto.");
         return;
@@ -86,12 +129,11 @@ const App: React.FC = () => {
   };
 
   const handleAnalysis = async () => {
-    if (!videoFile || !selectedExercise) return;
+    if (!videoFile || !selectedExercise || !currentUser) return;
 
     try {
       let finalFile = videoFile;
 
-      // Automatic Compression Logic
       if (videoFile.size > 20 * 1024 * 1024) {
          setStep(AppStep.COMPRESSING);
          try {
@@ -109,6 +151,10 @@ const App: React.FC = () => {
       
       const result = await analyzeVideo(finalFile, selectedExercise);
       setAnalysisResult(result);
+      
+      // Save result immediately when analysis is done
+      MockDataService.saveResult(currentUser.id, currentUser.name, selectedExercise, result);
+      
       setStep(AppStep.RESULTS);
 
     } catch (err: any) {
@@ -120,91 +166,130 @@ const App: React.FC = () => {
 
   const resetApp = () => {
     setStep(AppStep.SELECT_EXERCISE);
-    setSelectedExercise(null);
-    setVideoFile(null);
-    setVideoPreview(null);
-    setAnalysisResult(null);
-    setError(null);
+    resetAnalysis();
   };
+
+  // --- RENDER ---
+
+  if (step === AppStep.LOGIN) {
+    return <Login onLogin={handleLogin} />;
+  }
+
+  // Get visible exercises based on permissions
+  const availableExercises = Object.values(ExerciseType).filter(ex => {
+    if (!currentUser || currentUser.role === 'admin') return true; // Admins see all for demo (or none if they don't do exercises)
+    if (currentUser.assignedExercises && currentUser.assignedExercises.length > 0) {
+      return currentUser.assignedExercises.includes(ex);
+    }
+    return false; // User has no exercises
+  });
 
   return (
     <div className="min-h-screen flex flex-col font-[Plus Jakarta Sans]">
-      {/* Modern Header */}
+      
+      {/* Header (Authenticated) */}
       <header className="sticky top-0 z-50 glass-panel border-b-0 border-b-slate-700/50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 group cursor-default">
             <div className="p-2 bg-blue-600 rounded-lg group-hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/20">
               <Video className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-white">FitAI <span className="text-blue-400 font-light">Analyzer</span></h1>
+            <h1 className="text-xl font-bold tracking-tight text-white hidden md:block">FitAI <span className="text-blue-400 font-light">Analyzer</span></h1>
           </div>
-          {step !== AppStep.SELECT_EXERCISE && (
-            <button 
-              onClick={resetApp} 
-              className="px-4 py-2 rounded-full text-sm font-medium text-slate-300 hover:text-white hover:bg-white/10 transition-all"
-            >
-              Novo
-            </button>
-          )}
+          
+          <div className="flex items-center gap-4">
+             <div className="flex items-center gap-2 text-right">
+                <div className="hidden md:block">
+                  <p className="text-sm font-bold text-white">{currentUser?.name}</p>
+                  <p className="text-xs text-slate-400 capitalize">{currentUser?.role === 'admin' ? 'Administrador' : 'Aluno'}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 border border-slate-600">
+                  <UserIcon className="w-5 h-5" />
+                </div>
+             </div>
+             
+             <div className="h-8 w-px bg-slate-700 mx-2 hidden md:block"></div>
+
+             <button 
+                onClick={handleLogout}
+                className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                title="Sair"
+             >
+               <LogOut className="w-5 h-5" />
+             </button>
+          </div>
         </div>
       </header>
 
       <main className="flex-grow flex items-center justify-center p-4 md:p-8">
         
-        {/* Step 1: Select Exercise */}
+        {/* VIEW: ADMIN DASHBOARD */}
+        {step === AppStep.ADMIN_DASHBOARD && currentUser?.role === 'admin' && (
+          <AdminDashboard currentUser={currentUser} onRefreshData={loadCustomImages} />
+        )}
+
+        {/* VIEW: EXERCISE SELECTION (User) */}
         {step === AppStep.SELECT_EXERCISE && (
           <div className="w-full max-w-6xl animate-fade-in flex flex-col items-center">
             <div className="text-center mb-10 max-w-2xl mt-4 md:mt-0">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4 border border-blue-500/20">
-                <Sparkles className="w-3 h-3" /> Inteligência Artificial
+                <Sparkles className="w-3 h-3" /> Sua Ficha de Treino
               </div>
-              <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
-                Eleve seu treino com <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">Análise Profissional</span>
+              <h2 className="text-3xl md:text-5xl font-bold text-white mb-6 leading-tight">
+                Olá, {currentUser?.name.split(' ')[0]}! <br/> 
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+                  Qual o treino de hoje?
+                </span>
               </h2>
-              <p className="text-slate-400 text-lg">
-                Escolha um exercício e grave sua execução. Nossa IA corrigirá sua postura instantaneamente.
-              </p>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 w-full mb-12">
-              {Object.values(ExerciseType).map((type) => (
-                <ExerciseCard
-                  key={type}
-                  type={type}
-                  imageUrl={EXERCISE_IMAGES[type]}
-                  selected={selectedExercise === type}
-                  onClick={() => setSelectedExercise(type)}
-                />
-              ))}
-            </div>
+            {availableExercises.length === 0 ? (
+              <div className="w-full max-w-md bg-slate-800/50 p-8 rounded-3xl text-center border border-slate-700">
+                <p className="text-slate-300 mb-2">Você ainda não possui exercícios atribuídos.</p>
+                <p className="text-sm text-slate-500">Peça ao seu treinador para atualizar sua ficha.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 w-full mb-12">
+                {availableExercises.map((type) => (
+                  <ExerciseCard
+                    key={type}
+                    type={type}
+                    imageUrl={exerciseImages[type] || DEFAULT_EXERCISE_IMAGES[type]}
+                    selected={selectedExercise === type}
+                    onClick={() => setSelectedExercise(type)}
+                  />
+                ))}
+              </div>
+            )}
 
-            <button
-              disabled={!selectedExercise}
-              onClick={() => setStep(AppStep.UPLOAD_VIDEO)}
-              className={`
-                w-full md:w-auto group flex items-center justify-center gap-3 px-10 py-5 rounded-full text-lg font-bold transition-all duration-300
-                ${selectedExercise 
-                  ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-xl shadow-blue-600/20 hover:shadow-blue-600/40 transform hover:-translate-y-1' 
-                  : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}
-              `}
-            >
-              Continuar
-              <ArrowRight className={`w-5 h-5 transition-transform ${selectedExercise ? 'group-hover:translate-x-1' : ''}`} />
-            </button>
+            {availableExercises.length > 0 && (
+              <button
+                disabled={!selectedExercise}
+                onClick={() => setStep(AppStep.UPLOAD_VIDEO)}
+                className={`
+                  w-full md:w-auto group flex items-center justify-center gap-3 px-10 py-5 rounded-full text-lg font-bold transition-all duration-300
+                  ${selectedExercise 
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-xl shadow-blue-600/20 hover:shadow-blue-600/40 transform hover:-translate-y-1' 
+                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}
+                `}
+              >
+                Continuar
+                <ArrowRight className={`w-5 h-5 transition-transform ${selectedExercise ? 'group-hover:translate-x-1' : ''}`} />
+              </button>
+            )}
           </div>
         )}
 
-        {/* Step 2: Upload Video (Mobile Optimized) */}
+        {/* VIEW: UPLOAD VIDEO */}
         {step === AppStep.UPLOAD_VIDEO && (
           <div className="w-full max-w-3xl animate-fade-in">
             <div className="glass-panel rounded-3xl p-6 md:p-12 shadow-2xl">
               <div className="text-center mb-8">
-                <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Vamos ver esse movimento</h2>
+                <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Registro de Execução</h2>
                 <p className="text-slate-400 text-sm md:text-base">Grave ou envie um vídeo fazendo: <br className="md:hidden"/><span className="text-blue-400 font-semibold">{selectedExercise}</span></p>
               </div>
               
               <div className="flex flex-col gap-4 mb-8">
-                
                 {/* 1. Mobile-First Camera Button */}
                 {!videoFile && (
                   <label 
@@ -219,14 +304,14 @@ const App: React.FC = () => {
                       id="camera-upload" 
                       type="file" 
                       accept="video/*" 
-                      capture="environment"
+                      capture="user"
                       className="hidden" 
                       onChange={handleFileChange} 
                     />
                   </label>
                 )}
 
-                {/* 2. Drag & Drop / Gallery Area */}
+                {/* 2. Drag & Drop */}
                 <label 
                   htmlFor="video-upload" 
                   className={`
@@ -263,7 +348,7 @@ const App: React.FC = () => {
                   />
                   
                   {videoFile && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
+                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
                       <span className="bg-white/10 backdrop-blur px-4 py-2 rounded-full text-white font-medium border border-white/20 flex items-center gap-2">
                         <Smartphone className="w-4 h-4" /> Alterar vídeo
                       </span>
@@ -303,10 +388,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Step 3: Compressing & Analyzing */}
+        {/* VIEW: ANALYSIS & COMPRESSION */}
         {(step === AppStep.ANALYZING || step === AppStep.COMPRESSING) && (
           <div className="text-center animate-fade-in w-full max-w-2xl mx-auto px-4">
-            <div className="relative inline-flex items-center justify-center mb-12">
+             <div className="relative inline-flex items-center justify-center mb-12">
               <div className="absolute inset-0 bg-blue-500 rounded-full opacity-20 blur-2xl animate-pulse"></div>
               <div className="relative bg-slate-900/80 rounded-full p-8 md:p-10 border border-blue-500/30 shadow-2xl shadow-blue-500/20">
                 <Loader2 className="w-16 h-16 md:w-20 md:h-20 text-blue-400 animate-spin" />
@@ -319,7 +404,7 @@ const App: React.FC = () => {
                    <Zap className="w-6 h-6 text-yellow-400 fill-yellow-400" /> Otimizando Vídeo
                  </h2>
                  <p className="text-slate-400 text-sm md:text-base mb-10 max-w-md mx-auto">
-                    Reduzindo o tamanho do arquivo para análise rápida...
+                    Reduzindo o tamanho do arquivo para upload...
                  </p>
               </>
             ) : (
@@ -363,12 +448,13 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Step 4: Results */}
+        {/* VIEW: RESULTS */}
         {step === AppStep.RESULTS && analysisResult && selectedExercise && (
           <ResultView 
             result={analysisResult} 
             exercise={selectedExercise} 
-            onReset={resetApp} 
+            onReset={resetApp}
+            onSave={() => { /* Auto-save handled in logic, this is mostly for UI flow */ }}
           />
         )}
 
