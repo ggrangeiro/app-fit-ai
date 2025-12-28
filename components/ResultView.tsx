@@ -75,7 +75,11 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
     if (user) {
         // Fetch previous records
         const allRecords = MockDataService.getHistoryByExercise(user.id, exercise);
-        const pastRecords = allRecords.filter(r => Math.abs(r.timestamp - Date.now()) > 2000); 
+        
+        // FIX: The current result was just saved in App.tsx before rendering this view, so it is at index 0 (newest).
+        // We need to exclude it to find the *previous* records for meaningful comparison.
+        // allRecords is sorted by timestamp desc.
+        const pastRecords = allRecords.slice(1); 
         
         setHistoryRecords(pastRecords);
 
@@ -83,6 +87,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
             setLoadingInsight(true);
             try {
                 // Generate insight before opening modal to ensure content is ready
+                // Compare current 'result' with the most recent PAST result (pastRecords[0])
                 const insight = await generateProgressInsight(result, pastRecords[0].result, exercise);
                 setComparisonInsight(insight);
             } catch (e) {
