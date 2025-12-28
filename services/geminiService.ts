@@ -23,24 +23,29 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
 };
 
 export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Promise<AnalysisResult> => {
-  console.log(`Starting rigorous validation for: ${exerciseType}`);
+  console.log(`Iniciando validação de contexto rigorosa para: ${exerciseType}`);
   
   const mediaPart = await fileToGenerativePart(file);
 
   const validationRules = `
-    INSTRUÇÕES CRÍTICAS DE SEGURANÇA E CONTEXTO:
-    Sua primeira e mais importante tarefa é validar o conteúdo. Seja cético.
+    REGRA DE OURO: VOCÊ É UM FILTRO DE CONTEXTO FITNESS ULTRA-RIGOROSO.
     
-    1. PRESENÇA HUMANA: Existe pelo menos um ser humano claramente visível realizando uma atividade? Se for um objeto, animal, paisagem ou ambiente vazio, REJEITE.
-    2. COERÊNCIA DE CATEGORIA: O conteúdo condiz com o que foi selecionado: "${exerciseType}"?
-       - Se o usuário selecionou um exercício específico (ex: Agachamento), ele deve estar tentando realizar ESSE exercício.
-       - Se selecionou "Análise de Postura", deve ser uma foto/vídeo de um humano em pé ou sentado para avaliação.
-       - Se selecionou "Análise Corporal", deve ser um humano em trajes que permitam ver a composição física.
+    Sua primeira missão é validar se o arquivo é VÁLIDO para análise de saúde/fitness.
     
-    SE QUALQUER REGRA FALHAR:
-    - Defina "isValidContent" como false.
-    - No campo "validationError", explique educadamente mas com firmeza por que o conteúdo foi rejeitado (ex: "Não detectamos um humano no vídeo" ou "O vídeo enviado parece ser de um exercício diferente do selecionado").
-    - Zere os outros campos (score: 0, repetitions: 0, etc).
+    CRITÉRIOS DE REJEIÇÃO IMEDIATA (isValidContent = false):
+    1. CONTEXTO ERRADO: Vídeos de esportes coletivos (futebol, basquete, etc), partidas profissionais, desenhos animados, filmes, memes ou paisagens sem pessoas treinando.
+    2. AUSÊNCIA DE FOCO: Se houver muitas pessoas e não ficar claro quem é o aluno treinando.
+    3. INCOMPATIBILIDADE: Se o usuário escolheu "${exerciseType}" mas está fazendo algo totalmente diferente (ex: dançando, jogando bola, ou apenas caminhando).
+    4. QUALIDADE: Vídeo muito escuro, borrado ou onde o corpo não pode ser distinguido do fundo.
+    
+    SE FOR REJEITADO:
+    - isValidContent: false
+    - validationError: Explique o motivo específico (ex: "O vídeo enviado parece ser de uma partida de futebol. Por favor, envie um vídeo focado na execução do exercício selecionado.")
+    - Zere todos os scores e repetições.
+    
+    SE FOR VÁLIDO (Passou no filtro de contexto e o exercício "${exerciseType}" foi identificado):
+    - isValidContent: true
+    - Prossiga com a análise biomecânica normal.
   `;
 
   let prompt = '';
@@ -48,26 +53,22 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
   if (exerciseType === ExerciseType.POSTURE_ANALYSIS) {
     prompt = `
       ${validationRules}
-      Se o conteúdo for VÁLIDO:
-      Atue como Especialista em Fisioterapia e Biomecânica. Analise a POSTURA.
-      Identifique desvios laterais ou frontais, simetria de ombros/quadril e dê nota 0-100.
+      Contexto: Análise Postural Estática ou Dinâmica.
+      Instrução: Analise o alinhamento de ombros, coluna e quadril. Identifique escolioses aparentes ou inclinações pélvicas.
       Responda EXCLUSIVAMENTE em JSON.
     `;
   } else if (exerciseType === ExerciseType.BODY_COMPOSITION) {
     prompt = `
       ${validationRules}
-      Se o conteúdo for VÁLIDO:
-      Atue como Nutricionista Esportivo. Analise a COMPOSIÇÃO CORPORAL.
-      Estime % de gordura (coloque no campo 'repetitions'), identifique o biotipo e dê nota de condicionamento.
+      Contexto: Avaliação Antropométrica Visual.
+      Instrução: Estime o biotipo (ectomorfo, mesomorfo, endomorfo) e a gordura corporal aproximada baseada na definição muscular visível.
       Responda EXCLUSIVAMENTE em JSON.
     `;
   } else {
     prompt = `
       ${validationRules}
-      Se o conteúdo for VÁLIDO:
-      Atue como Personal Trainer. Analise o exercício ${exerciseType}.
-      Conte APENAS repetições com técnica aceitável. Atribua nota 0-100 baseada na amplitude e controle.
-      Dê feedbacks curtos com emojis.
+      Contexto: Treinamento Resistido / Cardio (${exerciseType}).
+      Instrução: Conte apenas repetições completas. Avalie a cadência e amplitude do movimento.
       Responda EXCLUSIVAMENTE em JSON.
     `;
   }
@@ -109,7 +110,7 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
     if (response && response.text) {
       return JSON.parse(response.text.trim()) as AnalysisResult;
     }
-    throw new Error("Erro na comunicação com a IA.");
+    throw new Error("Falha na interpretação da IA.");
   } catch (error: any) {
     console.error("Gemini Error:", error);
     throw error;
