@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, ChevronRight, X } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, ChevronRight, X, AlertTriangle, ThumbsUp, Info } from 'lucide-react';
 import MuscleMap from './MuscleMap';
 import { generateDietPlan } from '../services/geminiService';
 
@@ -258,10 +258,10 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
         {/* Header */}
         <div className="text-center mb-10 relative z-10">
           <span className="px-4 py-1.5 rounded-full bg-slate-700/50 text-slate-300 text-sm font-medium border border-slate-600/50">
-            Relatório de Performance
+            Relatório Biomecânico
           </span>
           <h2 className="text-3xl md:text-4xl font-bold mt-4 text-white">
-            {isBodyCompAnalysis ? 'Avaliação Corporal' : `Análise de ${exercise}`}
+            {isBodyCompAnalysis ? 'Avaliação Corporal Detalhada' : `Análise de ${exercise}`}
           </h2>
         </div>
 
@@ -278,19 +278,8 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
                 <Trophy className={`w-32 h-32 ${isHighPerformance ? 'text-yellow-400' : 'text-white'}`} />
               </div>
               
-              {isHighPerformance && (
-                <>
-                  <div className="absolute top-6 left-6 animate-float" style={{ animationDelay: '0s' }}>
-                    <Sparkles className="w-6 h-6 text-yellow-300 fill-yellow-300/50" />
-                  </div>
-                  <div className="absolute bottom-10 right-8 animate-float" style={{ animationDelay: '1.5s' }}>
-                    <Sparkles className="w-4 h-4 text-emerald-400 fill-emerald-400/50" />
-                  </div>
-                </>
-              )}
-              
               <h3 className={`text-lg font-medium mb-2 ${isHighPerformance ? 'text-yellow-100' : 'text-slate-300'}`}>
-                {isPostureAnalysis ? 'Alinhamento Global' : (isBodyCompAnalysis ? 'Estética / Condicionamento' : 'Pontuação Técnica')}
+                {isPostureAnalysis ? 'Alinhamento Global' : (isBodyCompAnalysis ? 'Índice de Composição' : 'Score Técnico')}
               </h3>
               
               <div className="h-56 w-full relative z-10">
@@ -325,6 +314,16 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
                   </span>
                 </div>
               </div>
+
+               {/* Segmentation Score List */}
+               <div className="w-full mt-4 space-y-2">
+                 {result.feedback.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-1">
+                       <span>{item.message}</span>
+                       <span className={getScoreTextColor(item.score)}>{item.score}/100</span>
+                    </div>
+                 ))}
+               </div>
             </div>
 
             <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col items-center justify-center gap-2">
@@ -344,34 +343,60 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
 
           </div>
 
-          {/* Details Column (Middle) - Feedback */}
+          {/* Details Column (Middle) - REDESIGNED FOR DETAIL */}
           <div className="lg:col-span-4 flex flex-col gap-6">
-            <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 h-full">
-              <h3 className="text-lg font-bold mb-5 flex items-center gap-3 text-white border-b border-slate-700/50 pb-4">
-                <CheckCircle className="text-emerald-400 w-5 h-5" /> 
-                {isBodyCompAnalysis ? 'Detalhes da Avaliação' : 'Detalhes da Execução'}
-              </h3>
-              <ul className="space-y-4 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
-                {result.feedback.map((item, index) => (
-                  <li key={index} className="flex flex-col gap-2 p-4 bg-slate-800/30 rounded-xl hover:bg-slate-800/50 transition-colors border border-slate-700/30">
-                    <div className="flex justify-between items-start gap-3">
-                      <span className="text-slate-200 font-medium leading-relaxed text-sm flex-1">
-                        {item.message}
-                      </span>
-                      <span className={`font-bold text-sm ${getScoreTextColor(item.score)}`}>
-                        {item.score}
-                      </span>
-                    </div>
-                    {/* Progress Bar */}
-                    <div className="w-full h-1 bg-slate-700/50 rounded-full overflow-hidden mt-1">
-                      <div 
-                        className={`h-full ${getScoreColor(item.score)} transition-all duration-1000 ease-out`}
-                        style={{ width: `${item.score}%` }}
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            <div className="flex flex-col h-full gap-6">
+              
+              {/* Pontos Fortes */}
+              {result.strengths && result.strengths.length > 0 && (
+                <div className="bg-emerald-900/10 rounded-3xl p-6 border border-emerald-500/20">
+                   <h3 className="text-lg font-bold mb-4 flex items-center gap-3 text-emerald-400">
+                    <ThumbsUp className="w-5 h-5" /> Pontos Fortes
+                  </h3>
+                  <ul className="space-y-3">
+                    {result.strengths.map((strength, index) => (
+                      <li key={index} className="flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                        <span className="text-slate-200 text-sm leading-relaxed">{strength}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Ajustes Necessários (Rico em detalhe) */}
+              <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex-grow">
+                <h3 className="text-lg font-bold mb-5 flex items-center gap-3 text-white border-b border-slate-700/50 pb-4">
+                  <AlertTriangle className="text-yellow-400 w-5 h-5" /> 
+                  {isBodyCompAnalysis ? 'Recomendações' : 'Ajustes Técnicos'}
+                </h3>
+                
+                {result.improvements ? (
+                   <div className="space-y-4 overflow-y-auto max-h-[500px] pr-2 custom-scrollbar">
+                     {result.improvements.map((item, index) => (
+                       <div key={index} className="bg-slate-800/30 rounded-xl p-4 border-l-4 border-l-yellow-500 border-t border-r border-b border-slate-700/30 hover:bg-slate-800/50 transition-colors">
+                          <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
+                             {item.instruction}
+                          </h4>
+                          <div className="flex items-start gap-2 text-xs text-slate-400 bg-black/20 p-2 rounded-lg">
+                             <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                             <p className="leading-relaxed">{item.detail}</p>
+                          </div>
+                       </div>
+                     ))}
+                   </div>
+                ) : (
+                  // Fallback para análises antigas
+                   <ul className="space-y-4 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
+                    {result.feedback.filter(f => f.score < 70).map((item, index) => (
+                      <li key={index} className="flex flex-col gap-2 p-4 bg-slate-800/30 rounded-xl">
+                         <span className="text-slate-200 font-medium text-sm">{item.message}</span>
+                         <span className="text-xs text-red-400">Pontuação baixa detectada nesta região. Reveja a execução.</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
 
@@ -404,9 +429,9 @@ const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSa
                 </div>
                 <h3 className="text-sm font-bold mb-3 flex items-center gap-2 text-indigo-300 uppercase tracking-wider relative z-10">
                   <MessageCircleHeart className="w-4 h-4" /> 
-                  {isPostureAnalysis ? 'Hábito Saudável' : (isBodyCompAnalysis ? 'Dica Nutricional' : 'Dica do Coach')}
+                  {isPostureAnalysis ? 'Resumo Postural' : (isBodyCompAnalysis ? 'Conclusão' : 'Dica de Mestre')}
                 </h3>
-                <p className="text-white font-medium text-lg md:text-xl leading-relaxed relative z-10">
+                <p className="text-white font-medium text-lg leading-relaxed relative z-10">
                   "{result.formCorrection}"
                 </p>
             </div>

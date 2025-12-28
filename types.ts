@@ -28,12 +28,22 @@ export interface FeedbackItem {
   score: number;
 }
 
+export interface DetailedImprovement {
+  instruction: string; // O que fazer (ex: "Mantenha a coluna neutra")
+  detail: string;      // O porquê/detalhe (ex: "Arredondar a lombar aumenta risco de hérnia...")
+}
+
 export interface AnalysisResult {
   isValidContent: boolean; // Indica se passou na validação de humano + categoria
   validationError?: string; // Mensagem explicando por que falhou na validação
   score: number;
   repetitions: number; 
-  feedback: FeedbackItem[];
+  feedback: FeedbackItem[]; // Mantido para compatibilidade, mas usado para scores por parte do corpo
+  
+  // Novos campos detalhados
+  strengths?: string[]; // O que o usuário fez certo
+  improvements?: DetailedImprovement[]; // Lista detalhada de correções
+  
   formCorrection: string;
   muscleGroups: string[];
   date?: string;

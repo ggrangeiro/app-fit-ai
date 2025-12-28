@@ -23,29 +23,31 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
 };
 
 export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Promise<AnalysisResult> => {
-  console.log(`Iniciando validação de contexto rigorosa para: ${exerciseType}`);
+  console.log(`Iniciando análise detalhada para: ${exerciseType}`);
   
   const mediaPart = await fileToGenerativePart(file);
 
   const validationRules = `
     REGRA DE OURO: VOCÊ É UM FILTRO DE CONTEXTO FITNESS ULTRA-RIGOROSO.
     
-    Sua primeira missão é validar se o arquivo é VÁLIDO para análise de saúde/fitness.
+    1. Valide se o vídeo contém um humano realizando "${exerciseType}".
+    2. Se for inválido (esporte errado, sem pessoa, meme), retorne isValidContent: false.
+  `;
+
+  // Novas regras de estilo para feedback DETALHADO
+  const detailedStyle = `
+    VOCÊ É UM TREINADOR DE BIOMECÂNICA DE ELITE (PhD em Cinesiologia).
     
-    CRITÉRIOS DE REJEIÇÃO IMEDIATA (isValidContent = false):
-    1. CONTEXTO ERRADO: Vídeos de esportes coletivos (futebol, basquete, etc), partidas profissionais, desenhos animados, filmes, memes ou paisagens sem pessoas treinando.
-    2. AUSÊNCIA DE FOCO: Se houver muitas pessoas e não ficar claro quem é o aluno treinando.
-    3. INCOMPATIBILIDADE: Se o usuário escolheu "${exerciseType}" mas está fazendo algo totalmente diferente (ex: dançando, jogando bola, ou apenas caminhando).
-    4. QUALIDADE: Vídeo muito escuro, borrado ou onde o corpo não pode ser distinguido do fundo.
+    Seu objetivo não é apenas corrigir, mas EDUCAR. A análise deve ser rica, detalhada e técnica, mas acessível.
     
-    SE FOR REJEITADO:
-    - isValidContent: false
-    - validationError: Explique o motivo específico (ex: "O vídeo enviado parece ser de uma partida de futebol. Por favor, envie um vídeo focado na execução do exercício selecionado.")
-    - Zere todos os scores e repetições.
+    ESTRUTURA DA RESPOSTA:
+    1. "strengths": Identifique 2 a 3 pontos que o usuário executou PERFEITAMENTE. Elogie a técnica (ex: estabilidade, amplitude, ritmo).
+    2. "improvements": Liste 3 a 5 correções CRÍTICAS. Para cada correção, forneça:
+       - "instruction": A ordem direta do que mudar.
+       - "detail": A explicação biomecânica ou o risco de lesão associado (O PORQUÊ).
+    3. "feedback": Use este array para dar notas (0-100) para partes específicas do corpo (ex: Cabeça, Tronco, Quadril, Joelhos, Pés).
     
-    SE FOR VÁLIDO (Passou no filtro de contexto e o exercício "${exerciseType}" foi identificado):
-    - isValidContent: true
-    - Prossiga com a análise biomecânica normal.
+    O tom deve ser encorajador porém rigoroso tecnicamente.
   `;
 
   let prompt = '';
@@ -53,32 +55,37 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
   if (exerciseType === ExerciseType.POSTURE_ANALYSIS) {
     prompt = `
       ${validationRules}
+      ${detailedStyle}
       Contexto: Análise Postural Estática ou Dinâmica.
-      Instrução: Analise o alinhamento de ombros, coluna e quadril. Identifique escolioses aparentes ou inclinações pélvicas.
+      Instrução: Realize uma varredura completa. Identifique desvios como Hiperlordose, Hipercifose, Escoliose, Valgo Dinâmico, Cabeça protusa.
+      Dê detalhes sobre como esses desvios afetam o dia a dia.
       Responda EXCLUSIVAMENTE em JSON.
     `;
   } else if (exerciseType === ExerciseType.BODY_COMPOSITION) {
     prompt = `
       ${validationRules}
+      ${detailedStyle}
       Contexto: Avaliação Antropométrica Visual.
-      Instrução: Estime o biotipo (ectomorfo, mesomorfo, endomorfo) e a porcentagem de gordura corporal aproximada baseada na definição muscular visível.
+      Instrução: Estime o biotipo e a gordura corporal.
+      No campo "improvements", sugira focos estéticos ou de saúde (ex: "Focar em deltoide lateral para equilibrar a silhueta").
       
-      IMPORTANTE: Você DEVE preencher o campo "repetitions" no JSON com o valor numérico estimado da gordura corporal (Ex: se for 15%, retorne 15). Não retorne 0 a menos que não seja possível estimar.
-      
+      IMPORTANTE: Preencha "repetitions" com a % de gordura estimada (apenas número).
       Responda EXCLUSIVAMENTE em JSON.
     `;
   } else {
     prompt = `
       ${validationRules}
+      ${detailedStyle}
       Contexto: Treinamento Resistido / Cardio (${exerciseType}).
-      Instrução: Conte apenas repetições completas. Avalie a cadência e amplitude do movimento.
+      Instrução: Analise a fase concêntrica e excêntrica. Verifique a estabilidade articular.
+      Identifique compensações musculares.
       Responda EXCLUSIVAMENTE em JSON.
     `;
   }
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview', // Upgrade para modelo Pro para melhor raciocínio biomecânico
       contents: {
         parts: [mediaPart, { text: prompt }],
       },
@@ -91,18 +98,38 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
             validationError: { type: Type.STRING },
             score: { type: Type.NUMBER },
             repetitions: { type: Type.NUMBER },
+            
+            // Novos campos detalhados
+            strengths: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING },
+              description: "Lista de pontos positivos da execução"
+            },
+            improvements: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  instruction: { type: Type.STRING, description: "Ação corretiva direta" },
+                  detail: { type: Type.STRING, description: "Explicação técnica/biomecânica do erro" }
+                },
+                required: ["instruction", "detail"]
+              }
+            },
+            
+            // Feedback segmentado por parte do corpo
             feedback: { 
               type: Type.ARRAY, 
               items: { 
                 type: Type.OBJECT,
                 properties: {
-                  message: { type: Type.STRING },
-                  score: { type: Type.NUMBER }
+                  message: { type: Type.STRING, description: "Nome da parte do corpo avaliada (ex: Joelhos)" },
+                  score: { type: Type.NUMBER, description: "Nota de 0 a 100 para essa parte" }
                 },
                 required: ["message", "score"]
               }
             },
-            formCorrection: { type: Type.STRING },
+            formCorrection: { type: Type.STRING, description: "Resumo geral ou 'Dica de Ouro'" },
             muscleGroups: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
           required: ["isValidContent", "score", "repetitions", "feedback", "formCorrection", "muscleGroups"]
