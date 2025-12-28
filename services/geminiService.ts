@@ -67,9 +67,12 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
       ${detailedStyle}
       Contexto: Avaliação Antropométrica Visual.
       Instrução: Estime o biotipo e a gordura corporal.
-      No campo "improvements", sugira focos estéticos ou de saúde (ex: "Focar em deltoide lateral para equilibrar a silhueta").
+      IMPORTANTE: Identifique visualmente o sexo biológico (masculino ou feminino) para ajustar a estimativa de gordura e sugestões.
+      
+      No campo "improvements", sugira focos estéticos ou de saúde baseados no biotipo identificado (ex: "Focar em deltoide lateral para equilibrar a silhueta").
       
       IMPORTANTE: Preencha "repetitions" com a % de gordura estimada (apenas número).
+      Preencha "gender" com 'masculino' ou 'feminino'.
       Responda EXCLUSIVAMENTE em JSON.
     `;
   } else {
@@ -98,6 +101,7 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
             validationError: { type: Type.STRING },
             score: { type: Type.NUMBER },
             repetitions: { type: Type.NUMBER },
+            gender: { type: Type.STRING, description: "Sexo estimado: 'masculino' ou 'feminino'" },
             
             // Novos campos detalhados
             strengths: { 
@@ -148,32 +152,36 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
 };
 
 export const generateDietPlan = async (
-  userData: { weight: string; height: string; goal: string },
+  userData: { weight: string; height: string; goal: string; gender: string },
   analysisContext: AnalysisResult
 ): Promise<string> => {
   const prompt = `
     Atue como um nutricionista esportivo de elite com foco em UI/UX moderno.
     
     Crie um plano alimentar semanal visualmente incrível e moderno, baseado nestes dados:
-    - Peso: ${userData.weight}kg | Altura: ${userData.height}cm | Objetivo: ${userData.goal}
+    - Peso: ${userData.weight}kg | Altura: ${userData.height}cm | Sexo: ${userData.gender}
+    - Objetivo: ${userData.goal}
     - Contexto IA: ${analysisContext.formCorrection}
     
-    DIRETRIZES DE DESIGN E HTML (IMPORTANTE):
+    INSTRUÇÕES ESPECÍFICAS DE GÊNERO:
+    - Ajuste as calorias e macronutrientes considerando o metabolismo basal típico do sexo ${userData.gender}.
+    
+    DIRETRIZES DE DESIGN E HTML (IMPORTANTE - LEGIBILIDADE MÁXIMA):
     1. NÃO use tabelas HTML padrão (<table>). Use um layout de CARDS (Cartões) modernos usando <div> e classes Tailwind CSS.
     2. Estrutura sugerida:
-       - Um "Hero Section" no topo com o resumo dos Macros em destaque (Cards coloridos grandes).
-       - Um GRID responsivo (grid-cols-1 md:grid-cols-2 gap-6) para os dias da semana.
-       - Cada dia deve ser um "Card" bonito: fundo branco (bg-white), sombra suave (shadow-md), bordas arredondadas (rounded-2xl) e borda sutil (border border-slate-200).
-    3. Tipografia e Cores (ALTA LEGIBILIDADE):
-       - Use 'text-slate-800' ou 'text-slate-900' para todo o texto principal nos dias comuns.
-       - Use cores de destaque suaves para títulos (ex: text-emerald-700, text-blue-700).
-       - Use badges (etiquetas) para as refeições.
+       - Um "Hero Section" no topo com o resumo dos Macros em destaque.
+       - Um GRID responsivo para os dias da semana.
+       - Cada dia deve ser um "Card": fundo branco (bg-white), bordas arredondadas (rounded-2xl).
+    3. CORES E TIPOGRAFIA (CRUCIAL):
+       - O texto principal DEVE SER ESCURO E LEGÍVEL: Use 'text-slate-900' (quase preto).
+       - Títulos dentro dos cards devem ser COLORIDOS e ESCUROS (ex: 'text-emerald-800' ou 'text-teal-900').
+       - NUNCA use cinza claro (text-gray-400, text-slate-300) dentro dos cards brancos.
+       - Use badges vibrantes para as refeições.
     4. Conteúdo:
-       - Organize o conteúdo de forma limpa dentro dos cards. Use listas (<ul>) sem marcadores padrão, mas com espaçamento.
-       - Para o DOMINGO (Sunday): Crie um card especial com fundo escuro (ex: bg-slate-800) para diferenciar (Dia de Descanso ou Livre). IMPORTANTE: Neste card de Domingo, TODO o texto deve ser BRANCO (text-white ou text-slate-100) para garantir leitura perfeita.
+       - Organize o conteúdo de forma limpa.
+       - Para o DOMINGO (Sunday): Card especial com fundo escuro (bg-slate-800). Neste caso, o texto deve ser BRANCO.
     
-    O output deve ser APENAS o código HTML do conteúdo interno (sem tags <html> ou <body>).
-    Faça parecer um dashboard de aplicativo de nutrição premium.
+    O output deve ser APENAS o código HTML do conteúdo interno.
   `;
 
   try {
@@ -190,7 +198,7 @@ export const generateDietPlan = async (
 };
 
 export const generateWorkoutPlan = async (
-  userData: { weight: string; height: string; goal: string; level: string; frequency: string },
+  userData: { weight: string; height: string; goal: string; level: string; frequency: string; observations: string; gender: string },
   analysisContext: AnalysisResult
 ): Promise<string> => {
   // Serializar os pontos de melhoria para o prompt
@@ -199,36 +207,35 @@ export const generateWorkoutPlan = async (
     : analysisContext.formCorrection;
 
   const prompt = `
-    Atue como um Personal Trainer de elite e Especialista em Biomecânica.
+    Atue como um Personal Trainer de elite e Especialista em Biomecânica e Reabilitação.
     
     Crie um plano de treino semanal visualmente incrível e moderno.
     
     DADOS DO ALUNO:
-    - Peso: ${userData.weight}kg | Altura: ${userData.height}cm
-    - Objetivo: ${userData.goal} (Hipertrofia, Definição ou Emagrecimento)
-    - Nível de Experiência: ${userData.level}
-    - Frequência Disponível: ${userData.frequency} dias por semana
-    - % de Gordura Estimada: ${analysisContext.repetitions}%
+    - Peso: ${userData.weight}kg | Altura: ${userData.height}cm | Sexo: ${userData.gender}
+    - Objetivo: ${userData.goal}
+    - Nível: ${userData.level}
+    - Frequência: ${userData.frequency} dias
     
-    CRUCIAL - CORREÇÕES BIOMECÂNICAS:
-    O aluno realizou uma análise de movimento e precisa destes ajustes técnicos. INCLUA exercícios corretivos ou de mobilidade no início dos treinos baseados nisso:
-    "${technicalAdjustments}"
+    OBSERVAÇÕES: "${userData.observations || 'Nenhuma.'}"
+    ANÁLISE BIOMECÂNICA: "${technicalAdjustments}"
     
-    DIRETRIZES DE DESIGN E HTML (MUITO IMPORTANTE):
-    1. Estrutura Visual: Use o mesmo padrão "Card/Grid" moderno.
-       - "Hero Section": Resumo da divisão de treino (ex: ABC, ABCD) e foco principal.
-       - Grid responsivo para os dias da semana (Cards).
-    2. ESTILO DO CARD DE FREQUÊNCIA (Hero Section):
-       - Ao mostrar a frequência, escreva APENAS o número seguido de 'x' (ex: "4x", "5x"). 
-       - NÃO escreva "semana" ou "vezes". Exemplo correto: <span class="...">4x</span>
-    3. Conteúdo do Treino:
-       - Adapte o volume e complexidade para o nível ${userData.level}.
-       - Divida o treino exatamente em ${userData.frequency} dias ativos.
-       - Exercício | Séries | Repetições | Intervalo.
-       - Inclua uma seção "Aquecimento Específico" em cada dia.
-    4. Dia de Descanso (Domingo/Rest Day):
-       - Use um card com fundo escuro (bg-slate-800).
-       - Texto OBRIGATORIAMENTE BRANCO (text-white) para legibilidade.
+    INSTRUÇÕES DE INTEGRAÇÃO E GÊNERO:
+    1. Considere diferenças fisiológicas para o sexo ${userData.gender} (ex: volume de treino, recuperação, ênfases estéticas comuns se não especificado o contrário).
+    2. Se houver dor relatada, adapte.
+    3. Use aquecimento para corrigir biomecânica detectada na análise.
+    
+    DIRETRIZES DE DESIGN E HTML (LEGIBILIDADE TOTAL):
+    1. Estrutura Visual: Padrão "Card/Grid" moderno.
+    2. CORES E FONTES (MUITO IMPORTANTE):
+       - Fundo dos Cards: Branco (bg-white).
+       - Texto dos Exercícios: OBRIGATORIAMENTE ESCURO ('text-slate-900').
+       - Títulos e Cabeçalhos: Use AZUL ESCURO ou INDIGO ESCURO ('text-blue-800', 'text-indigo-900').
+       - PROIBIDO usar texto cinza claro, prata ou cores lavadas dentro dos cards brancos. O contraste deve ser alto.
+    3. ESTILO DO CARD DE FREQUÊNCIA:
+       - Escreva APENAS o número seguido de 'x' (ex: <span class="text-blue-900 font-bold">4x</span>).
+    4. Dia de Descanso (Domingo):
+       - Fundo escuro (bg-slate-800). Texto BRANCO (text-white).
     
     O output deve ser APENAS o código HTML do conteúdo interno.
   `;

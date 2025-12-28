@@ -44,6 +44,8 @@ export interface AnalysisResult {
   strengths?: string[]; // O que o usuário fez certo
   improvements?: DetailedImprovement[]; // Lista detalhada de correções
   
+  gender?: string; // 'masculino' | 'feminino' detectado pela IA
+  
   formCorrection: string;
   muscleGroups: string[];
   date?: string;

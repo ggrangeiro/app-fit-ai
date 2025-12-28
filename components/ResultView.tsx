@@ -22,7 +22,8 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
   const [dietFormData, setDietFormData] = useState({
     weight: '',
     height: '',
-    goal: 'emagrecer'
+    goal: 'emagrecer',
+    gender: 'masculino'
   });
 
   // Workout Plan State
@@ -34,7 +35,9 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
     height: '',
     goal: 'hipertrofia',
     level: 'iniciante',
-    frequency: '4'
+    frequency: '4',
+    observations: '',
+    gender: 'masculino'
   });
 
   const isHighPerformance = result.score > 80;
@@ -47,6 +50,15 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
       setSaved(true);
     }
   }, [onSave, saved]);
+
+  // Pre-fill gender if detected by AI
+  useEffect(() => {
+    if (result.gender) {
+      const detectedGender = result.gender.toLowerCase().includes('fem') ? 'feminino' : 'masculino';
+      setDietFormData(prev => ({ ...prev, gender: detectedGender }));
+      setWorkoutFormData(prev => ({ ...prev, gender: detectedGender }));
+    }
+  }, [result.gender]);
 
   const handleGenerateDiet = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +140,11 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
             </div>
             <span className="text-4xl font-bold text-white">{result.repetitions}%</span>
             <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Gordura Estimada</span>
+            {result.gender && (
+               <span className="text-[10px] text-slate-500 mt-1 uppercase font-bold bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+                 {result.gender}
+               </span>
+            )}
         </>
       );
     }
@@ -236,16 +253,28 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
              </div>
 
              <form onSubmit={handleGenerateDiet} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Peso Atual (kg)</label>
-                  <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={dietFormData.weight} onChange={e => setDietFormData({...dietFormData, weight: e.target.value})} />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Peso (kg)</label>
+                    <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                      value={dietFormData.weight} onChange={e => setDietFormData({...dietFormData, weight: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
+                    <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                      value={dietFormData.height} onChange={e => setDietFormData({...dietFormData, height: e.target.value})} />
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
-                  <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={dietFormData.height} onChange={e => setDietFormData({...dietFormData, height: e.target.value})} />
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Sexo Biológico</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={dietFormData.gender} onChange={e => setDietFormData({...dietFormData, gender: e.target.value})}>
+                    <option value="masculino">Masculino</option>
+                    <option value="feminino">Feminino</option>
+                  </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
                   <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -296,6 +325,15 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Sexo Biológico</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={workoutFormData.gender} onChange={e => setWorkoutFormData({...workoutFormData, gender: e.target.value})}>
+                    <option value="masculino">Masculino</option>
+                    <option value="feminino">Feminino</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
                   <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
                     value={workoutFormData.goal} onChange={e => setWorkoutFormData({...workoutFormData, goal: e.target.value})}>
@@ -326,6 +364,18 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
                     <option value="5">5 dias</option>
                     <option value="6">6 dias</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Observações / Limitações</label>
+                  <textarea 
+                    rows={3}
+                    placeholder="Ex: Tenho condromalácia no joelho esquerdo, prefiro treinos curtos, sinto dor no ombro..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder-slate-500 text-sm"
+                    value={workoutFormData.observations}
+                    onChange={e => setWorkoutFormData({...workoutFormData, observations: e.target.value})}
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">A IA usará isso para adaptar ou remover exercícios.</p>
                 </div>
 
                 <button type="submit" disabled={workoutLoading} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
