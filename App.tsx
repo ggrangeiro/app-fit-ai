@@ -92,7 +92,6 @@ const App: React.FC = () => {
     setStep(user.role === 'admin' ? AppStep.ADMIN_DASHBOARD : AppStep.SELECT_EXERCISE);
   };
 
-  // Fixed handleLogout to correctly reset data and then set the step to login
   const handleLogout = () => {
     MockDataService.logout();
     setCurrentUser(null);
@@ -100,7 +99,6 @@ const App: React.FC = () => {
     setStep(AppStep.LOGIN);
   };
 
-  // Fixed resetAnalysis to include a step transition back to exercise selection
   const resetAnalysis = () => {
     setSelectedExercise(null);
     setMediaFile(null);
@@ -135,6 +133,39 @@ const App: React.FC = () => {
     }
   };
 
+  const sendReportEmail = (result: AnalysisResult, exercise: string, user: User) => {
+    const subject = encodeURIComponent(`Relatório FitAI: ${user.name} - ${exercise}`);
+    const body = encodeURIComponent(`
+Olá,
+
+Segue o relatório de performance do aluno.
+
+ALUNO: ${user.name}
+DATA: ${new Date().toLocaleDateString()}
+EXERCÍCIO: ${exercise}
+
+--- RESULTADOS ---
+SCORE: ${result.score}/100
+REPETIÇÕES VÁLIDAS: ${result.repetitions}
+
+--- FEEDBACK DO COACH IA ---
+${result.formCorrection}
+
+--- DETALHES TÉCNICOS ---
+${result.feedback.map(f => `- ${f.message} (${f.score})`).join('\n')}
+
+Atenciosamente,
+Plataforma FitAI
+    `);
+
+    // Abre o cliente de email
+    const mailtoLink = `mailto:ggrangeiro@me.com?subject=${subject}&body=${body}`;
+    
+    // Tenta abrir em uma nova aba/janela para não sair do app, ou apenas dispara
+    window.open(mailtoLink, '_blank');
+    console.log("Relatório enviado para ggrangeiro@me.com");
+  };
+
   const handleAnalysis = async () => {
     if (!mediaFile || !selectedExercise || !currentUser) return;
 
@@ -162,6 +193,10 @@ const App: React.FC = () => {
       
       setAnalysisResult(result);
       MockDataService.saveResult(currentUser.id, currentUser.name, selectedExercise, result);
+      
+      // Enviar relatório por e-mail automaticamente
+      sendReportEmail(result, selectedExercise, currentUser);
+
       setStep(AppStep.RESULTS);
 
     } catch (err: any) {
@@ -171,15 +206,27 @@ const App: React.FC = () => {
   };
 
   const handleGoBackToSelect = () => {
-    clearSelectedMedia(); // Limpa mídia ao voltar
+    clearSelectedMedia();
     setStep(AppStep.SELECT_EXERCISE);
   };
 
   if (step === AppStep.LOGIN) return <Login onLogin={handleLogin} />;
 
+  // Filter exercises based on permissions
+  const assigned = currentUser?.assignedExercises || [];
+  
   const availableExercises = Object.values(ExerciseType);
   const specialExercises = [ExerciseType.POSTURE_ANALYSIS, ExerciseType.BODY_COMPOSITION];
-  const gridExercises = availableExercises.filter(ex => !specialExercises.includes(ex));
+  
+  // Grid exercises: Must be in 'assigned' list AND not be special
+  const gridExercises = availableExercises.filter(ex => 
+    !specialExercises.includes(ex) && assigned.includes(ex)
+  );
+
+  // Special exercises: Must be in 'assigned' list
+  const hasPostureAccess = assigned.includes(ExerciseType.POSTURE_ANALYSIS);
+  const hasBodyCompAccess = assigned.includes(ExerciseType.BODY_COMPOSITION);
+
   const isSpecialMode = selectedExercise && specialExercises.includes(selectedExercise);
 
   return (
@@ -227,21 +274,42 @@ const App: React.FC = () => {
                  <h3 className="text-white font-bold text-xl">Gravar Treino</h3>
               </button>
               <div className="flex flex-col gap-3">
-                <button className="glass-panel p-5 rounded-2xl flex items-center gap-4 group hover:bg-emerald-600/20 transition-all border-2 border-emerald-500/30 flex-1" onClick={() => { setSelectedExercise(ExerciseType.POSTURE_ANALYSIS); setStep(AppStep.UPLOAD_VIDEO); }}>
-                   <div className="p-3 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><ScanLine className="w-5 h-5" /></div>
-                   <div className="text-left"><h3 className="text-white font-bold text-lg">Analisar Postura</h3><p className="text-slate-400 text-xs">Biofeedback Postural</p></div>
-                </button>
-                <button className="glass-panel p-5 rounded-2xl flex items-center gap-4 group hover:bg-violet-600/20 transition-all border-2 border-violet-500/30 flex-1" onClick={() => { setSelectedExercise(ExerciseType.BODY_COMPOSITION); setStep(AppStep.UPLOAD_VIDEO); }}>
-                   <div className="p-3 bg-violet-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Scale className="w-5 h-5" /></div>
-                   <div className="text-left"><h3 className="text-white font-bold text-lg">Análise Corporal</h3><p className="text-slate-400 text-xs">Biotipo & % Gordura</p></div>
-                </button>
+                {hasPostureAccess ? (
+                  <button className="glass-panel p-5 rounded-2xl flex items-center gap-4 group hover:bg-emerald-600/20 transition-all border-2 border-emerald-500/30 flex-1" onClick={() => { setSelectedExercise(ExerciseType.POSTURE_ANALYSIS); setStep(AppStep.UPLOAD_VIDEO); }}>
+                     <div className="p-3 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><ScanLine className="w-5 h-5" /></div>
+                     <div className="text-left"><h3 className="text-white font-bold text-lg">Analisar Postura</h3><p className="text-slate-400 text-xs">Biofeedback Postural</p></div>
+                  </button>
+                ) : (
+                   <div className="glass-panel p-5 rounded-2xl flex items-center gap-4 opacity-40 border-2 border-slate-700 flex-1 cursor-not-allowed">
+                     <div className="p-3 bg-slate-700 rounded-full text-white"><ScanLine className="w-5 h-5" /></div>
+                     <div className="text-left"><h3 className="text-white font-bold text-lg">Analisar Postura</h3><p className="text-slate-400 text-xs">Não atribuído</p></div>
+                  </div>
+                )}
+
+                {hasBodyCompAccess ? (
+                  <button className="glass-panel p-5 rounded-2xl flex items-center gap-4 group hover:bg-violet-600/20 transition-all border-2 border-violet-500/30 flex-1" onClick={() => { setSelectedExercise(ExerciseType.BODY_COMPOSITION); setStep(AppStep.UPLOAD_VIDEO); }}>
+                     <div className="p-3 bg-violet-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Scale className="w-5 h-5" /></div>
+                     <div className="text-left"><h3 className="text-white font-bold text-lg">Análise Corporal</h3><p className="text-slate-400 text-xs">Biotipo & % Gordura</p></div>
+                  </button>
+                ) : (
+                  <div className="glass-panel p-5 rounded-2xl flex items-center gap-4 opacity-40 border-2 border-slate-700 flex-1 cursor-not-allowed">
+                     <div className="p-3 bg-slate-700 rounded-full text-white"><Scale className="w-5 h-5" /></div>
+                     <div className="text-left"><h3 className="text-white font-bold text-lg">Análise Corporal</h3><p className="text-slate-400 text-xs">Não atribuído</p></div>
+                  </div>
+                )}
               </div>
             </div>
 
             <div id="exercise-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 w-full mb-12">
-              {gridExercises.map((type) => (
-                <ExerciseCard key={type} type={type} imageUrl={exerciseImages[type] || DEFAULT_EXERCISE_IMAGES[type]} selected={selectedExercise === type} onClick={() => setSelectedExercise(type)} />
-              ))}
+              {gridExercises.length > 0 ? (
+                gridExercises.map((type) => (
+                  <ExerciseCard key={type} type={type} imageUrl={exerciseImages[type] || DEFAULT_EXERCISE_IMAGES[type]} selected={selectedExercise === type} onClick={() => setSelectedExercise(type)} />
+                ))
+              ) : (
+                <div className="col-span-full text-center py-10 text-slate-400">
+                  <p>Nenhum exercício de força atribuído. Fale com seu administrador.</p>
+                </div>
+              )}
             </div>
 
             <button disabled={!selectedExercise} onClick={() => setStep(AppStep.UPLOAD_VIDEO)} className={`w-full md:w-auto group flex items-center justify-center gap-3 px-10 py-5 rounded-full text-lg font-bold transition-all duration-300 sticky bottom-8 z-40 shadow-2xl ${selectedExercise ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'opacity-0 pointer-events-none'}`}>
@@ -368,7 +436,6 @@ const App: React.FC = () => {
         )}
 
         {step === AppStep.RESULTS && analysisResult && selectedExercise && (
-          // Fixed typo: renamed resetApp to resetAnalysis to match the defined function
           <ResultView result={analysisResult} exercise={selectedExercise} onReset={resetAnalysis} />
         )}
       </main>

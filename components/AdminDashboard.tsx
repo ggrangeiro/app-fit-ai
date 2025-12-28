@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, ExerciseRecord, ExerciseType } from '../types';
 import { MockDataService } from '../services/mockDataService';
 import { generateExerciseThumbnail } from '../services/geminiService';
-import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save } from 'lucide-react';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -24,9 +25,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
   const [newEmail, setNewEmail] = useState('');
   const [createMsg, setCreateMsg] = useState('');
 
+  // Local state for assignments editing
+  const [editingAssignments, setEditingAssignments] = useState<ExerciseType[]>([]);
+
   useEffect(() => {
     refreshData();
   }, []);
+
+  useEffect(() => {
+    if (selectedUser) {
+        setEditingAssignments(selectedUser.assignedExercises || []);
+    }
+  }, [selectedUser]);
 
   const refreshData = () => {
     setUsers(MockDataService.getUsers());
@@ -88,6 +98,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     }
   };
 
+  const toggleAssignment = (exercise: ExerciseType) => {
+    setEditingAssignments(prev => {
+        if (prev.includes(exercise)) {
+            return prev.filter(e => e !== exercise);
+        } else {
+            return [...prev, exercise];
+        }
+    });
+  };
+
+  const saveAssignments = () => {
+    if (!selectedUser) return;
+    MockDataService.updateUserExercises(selectedUser.id, editingAssignments);
+    // Update local user state to reflect changes immediately
+    setSelectedUser({ ...selectedUser, assignedExercises: editingAssignments });
+    refreshData();
+    alert("Permissões atualizadas com sucesso!");
+  };
+
+  const selectAllExercises = () => {
+    setEditingAssignments(Object.values(ExerciseType));
+  };
+  
+  const deselectAllExercises = () => {
+    setEditingAssignments([]);
+  };
+
   const getUserRecords = (userId: string) => {
     return records.filter(r => r.userId === userId);
   };
@@ -97,6 +134,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     if (score >= 60) return "text-yellow-400 border-yellow-500/30 bg-yellow-500/10";
     return "text-red-400 border-red-500/30 bg-red-500/10";
   };
+
+  const allExercises = Object.values(ExerciseType);
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 animate-fade-in">
@@ -251,7 +290,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                       <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-700/50 pt-3">
                          <span>Acesso Total</span>
                          <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">
-                           Ver histórico <ChevronRight className="w-3 h-3" />
+                           Ver perfil <ChevronRight className="w-3 h-3" />
                          </span>
                       </div>
                     </div>
@@ -261,7 +300,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
             </div>
           )}
 
-          {/* USER DETAIL VIEW */}
+          {/* USER DETAIL VIEW & ASSIGNMENTS */}
           {activeTab === 'users' && selectedUser && (
             <div className="h-full flex flex-col animate-fade-in">
               <button 
@@ -272,16 +311,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
               </button>
 
               <div className="flex flex-col md:flex-row gap-6 h-full overflow-hidden">
-                {/* Left: User Info (Simplified, removed Assign Exercises) */}
+                {/* Left: User Info & Assignments */}
                 <div className="md:w-1/3 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
                    <div className="bg-slate-800/30 p-5 rounded-2xl border border-slate-700/50">
                       <h3 className="text-xl font-bold text-white mb-1">{selectedUser.name}</h3>
                       <p className="text-slate-400 text-sm mb-6">{selectedUser.email}</p>
                       
-                      <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-200 text-sm">
-                        <span className="font-bold block mb-1">Status da Conta:</span>
-                        Este usuário tem acesso total a todos os exercícios e funcionalidades de análise da plataforma.
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-bold text-white flex items-center gap-2"><Dumbbell className="w-4 h-4" /> Exercícios Atribuídos</h4>
+                        <div className="flex gap-2 text-xs">
+                            <button onClick={selectAllExercises} className="text-blue-400 hover:text-blue-300">Todos</button>
+                            <span className="text-slate-600">|</span>
+                            <button onClick={deselectAllExercises} className="text-slate-400 hover:text-slate-300">Nenhum</button>
+                        </div>
                       </div>
+
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1 mb-4 bg-slate-900/20 p-2 rounded-xl">
+                        {allExercises.map(exercise => {
+                            const isAssigned = editingAssignments.includes(exercise);
+                            return (
+                                <div key={exercise} 
+                                     onClick={() => toggleAssignment(exercise)}
+                                     className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors border ${isAssigned ? 'bg-blue-600/20 border-blue-500/30' : 'bg-slate-800/50 border-transparent hover:border-slate-600'}`}>
+                                    <span className={`text-xs font-medium ${isAssigned ? 'text-white' : 'text-slate-500'}`}>{exercise}</span>
+                                    {isAssigned ? <ToggleRight className="w-5 h-5 text-blue-400" /> : <ToggleLeft className="w-5 h-5 text-slate-600" />}
+                                </div>
+                            );
+                        })}
+                      </div>
+
+                      <button 
+                        onClick={saveAssignments}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition-all"
+                      >
+                        <Save className="w-4 h-4" /> Salvar Permissões
+                      </button>
                    </div>
                 </div>
 

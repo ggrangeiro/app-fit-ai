@@ -1,3 +1,4 @@
+
 import { ExerciseType, ExerciseRecord, User, UserRole, AnalysisResult } from "../types";
 
 // Keys for LocalStorage
@@ -15,6 +16,15 @@ const DEFAULT_ADMIN: User = {
   assignedExercises: []
 };
 
+// Default Test User
+const DEFAULT_TEST_USER: User = {
+  id: 'test-user-1',
+  name: 'Teste',
+  email: 'teste@teste.com',
+  role: 'user',
+  assignedExercises: Object.values(ExerciseType) // Todos habilitados
+};
+
 // Helper to simulate delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -23,10 +33,24 @@ export const MockDataService = {
   // --- AUTH ---
 
   init: () => {
-    const users = localStorage.getItem(USERS_KEY);
-    if (!users) {
-      // Create default admin if no data exists
-      localStorage.setItem(USERS_KEY, JSON.stringify([DEFAULT_ADMIN]));
+    const usersRaw = localStorage.getItem(USERS_KEY);
+    let users: User[] = usersRaw ? JSON.parse(usersRaw) : [];
+    let hasChanges = false;
+
+    // Ensure Admin exists
+    if (!users.find(u => u.email === DEFAULT_ADMIN.email)) {
+      users.push(DEFAULT_ADMIN);
+      hasChanges = true;
+    }
+
+    // Ensure Test User exists
+    if (!users.find(u => u.email === DEFAULT_TEST_USER.email)) {
+      users.push(DEFAULT_TEST_USER);
+      hasChanges = true;
+    }
+
+    if (hasChanges || !usersRaw) {
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
     }
   },
 
@@ -34,6 +58,9 @@ export const MockDataService = {
     await delay(800); // Simulate network request
     const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    
+    // Na versão mock, a senha não é validada estritamente, permitindo acesso simplificado
+    // O usuário 'teste@teste.com' funcionará com a senha 'teste' (ou qualquer outra).
     
     if (user) {
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
