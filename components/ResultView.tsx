@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, ChevronRight, X, AlertTriangle, ThumbsUp, Info } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, ChevronRight, X, AlertTriangle, ThumbsUp, Info, Dumbbell } from 'lucide-react';
 import MuscleMap from './MuscleMap';
-import { generateDietPlan } from '../services/geminiService';
+import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 
 interface ResultViewProps {
   result: AnalysisResult;
@@ -23,6 +23,16 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
     weight: '',
     height: '',
     goal: 'emagrecer'
+  });
+
+  // Workout Plan State
+  const [showWorkoutForm, setShowWorkoutForm] = useState(false);
+  const [workoutLoading, setWorkoutLoading] = useState(false);
+  const [workoutPlanHtml, setWorkoutPlanHtml] = useState<string | null>(null);
+  const [workoutFormData, setWorkoutFormData] = useState({
+    weight: '',
+    height: '',
+    goal: 'hipertrofia'
   });
 
   const isHighPerformance = result.score > 80;
@@ -50,7 +60,21 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
     }
   };
 
-  const handlePrintDiet = () => {
+  const handleGenerateWorkout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWorkoutLoading(true);
+    try {
+      const planHtml = await generateWorkoutPlan(workoutFormData, result);
+      setWorkoutPlanHtml(planHtml);
+      setShowWorkoutForm(false);
+    } catch (error) {
+      alert("Erro ao gerar treino. Tente novamente.");
+    } finally {
+      setWorkoutLoading(false);
+    }
+  };
+
+  const handlePrint = () => {
     window.print();
   };
 
@@ -117,104 +141,77 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
     );
   };
 
-  // Se o plano de dieta estiver visível, renderizamos uma view especial para ele
-  if (dietPlanHtml) {
-    return (
-      <div className="w-full max-w-7xl mx-auto animate-fade-in pb-10">
-        <style>{`
-          /* Custom Scrollbar for Diet View */
-          #diet-plan-container ::-webkit-scrollbar {
-            width: 8px;
-          }
-          #diet-plan-container ::-webkit-scrollbar-track {
-            background: #f1f5f9; 
-          }
-          #diet-plan-container ::-webkit-scrollbar-thumb {
-            background: #cbd5e1; 
-            border-radius: 4px;
-          }
+  // Helper to render HTML content (used for both Diet and Workout)
+  const renderGeneratedPlan = (htmlContent: string, title: string, icon: React.ReactNode, onClose: () => void, isDiet: boolean) => (
+    <div className="w-full max-w-7xl mx-auto animate-fade-in pb-10">
+      <style>{`
+        #generated-plan-container ::-webkit-scrollbar { width: 8px; }
+        #generated-plan-container ::-webkit-scrollbar-track { background: #f1f5f9; }
+        #generated-plan-container ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        #generated-plan-content { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
+        @media print {
+          body * { visibility: hidden; }
+          #generated-plan-container, #generated-plan-container * { visibility: visible; }
+          #generated-plan-container { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: white; box-shadow: none; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
 
-          /* Ensure generated content inherits font properly */
-          #diet-plan-content {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            color: #1e293b; /* Base text color, but allows override by text-white classes */
-          }
-          
-          @media print {
-            body * {
-              visibility: hidden;
-            }
-            #diet-plan-container, #diet-plan-container * {
-              visibility: visible;
-            }
-            #diet-plan-container {
-              position: absolute;
-              left: 0;
-              top: 0;
-              width: 100%;
-              margin: 0;
-              padding: 0;
-              background: white;
-              box-shadow: none;
-            }
-            .no-print {
-              display: none !important;
-            }
-          }
-        `}</style>
-
-        <div className="flex items-center justify-between mb-6 no-print">
-           <button onClick={() => setDietPlanHtml(null)} className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
-              <ArrowLeft className="w-5 h-5" /> Voltar aos Resultados
-           </button>
-           <button onClick={handlePrintDiet} className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg transition-all">
-              <Printer className="w-5 h-5" /> Imprimir Plano
-           </button>
-        </div>
-
-        {/* Main Container - Changed to slate-50 for modern dashboard feel */}
-        <div className="bg-slate-50 rounded-3xl p-6 md:p-10 shadow-2xl text-slate-900 min-h-[80vh]" id="diet-plan-container">
-           
-           {/* Modern Header */}
-           <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-6 gap-4">
-              <div className="flex items-center gap-4">
-                <div className="p-4 bg-emerald-500 rounded-2xl shadow-lg shadow-emerald-500/20 text-white">
-                   <Utensils className="w-8 h-8" />
-                </div>
-                <div>
-                  <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Plano Nutricional</h2>
-                  <div className="flex items-center gap-2 text-slate-500 text-sm mt-1">
-                    <Sparkles className="w-4 h-4 text-yellow-500" />
-                    <span>Personalizado via IA</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex gap-3 text-sm bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-                <div className="px-4 py-2 bg-slate-100 rounded-lg">
-                   <span className="block text-xs text-slate-500 uppercase font-bold">Objetivo</span>
-                   <span className="font-bold text-slate-900 capitalize">{dietFormData.goal.replace('_', ' ')}</span>
-                </div>
-                <div className="px-4 py-2 bg-slate-100 rounded-lg">
-                   <span className="block text-xs text-slate-500 uppercase font-bold">Perfil</span>
-                   <span className="font-bold text-slate-900">{dietFormData.weight}kg • {dietFormData.height}cm</span>
-                </div>
-              </div>
-           </div>
-           
-           {/* Content Injection Area */}
-           <div 
-             id="diet-plan-content"
-             className="w-full"
-             dangerouslySetInnerHTML={{ __html: dietPlanHtml }} 
-           />
-           
-           <div className="mt-10 text-center text-slate-400 text-xs border-t border-slate-200 pt-6">
-              <p>Este plano é uma sugestão gerada por inteligência artificial e não substitui uma consulta médica profissional.</p>
-           </div>
-        </div>
+      <div className="flex items-center justify-between mb-6 no-print">
+         <button onClick={onClose} className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
+            <ArrowLeft className="w-5 h-5" /> Voltar aos Resultados
+         </button>
+         <button onClick={handlePrint} className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg transition-all">
+            <Printer className="w-5 h-5" /> Imprimir Plano
+         </button>
       </div>
-    );
+
+      <div className="bg-slate-50 rounded-3xl p-6 md:p-10 shadow-2xl text-slate-900 min-h-[80vh]" id="generated-plan-container">
+         <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-6 gap-4">
+            <div className="flex items-center gap-4">
+              <div className={`p-4 rounded-2xl shadow-lg text-white ${isDiet ? 'bg-emerald-500 shadow-emerald-500/20' : 'bg-blue-600 shadow-blue-600/20'}`}>
+                 {icon}
+              </div>
+              <div>
+                <h2 className="text-3xl font-bold text-slate-900 tracking-tight">{title}</h2>
+                <div className="flex items-center gap-2 text-slate-500 text-sm mt-1">
+                  <Sparkles className="w-4 h-4 text-yellow-500" />
+                  <span>Personalizado via IA</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 text-sm bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+              <div className="px-4 py-2 bg-slate-100 rounded-lg">
+                 <span className="block text-xs text-slate-500 uppercase font-bold">Objetivo</span>
+                 <span className="font-bold text-slate-900 capitalize">
+                    {isDiet ? dietFormData.goal.replace('_', ' ') : workoutFormData.goal.replace('_', ' ')}
+                 </span>
+              </div>
+              <div className="px-4 py-2 bg-slate-100 rounded-lg">
+                 <span className="block text-xs text-slate-500 uppercase font-bold">Perfil</span>
+                 <span className="font-bold text-slate-900">
+                    {isDiet ? dietFormData.weight : workoutFormData.weight}kg • {isDiet ? dietFormData.height : workoutFormData.height}cm
+                 </span>
+              </div>
+            </div>
+         </div>
+         
+         <div id="generated-plan-content" className="w-full" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+         
+         <div className="mt-10 text-center text-slate-400 text-xs border-t border-slate-200 pt-6">
+            <p>Este plano é uma sugestão gerada por inteligência artificial e não substitui o acompanhamento de um profissional de educação física ou nutricionista.</p>
+         </div>
+      </div>
+    </div>
+  );
+
+  if (dietPlanHtml) {
+    return renderGeneratedPlan(dietPlanHtml, "Plano Nutricional", <Utensils className="w-8 h-8" />, () => setDietPlanHtml(null), true);
+  }
+
+  if (workoutPlanHtml) {
+    return renderGeneratedPlan(workoutPlanHtml, "Plano de Treino", <Dumbbell className="w-8 h-8" />, () => setWorkoutPlanHtml(null), false);
   }
 
   return (
@@ -239,48 +236,73 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
              <form onSubmit={handleGenerateDiet} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Peso Atual (kg)</label>
-                  <input 
-                    type="number" 
-                    required
-                    step="0.1"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                    placeholder="ex: 75.5"
-                    value={dietFormData.weight}
-                    onChange={e => setDietFormData({...dietFormData, weight: e.target.value})}
-                  />
+                  <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={dietFormData.weight} onChange={e => setDietFormData({...dietFormData, weight: e.target.value})} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
-                  <input 
-                    type="number" 
-                    required
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                    placeholder="ex: 175"
-                    value={dietFormData.height}
-                    onChange={e => setDietFormData({...dietFormData, height: e.target.value})}
-                  />
+                  <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={dietFormData.height} onChange={e => setDietFormData({...dietFormData, height: e.target.value})} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo Principal</label>
-                  <select 
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={dietFormData.goal}
-                    onChange={e => setDietFormData({...dietFormData, goal: e.target.value})}
-                  >
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={dietFormData.goal} onChange={e => setDietFormData({...dietFormData, goal: e.target.value})}>
                     <option value="emagrecer">Emagrecer (Perder Gordura)</option>
                     <option value="ganhar_massa">Hipertrofia (Ganhar Massa)</option>
-                    <option value="manutencao">Manutenção (Saúde Geral)</option>
+                    <option value="manutencao">Manutenção</option>
                     <option value="definicao">Definição Muscular</option>
                   </select>
                 </div>
-
-                <button 
-                  type="submit" 
-                  disabled={dietLoading}
-                  className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2"
-                >
+                <button type="submit" disabled={dietLoading} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
                   {dietLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                  {dietLoading ? "A IA está montando o plano..." : "Gerar Plano Alimentar"}
+                  {dietLoading ? "Gerando..." : "Gerar Dieta"}
+                </button>
+             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Form for Workout */}
+      {showWorkoutForm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl">
+             <button onClick={() => setShowWorkoutForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+               <X className="w-6 h-6" />
+             </button>
+             
+             <div className="flex flex-col items-center mb-6">
+               <div className="p-3 bg-blue-600/20 text-blue-400 rounded-full mb-3">
+                 <Dumbbell className="w-8 h-8" />
+               </div>
+               <h3 className="text-2xl font-bold text-white">Montar Treino</h3>
+               <p className="text-slate-400 text-center text-sm">Treino personalizado baseado nas correções biomecânicas da sua análise.</p>
+             </div>
+
+             <form onSubmit={handleGenerateWorkout} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Peso Atual (kg)</label>
+                  <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={workoutFormData.weight} onChange={e => setWorkoutFormData({...workoutFormData, weight: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
+                  <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={workoutFormData.height} onChange={e => setWorkoutFormData({...workoutFormData, height: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={workoutFormData.goal} onChange={e => setWorkoutFormData({...workoutFormData, goal: e.target.value})}>
+                    <option value="hipertrofia">Hipertrofia (Crescer)</option>
+                    <option value="definicao">Definição (Secar)</option>
+                    <option value="emagrecimento">Emagrecimento (Perder Peso)</option>
+                    <option value="forca">Força Pura</option>
+                  </select>
+                </div>
+                <button type="submit" disabled={workoutLoading} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                  {workoutLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                  {workoutLoading ? "Gerando..." : "Gerar Treino"}
                 </button>
              </form>
           </div>
@@ -371,20 +393,29 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
                  {renderStatsBox()}
             </div>
             
-            {/* NEW: DIET PLAN BUTTON (Only for Body Composition) */}
+            {/* ACTION BUTTONS (Only for Body Composition) */}
             {isBodyCompAnalysis && (
-              <button 
-                onClick={() => setShowDietForm(true)}
-                className="w-full py-4 px-6 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl shadow-lg shadow-emerald-900/20 font-bold flex items-center justify-center gap-3 transition-transform hover:scale-[1.02] border border-emerald-500/30"
-              >
-                <Utensils className="w-5 h-5" /> 
-                <span>Gerar Plano Alimentar</span>
-              </button>
+              <div className="flex flex-col gap-3">
+                  <button 
+                    onClick={() => setShowDietForm(true)}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl shadow-lg font-bold flex items-center justify-center gap-2 transition-transform hover:scale-[1.02] border border-emerald-500/30 text-sm"
+                  >
+                    <Utensils className="w-4 h-4" /> 
+                    <span>Gerar Dieta</span>
+                  </button>
+                  <button 
+                    onClick={() => setShowWorkoutForm(true)}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl shadow-lg font-bold flex items-center justify-center gap-2 transition-transform hover:scale-[1.02] border border-blue-500/30 text-sm"
+                  >
+                    <Dumbbell className="w-4 h-4" /> 
+                    <span>Gerar Treino</span>
+                  </button>
+              </div>
             )}
 
           </div>
 
-          {/* Details Column (Middle) - REDESIGNED FOR DETAIL */}
+          {/* Details Column (Middle) */}
           <div className="lg:col-span-4 flex flex-col gap-6">
             <div className="flex flex-col h-full gap-6">
               
@@ -405,7 +436,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
                 </div>
               )}
 
-              {/* Ajustes Necessários (Rico em detalhe) */}
+              {/* Ajustes Necessários */}
               <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex-grow">
                 <h3 className="text-lg font-bold mb-5 flex items-center gap-3 text-white border-b border-slate-700/50 pb-4">
                   <AlertTriangle className="text-yellow-400 w-5 h-5" /> 
@@ -463,7 +494,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
                 </div>
              </div>
 
-             {/* Correction Card - Friendlier UI */}
+             {/* Correction Card */}
              <div className="bg-gradient-to-br from-indigo-600/20 to-blue-600/20 rounded-3xl p-6 border border-indigo-500/30 relative overflow-hidden flex-1 flex flex-col justify-center">
                 <div className="absolute top-0 right-0 p-4 opacity-10">
                   <MessageCircleHeart className="w-24 h-24 text-indigo-400" />

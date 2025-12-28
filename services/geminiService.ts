@@ -189,6 +189,59 @@ export const generateDietPlan = async (
   }
 };
 
+export const generateWorkoutPlan = async (
+  userData: { weight: string; height: string; goal: string },
+  analysisContext: AnalysisResult
+): Promise<string> => {
+  // Serializar os pontos de melhoria para o prompt
+  const technicalAdjustments = analysisContext.improvements 
+    ? analysisContext.improvements.map(i => `${i.instruction} (${i.detail})`).join("; ")
+    : analysisContext.formCorrection;
+
+  const prompt = `
+    Atue como um Personal Trainer de elite e Especialista em Biomecânica.
+    
+    Crie um plano de treino semanal visualmente incrível e moderno.
+    
+    DADOS DO ALUNO:
+    - Peso: ${userData.weight}kg | Altura: ${userData.height}cm
+    - Objetivo: ${userData.goal} (Hipertrofia, Definição ou Emagrecimento)
+    - % de Gordura Estimada: ${analysisContext.repetitions}%
+    
+    CRUCIAL - CORREÇÕES BIOMECÂNICAS:
+    O aluno realizou uma análise de movimento e precisa destes ajustes técnicos. INCLUA exercícios corretivos ou de mobilidade no início dos treinos baseados nisso:
+    "${technicalAdjustments}"
+    
+    DIRETRIZES DE DESIGN E HTML (MUITO IMPORTANTE):
+    1. Estrutura Visual: Use o mesmo padrão "Card/Grid" moderno.
+       - "Hero Section": Resumo da divisão de treino (ex: ABC, ABCD) e foco principal.
+       - Grid responsivo para os dias da semana (Cards).
+    2. Estilo dos Cards:
+       - Fundo branco (bg-white), bordas arredondadas (rounded-2xl), sombra suave.
+       - Use badges coloridas para grupos musculares (ex: <span class="bg-blue-100 text-blue-800...">Peito</span>).
+    3. Conteúdo do Treino:
+       - Exercício | Séries | Repetições | Intervalo.
+       - Inclua uma seção "Aquecimento Específico" em cada dia.
+    4. Dia de Descanso (Domingo/Rest Day):
+       - Use um card com fundo escuro (bg-slate-800).
+       - Texto OBRIGATORIAMENTE BRANCO (text-white) para legibilidade.
+    
+    O output deve ser APENAS o código HTML do conteúdo interno.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+    });
+
+    return response.text || "<p>Erro ao gerar treino.</p>";
+  } catch (e) {
+    console.error("Erro ao gerar treino", e);
+    throw new Error("Não foi possível gerar o plano de treino no momento.");
+  }
+};
+
 export const generateExerciseThumbnail = async (exerciseName: string): Promise<string> => {
   const prompt = `Professional fitness photography of a person performing ${exerciseName}. High resolution, gym environment, cinematic lighting.`;
   try {
