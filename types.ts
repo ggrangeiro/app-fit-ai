@@ -22,6 +22,7 @@ export interface AnalysisResult {
 export enum AppStep {
   SELECT_EXERCISE = 'SELECT_EXERCISE',
   UPLOAD_VIDEO = 'UPLOAD_VIDEO',
+  COMPRESSING = 'COMPRESSING',
   ANALYZING = 'ANALYZING',
   RESULTS = 'RESULTS'
 }
