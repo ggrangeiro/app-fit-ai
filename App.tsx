@@ -32,7 +32,8 @@ const DEFAULT_EXERCISE_IMAGES: Record<ExerciseType, string> = {
   [ExerciseType.BULGARIAN_SQUAT]: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop",
   [ExerciseType.DEADLIFT]: "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
   [ExerciseType.TRICEP_DIP]: "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
-  [ExerciseType.BICEP_CURL]: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop"
+  [ExerciseType.BICEP_CURL]: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop",
+  [ExerciseType.CABLE_CROSSOVER]: "https://images.unsplash.com/photo-1534367507873-d2d7e24c797f?q=80&w=800&auto=format&fit=crop"
 };
 
 const EXERCISE_TIPS: Record<ExerciseType, string[]> = {
@@ -119,6 +120,12 @@ const EXERCISE_TIPS: Record<ExerciseType, string[]> = {
     "Não balance o tronco para impulsionar o peso.",
     "Controle a descida (fase excêntrica).",
     "Estenda o braço quase totalmente embaixo."
+  ],
+  [ExerciseType.CABLE_CROSSOVER]: [
+    "Mantenha os cotovelos levemente flexionados durante todo o arco.",
+    "Concentre a força no peitoral, imagine que está abraçando uma árvore.",
+    "Não deixe os ombros subirem em direção às orelhas.",
+    "Controle a fase excêntrica (volta), não deixe o peso despencar."
   ]
 };
 

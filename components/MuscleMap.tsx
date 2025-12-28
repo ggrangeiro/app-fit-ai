@@ -18,7 +18,7 @@ const MuscleMap: React.FC<MuscleMapProps> = ({ muscles }) => {
   // Define muscle states
   const highlights = {
     shoulders: isActive(['ombro', 'deltóide', 'deltoide', 'trapézio', 'trapezio']),
-    chest: isActive(['peito', 'peitoral', 'tórax', 'torax', 'push']),
+    chest: isActive(['peito', 'peitoral', 'tórax', 'torax', 'push', 'crucifixo', 'cross']),
     back: isActive(['costas', 'dorsal', 'lombar', 'latíssimo', 'grande dorsal']),
     arms: isActive(['braço', 'bíceps', 'biceps', 'tríceps', 'triceps', 'antebraço']),
     abs: isActive(['abdômen', 'abdomen', 'abdominal', 'core', 'barriga', 'prancha']),

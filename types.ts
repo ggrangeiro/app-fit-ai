@@ -14,7 +14,8 @@ export enum ExerciseType {
   BULGARIAN_SQUAT = 'Agachamento Búlgaro',
   DEADLIFT = 'Levantamento Terra (Deadlift)',
   TRICEP_DIP = 'Tríceps Banco (Dips)',
-  BICEP_CURL = 'Rosca Direta (Bicep Curl)'
+  BICEP_CURL = 'Rosca Direta (Bicep Curl)',
+  CABLE_CROSSOVER = 'Crucifixo no Cross Over'
 }
 
 export interface FeedbackItem {
