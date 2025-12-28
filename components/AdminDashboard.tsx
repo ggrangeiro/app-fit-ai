@@ -88,28 +88,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     }
   };
 
-  const toggleExercise = (userId: string, exercise: ExerciseType) => {
-    if (!selectedUser) return;
-    
-    const currentExercises = selectedUser.assignedExercises || [];
-    let updatedExercises: ExerciseType[];
-
-    if (currentExercises.includes(exercise)) {
-      updatedExercises = currentExercises.filter(e => e !== exercise);
-    } else {
-      updatedExercises = [...currentExercises, exercise];
-    }
-
-    MockDataService.updateUserExercises(userId, updatedExercises);
-    
-    // Update local state
-    const updatedUser = { ...selectedUser, assignedExercises: updatedExercises };
-    setSelectedUser(updatedUser);
-    
-    // Update list state
-    setUsers(users.map(u => u.id === userId ? updatedUser : u));
-  };
-
   const getUserRecords = (userId: string) => {
     return records.filter(r => r.userId === userId);
   };
@@ -271,9 +249,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                       <p className="text-slate-400 text-sm truncate mb-4">{user.email}</p>
                       
                       <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-700/50 pt-3">
-                         <span>{user.assignedExercises?.length || 0} Exercícios</span>
+                         <span>Acesso Total</span>
                          <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">
-                           Ver detalhes <ChevronRight className="w-3 h-3" />
+                           Ver histórico <ChevronRight className="w-3 h-3" />
                          </span>
                       </div>
                     </div>
@@ -294,41 +272,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
               </button>
 
               <div className="flex flex-col md:flex-row gap-6 h-full overflow-hidden">
-                {/* Left: Exercises Config */}
-                <div className="md:w-1/2 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
+                {/* Left: User Info (Simplified, removed Assign Exercises) */}
+                <div className="md:w-1/3 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
                    <div className="bg-slate-800/30 p-5 rounded-2xl border border-slate-700/50">
                       <h3 className="text-xl font-bold text-white mb-1">{selectedUser.name}</h3>
                       <p className="text-slate-400 text-sm mb-6">{selectedUser.email}</p>
                       
-                      <h4 className="text-sm font-bold text-blue-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                        <Plus className="w-4 h-4" /> Atribuir Exercícios
-                      </h4>
-                      
-                      <div className="space-y-2">
-                        {Object.values(ExerciseType).map((type) => {
-                          const isAssigned = selectedUser.assignedExercises?.includes(type);
-                          return (
-                            <button
-                              key={type}
-                              onClick={() => toggleExercise(selectedUser.id, type)}
-                              className={`
-                                w-full flex items-center justify-between p-3 rounded-xl border transition-all
-                                ${isAssigned 
-                                  ? 'bg-blue-600/20 border-blue-500/50 text-blue-200' 
-                                  : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800'}
-                              `}
-                            >
-                              <span className="text-sm font-medium">{type}</span>
-                              {isAssigned && <Check className="w-4 h-4 text-blue-400" />}
-                            </button>
-                          );
-                        })}
+                      <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-200 text-sm">
+                        <span className="font-bold block mb-1">Status da Conta:</span>
+                        Este usuário tem acesso total a todos os exercícios e funcionalidades de análise da plataforma.
                       </div>
                    </div>
                 </div>
 
                 {/* Right: History */}
-                <div className="md:w-1/2 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
+                <div className="md:w-2/3 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
                   <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider sticky top-0 bg-transparent mb-2">
                     Histórico de Execuções
                   </h4>

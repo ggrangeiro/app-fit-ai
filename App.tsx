@@ -7,7 +7,7 @@ import ExerciseCard from './components/ExerciseCard';
 import ResultView from './components/ResultView';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Camera, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Image as ImageIcon, Scale, Activity } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon } from 'lucide-react';
 
 // ============================================================================
 // PARA TROCAR AS FOTOS DOS CARDS:
@@ -282,13 +282,8 @@ const App: React.FC = () => {
   }
 
   // Get visible exercises based on permissions
-  const availableExercises = Object.values(ExerciseType).filter(ex => {
-    if (!currentUser || currentUser.role === 'admin') return true; // Admins see all for demo
-    if (currentUser.assignedExercises && currentUser.assignedExercises.length > 0) {
-      return currentUser.assignedExercises.includes(ex);
-    }
-    return false; // User has no exercises
-  });
+  // UPDATE: Removed filtering. All users see all exercises now.
+  const availableExercises = Object.values(ExerciseType);
 
   // Separate Special Analysis from grid exercises for manual placement
   const specialExercises = [ExerciseType.POSTURE_ANALYSIS, ExerciseType.BODY_COMPOSITION];
@@ -466,42 +461,25 @@ const App: React.FC = () => {
               <div className="text-center mb-8">
                 <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Registro de Execução</h2>
                 <p className="text-slate-400 text-sm md:text-base">
-                  Grave ou envie {isSpecialMode ? "uma foto ou vídeo" : "um vídeo"} de: <br className="md:hidden"/>
+                  Envie {isSpecialMode ? "uma foto ou vídeo" : "um vídeo"} de: <br className="md:hidden"/>
                   <span className="text-blue-400 font-semibold">{selectedExercise}</span>
                 </p>
               </div>
               
               <div className="flex flex-col gap-4 mb-8">
-                {/* 1. Mobile-First Camera Button */}
-                {!mediaFile && (
-                  <label 
-                    htmlFor="camera-upload"
-                    className="w-full py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-2xl flex items-center justify-center gap-3 cursor-pointer shadow-lg shadow-blue-900/20 active:scale-[0.98] transition-all border border-blue-400/20"
-                  >
-                    <div className="bg-white/20 p-2 rounded-full">
-                      {isSpecialMode ? <ImageIcon className="w-6 h-6 text-white" /> : <Camera className="w-6 h-6 text-white" />}
-                    </div>
-                    <span className="text-white font-bold text-lg">{isSpecialMode ? 'Tirar Foto ou Gravar' : 'Gravar Agora'}</span>
-                    <input 
-                      id="camera-upload" 
-                      type="file" 
-                      accept={acceptedFileTypes}
-                      // For special modes, we default to standard file picker to allow selfie cam switch etc easily
-                      capture={isSpecialMode ? undefined : "user"} 
-                      className="hidden" 
-                      onChange={handleFileChange} 
-                    />
-                  </label>
-                )}
+                {/* 
+                  REMOVED: Camera button (capture="user") due to mobile instability issues requested by user.
+                  The Drag & Drop / Gallery section below handles everything now.
+                */}
 
-                {/* 2. Drag & Drop */}
+                {/* 1. Drag & Drop / Gallery Upload (Primary Interaction) */}
                 <label 
                   htmlFor="video-upload" 
                   className={`
                     group relative flex flex-col items-center justify-center w-full rounded-2xl cursor-pointer transition-all duration-300 overflow-hidden
                     ${mediaFile 
                       ? 'bg-black border border-slate-700 h-auto aspect-video' 
-                      : 'h-48 md:h-64 border-2 border-dashed border-slate-600 bg-slate-800/30 hover:bg-slate-800 hover:border-blue-500'}
+                      : 'h-64 md:h-80 border-2 border-dashed border-slate-600 bg-slate-800/30 hover:bg-slate-800 hover:border-blue-500'}
                   `}
                 >
                   {mediaPreview ? (
@@ -525,11 +503,18 @@ const App: React.FC = () => {
                     )
                   ) : (
                     <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
-                      <div className="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center mb-3 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors">
-                        <UploadCloud className="w-6 h-6 text-slate-300 group-hover:text-blue-400" />
+                      <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors shadow-lg shadow-black/20">
+                        {isSpecialMode 
+                          ? <ImageIcon className="w-8 h-8 text-slate-300 group-hover:text-blue-400" />
+                          : <UploadCloud className="w-8 h-8 text-slate-300 group-hover:text-blue-400" />
+                        }
                       </div>
-                      <p className="text-slate-200 font-medium">Escolher da Galeria</p>
-                      <p className="text-slate-500 text-xs mt-1">{isSpecialMode ? "Fotos ou Vídeos" : "Apenas Vídeos"}</p>
+                      <p className="text-slate-200 font-bold text-lg mb-1">Anexar da Galeria</p>
+                      <p className="text-slate-500 text-sm max-w-[200px]">
+                        {isSpecialMode 
+                          ? "Selecione uma foto nítida ou grave um vídeo curto." 
+                          : "Selecione um vídeo da sua galeria."}
+                      </p>
                     </div>
                   )}
                   <input 
