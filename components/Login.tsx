@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { User } from '../types';
+import { User, ExerciseType } from '../types';
 import { MockDataService } from '../services/mockDataService';
 import { Dumbbell, ArrowRight, Lock, Mail, UserPlus, User as UserIcon } from 'lucide-react';
+import axios from 'axios';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -11,6 +12,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState(''); // New field for registration
+  const [password, setPassword] = useState(''); // Added state for password
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,27 +21,71 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError(null);
 
+    // --- CHAVE DE CONFIGURAÇÃO ---
+    // Defina como TRUE para usar o Backend Real via Axios.
+    // Defina como FALSE para usar o MockDataService (Simulação Local).
+    const USE_REAL_BACKEND = false; 
+
     try {
       if (isRegistering) {
-        // Registration Flow
+        
         if (!name.trim()) {
            throw new Error("Por favor, digite seu nome.");
         }
-        const newUser = await MockDataService.createUser(name, email);
-        // Auto login after create
-        localStorage.setItem('fitai_current_session', JSON.stringify(newUser));
-        onLogin(newUser);
+        if (!password.trim()) {
+           throw new Error("Por favor, digite uma senha.");
+        }
+
+        if (USE_REAL_BACKEND) {
+            // --- FLUXO DE CADASTRO COM BACKEND REAL ---
+            // URL do Backend Real
+            const url = 'https://backendai-732767853162.southamerica-east1.run.app/api/cadastrar';
+            
+            const payload = {
+              nome: name,
+              email: email,
+              senha: password
+            };
+
+            // Simplificando a chamada do Axios para evitar problemas de CORS com headers manuais desnecessários
+            const response = await axios.post(url, payload);
+
+            console.log('Resposta do Servidor:', response.data);
+            alert('Cadastro realizado com sucesso! Faça login para continuar.');
+        } else {
+            // --- FLUXO DE CADASTRO MOCK (Simulação) ---
+            // Simula um delay de rede
+            await new Promise(resolve => setTimeout(resolve, 800));
+            
+            // Cria o usuário no localStorage
+            await MockDataService.createUser(name, email);
+            
+            console.log('Usuário criado via MockService (Senha ignorada na simulação local)');
+            alert('Cadastro realizado com sucesso (Simulação Local)! Faça login para continuar.');
+        }
+        
+        // Limpar formulário e mudar para login após sucesso
+        setIsRegistering(false);
+        setPassword('');
+        
       } else {
-        // Login Flow
+        // --- FLUXO DE LOGIN (Mantido Mock ou Implementar Backend Futuro) ---
+        // Por enquanto, mantemos o login via MockDataService para não quebrar a aplicação 
+        // até que você tenha a rota de /login pronta no backend também.
+        
         const user = await MockDataService.login(email);
         if (user) {
           onLogin(user);
         } else {
-          setError('Usuário não encontrado. Verifique o e-mail ou crie uma conta.');
+          // Fallback temporário
+          setError('Usuário não encontrado ou senha incorreta (Simulação). Verifique o e-mail digitado.');
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro. Tente novamente.');
+      console.error('Erro na operação:', err);
+      // Tratamento de erro do Axios ou do Mock
+      const mensagemErro = err.response?.data?.message || err.message || 'Ocorreu um erro. Tente novamente.';
+      setError(mensagemErro);
     } finally {
       setLoading(false);
     }
@@ -50,6 +96,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError(null);
     setEmail('');
     setName('');
+    setPassword('');
   };
 
   return (
@@ -114,11 +161,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
                         <input 
                             type="password" 
+                            required
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
                             placeholder="••••••••"
                             className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                         />
                     </div>
-                    <p className="text-xs text-slate-500 px-1 pt-1">Para demonstração, qualquer senha funciona.</p>
                 </div>
 
                 {error && (
@@ -138,10 +187,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     `}
                 >
                     {loading ? (
-                      'Processando...'
+                      'Conectando...'
                     ) : (
                         <>
-                           {isRegistering ? 'Confirmar Cadastro' : 'Entrar'} 
+                           {isRegistering ? 'Cadastrar' : 'Entrar'} 
                            <ArrowRight className="w-5 h-5" />
                         </>
                     )}

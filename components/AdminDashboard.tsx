@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, ExerciseRecord, ExerciseType } from '../types';
 import { MockDataService } from '../services/mockDataService';
@@ -30,6 +29,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
 
   useEffect(() => {
     refreshData();
+    fetchBackendUsers(); // Chama a função de listagem do backend ao montar
   }, []);
 
   useEffect(() => {
@@ -38,8 +38,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     }
   }, [selectedUser]);
 
+  // Função para buscar usuários no Backend real e exibir no console
+  const fetchBackendUsers = async () => {
+    const API_URL = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
+    console.log("🚀 Tentando buscar usuários no backend:", API_URL);
+    
+    try {
+        const response = await fetch(API_URL, {
+            method: 'GET',
+            mode: 'cors', // Força o modo CORS
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Erro na requisição: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("✅ LISTA DE USUÁRIOS RECEBIDA:", data);
+        
+        // Atualiza a lista de usuários se o formato for compatível
+        if (Array.isArray(data)) {
+            setUsers(data); 
+        } else {
+            console.warn("Formato de dados recebido diferente de array:", data);
+        }
+    } catch (err: any) {
+        console.error("❌ Erro ao buscar usuários do backend:", err.message);
+    }
+  };
+
   const refreshData = () => {
-    setUsers(MockDataService.getUsers());
+    // Carrega dados do Mock inicialmente, mas o fetchBackendUsers pode sobrescrever a lista de usuários se tiver sucesso
+    const mockUsers = MockDataService.getUsers();
+    // Apenas define users do mock se a lista estiver vazia (para não sobrescrever o fetch assíncrono se ele for rápido demais, embora o fetch sobrescreva depois)
+    if (users.length === 0) {
+        setUsers(mockUsers);
+    }
     setRecords(MockDataService.getAllHistory());
   };
 
