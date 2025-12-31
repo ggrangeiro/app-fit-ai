@@ -34,25 +34,13 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
     2. Se for inválido (esporte errado, sem pessoa, meme), retorne isValidContent: false.
   `;
 
-  // Construção do contexto histórico
+  // Construção do contexto histórico (Apenas para conhecimento da IA, não para o texto final da Dica de Mestre)
   let historyContext = "";
   if (previousAnalysis) {
-    const prevScore = previousAnalysis.score;
-    const prevImprovements = previousAnalysis.improvements?.map(i => i.instruction).join("; ") || "Nenhum registro detalhado.";
-    const prevCorrection = previousAnalysis.formCorrection;
-
     historyContext = `
-      CONTEXTO DE EVOLUÇÃO (MUITO IMPORTANTE):
-      O usuário realizou este exercício anteriormente.
-      - Nota Anterior: ${prevScore}/100.
-      - Erros passados: "${prevImprovements}".
-      - Feedback passado: "${prevCorrection}".
-
-      SUA MISSÃO EXTRA:
-      Compare a execução ATUAL com a ANTERIOR.
-      1. Se ele corrigiu os erros passados, ELOGIE explicitamente no campo 'strengths' ou 'formCorrection'.
-      2. Se ele repetiu o mesmo erro, seja mais enfático na correção.
-      3. No campo 'formCorrection', inicie dizendo algo como "Em relação à sua última vez..." ou "Você melhorou em X...".
+      CONTEXTO DO USUÁRIO (HISTÓRICO):
+      O usuário realizou este exercício anteriormente com nota ${previousAnalysis.score}.
+      Erros passados: "${previousAnalysis.improvements?.map(i => i.instruction).join("; ") || "Nenhum"}".
     `;
   }
 
@@ -61,6 +49,11 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
     VOCÊ É UM TREINADOR DE BIOMECÂNICA DE ELITE (PhD em Cinesiologia).
     
     Seu objetivo não é apenas corrigir, mas EDUCAR. A análise deve ser rica, detalhada e técnica, mas acessível.
+    
+    IMPORTANTE SOBRE A RESPOSTA 'formCorrection':
+    - Analise APENAS a execução ATUAL (deste vídeo).
+    - NÃO compare com o histórico anterior neste campo. NÃO diga "você melhorou em relação à vez passada".
+    - O feedback deve ser absoluto sobre o vídeo atual.
     
     ESTRUTURA DA RESPOSTA:
     1. "strengths": Identifique 2 a 3 pontos que o usuário executou PERFEITAMENTE. Elogie a técnica (ex: estabilidade, amplitude, ritmo).
@@ -158,7 +151,7 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
                 required: ["message", "score"]
               }
             },
-            formCorrection: { type: Type.STRING, description: "Resumo geral ou 'Dica de Ouro'" },
+            formCorrection: { type: Type.STRING, description: "Resumo geral técnico da execução atual. Dica de Mestre." },
             muscleGroups: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
           required: ["isValidContent", "score", "repetitions", "feedback", "formCorrection", "muscleGroups"]
@@ -286,24 +279,26 @@ export const generateProgressInsight = async (
   const isBodyComp = exerciseType === ExerciseType.BODY_COMPOSITION;
   
   const prompt = `
-    Compare dois resultados de análise de ${exerciseType}.
+    Atue como um Coach Esportivo Parceiro e Analítico.
     
-    DADOS ATUAIS (Hoje):
-    - Score/Qualidade: ${currentResult.score}/100
+    OBJETIVO: Comparar exclusivamente a execução ATUAL (HOJE) com a execução IMEDIATAMENTE ANTERIOR (HISTÓRICO).
+    Exercício: ${exerciseType}
+    
+    DADOS DA SESSÃO ATUAL (HOJE):
+    - Score Técnico: ${currentResult.score}/100
     - ${isBodyComp ? '% Gordura' : 'Repetições'}: ${currentResult.repetitions}
-    - Feedback Principal: ${currentResult.formCorrection}
+    - Feedback da IA: "${currentResult.formCorrection}"
 
-    DADOS ANTERIORES (Passado):
-    - Score/Qualidade: ${previousResult.score}/100
+    DADOS DA SESSÃO ANTERIOR (PASSADO):
+    - Score Técnico: ${previousResult.score}/100
     - ${isBodyComp ? '% Gordura' : 'Repetições'}: ${previousResult.repetitions}
+    - Feedback Passado: "${previousResult.formCorrection}"
 
-    TAREFA:
-    Escreva um breve parágrafo (máximo 50 palavras) direto ao usuário comparando a evolução.
-    - Se melhorou, parabenize citando o que mudou.
-    - Se piorou, motive e diga para ter atenção.
-    - Se manteve, incentive a buscar o próximo nível.
-    
-    O tom deve ser de um "Coach Esportivo Parceiro". Use emojis.
+    INSTRUÇÕES:
+    1. Destaque a diferença de pontuação (ex: "+5 pontos", "-2 pontos").
+    2. Identifique se houve correção técnica baseada nos feedbacks.
+    3. Seja curto, direto e motivador. Máximo 40 palavras.
+    4. Use emojis.
   `;
 
   try {

@@ -56,6 +56,7 @@ const App: React.FC = () => {
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [historyRecords, setHistoryRecords] = useState<ExerciseRecord[]>([]); // Estado para armazenar o histórico
   const [error, setError] = useState<string | null>(null);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(DEFAULT_EXERCISE_IMAGES);
@@ -103,6 +104,7 @@ const App: React.FC = () => {
     setMediaFile(null);
     setMediaPreview(null);
     setAnalysisResult(null);
+    setHistoryRecords([]);
     setError(null);
     setStep(AppStep.SELECT_EXERCISE);
   };
@@ -150,7 +152,7 @@ const App: React.FC = () => {
 
       setStep(AppStep.ANALYZING);
 
-      // --- PASSO 1: BUSCAR HISTÓRICO ANTERIOR (GET) ---
+      // --- PASSO 1: BUSCAR HISTÓRICO ANTERIOR (GET) PARA CONTEXTO ---
       // Buscamos o último resultado para passar como contexto para a IA
       let previousRecord: ExerciseRecord | null = null;
       try {
@@ -217,6 +219,27 @@ const App: React.FC = () => {
         }
       } catch (saveError) {
         console.error("Falha na conexão ao salvar histórico:", saveError);
+      }
+
+      // --- PASSO 4: BUSCAR HISTÓRICO ATUALIZADO (GET) ---
+      // Agora buscamos a lista completa (incluindo o que acabamos de salvar) para exibir no modal
+      try {
+          console.log("Atualizando lista de histórico completa...");
+          const encodedExercise = encodeURIComponent(selectedExercise);
+          const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
+          
+          const historyResponse = await fetch(historyUrl, {
+              method: "GET",
+              headers: { "Content-Type": "application/json" }
+          });
+
+          if (historyResponse.ok) {
+              const fullHistoryData: ExerciseRecord[] = await historyResponse.json();
+              console.log("Histórico atualizado carregado:", fullHistoryData.length, "registros");
+              setHistoryRecords(fullHistoryData);
+          }
+      } catch (e) {
+          console.error("Erro ao atualizar histórico final:", e);
       }
 
       setStep(AppStep.RESULTS);
@@ -458,7 +481,12 @@ const App: React.FC = () => {
         )}
 
         {step === AppStep.RESULTS && analysisResult && selectedExercise && (
-          <ResultView result={analysisResult} exercise={selectedExercise} onReset={resetAnalysis} />
+          <ResultView 
+            result={analysisResult} 
+            exercise={selectedExercise} 
+            history={historyRecords} // Passa o histórico atualizado
+            onReset={resetAnalysis} 
+          />
         )}
       </main>
     </div>

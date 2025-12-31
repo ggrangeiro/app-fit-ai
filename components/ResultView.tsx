@@ -4,16 +4,16 @@ import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from '
 import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, ChevronRight, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan, generateProgressInsight } from '../services/geminiService';
-import { MockDataService } from '../services/mockDataService';
 
 interface ResultViewProps {
   result: AnalysisResult;
   exercise: ExerciseType;
+  history: ExerciseRecord[]; // Novo prop: histórico completo passado pelo pai
   onReset: () => void;
   onSave?: () => void;
 }
 
-export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onReset, onSave }) => {
+export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, history, onReset, onSave }) => {
   const [saved, setSaved] = useState(false);
   
   // Diet Plan State
@@ -43,10 +43,8 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
 
   // History / Evolution State
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false); // Loading state for the button/data
-  const [historyRecords, setHistoryRecords] = useState<ExerciseRecord[]>([]);
   const [comparisonInsight, setComparisonInsight] = useState<string | null>(null);
-  const [loadingInsight, setLoadingInsight] = useState(false); // Loading state for the internal AI text
+  const [loadingInsight, setLoadingInsight] = useState(false);
 
   const isHighPerformance = result.score > 80;
   const isPostureAnalysis = exercise === ExerciseType.POSTURE_ANALYSIS;
@@ -68,71 +66,46 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
     }
   }, [result.gender]);
 
-  // Carregar histórico automaticamente ao montar o componente
+  // Inicializa o Insight de Comparação baseado no histórico recebido
   useEffect(() => {
-    fetchHistory();
-  }, [exercise]);
+    generateComparison();
+  }, [history]);
 
-  const fetchHistory = async () => {
-    setHistoryLoading(true); 
-    const user = MockDataService.getCurrentUser();
+  const generateComparison = async () => {
+    if (!history || history.length === 0) return;
+
+    let previousRecord: ExerciseRecord | null = null;
     
-    if (user) {
-        // --- INTEGRAÇÃO COM BACKEND: BUSCAR EVOLUÇÃO ---
-        try {
-            const encodedExercise = encodeURIComponent(exercise);
-            const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${user.id}?exercise=${encodedExercise}`;
-            
-            const response = await fetch(historyUrl, {
-                method: "GET",
-                headers: { "Content-Type": "application/json" }
-            });
+    // Tenta encontrar o registro "anterior" verdadeiro.
+    // O backend pode ter retornado o registro atual no topo da lista se ele já foi indexado.
+    const latest = history[0];
+    
+    const isLatestTheCurrent = 
+        latest.result.score === result.score && 
+        latest.result.repetitions === result.repetitions &&
+        (Date.now() - latest.timestamp) < 120000;
 
-            if (response.ok) {
-                const allRecords: ExerciseRecord[] = await response.json();
-                
-                // Estratégia Robusta para identificar Histórico Passado vs Registro Atual (que acabou de ser salvo)
-                let pastRecords = allRecords;
-
-                if (allRecords.length > 0) {
-                    const latest = allRecords[0];
-                    // Se o registro mais recente tem o mesmo score, reps e foi criado nos últimos 2 minutos,
-                    // assumimos que é o registro atual que o backend já indexou.
-                    // Removemos ele para comparar com o "verdadeiro anterior".
-                    const isCurrentRecord = 
-                        latest.result.score === result.score && 
-                        latest.result.repetitions === result.repetitions &&
-                        (Date.now() - latest.timestamp) < 120000;
-
-                    if (isCurrentRecord) {
-                        pastRecords = allRecords.slice(1);
-                    }
-                }
-                
-                setHistoryRecords(pastRecords);
-
-                if (pastRecords.length > 0) {
-                    setLoadingInsight(true);
-                    try {
-                        const insight = await generateProgressInsight(result, pastRecords[0].result, exercise);
-                        setComparisonInsight(insight);
-                    } catch (e) {
-                        console.error("Failed to generate insight");
-                    } finally {
-                        setLoadingInsight(false);
-                    }
-                } else {
-                    setComparisonInsight(null);
-                }
-            } else {
-                console.error("Erro ao buscar histórico do backend");
-            }
-
-        } catch (error) {
-            console.error("Erro de conexão ao buscar evolução:", error);
-        }
+    if (isLatestTheCurrent) {
+        // Se o atual está na lista, o anterior é o próximo
+        previousRecord = history.length > 1 ? history[1] : null;
+    } else {
+        // Se o atual não está na lista, o anterior é o primeiro
+        previousRecord = history[0];
     }
-    setHistoryLoading(false); 
+
+    if (previousRecord) {
+        setLoadingInsight(true);
+        try {
+            const insight = await generateProgressInsight(result, previousRecord.result, exercise);
+            setComparisonInsight(insight);
+        } catch (e) {
+            console.error("Erro ao gerar insight:", e);
+        } finally {
+            setLoadingInsight(false);
+        }
+    } else {
+        setComparisonInsight(null);
+    }
   };
 
   const handleGenerateDiet = async (e: React.FormEvent) => {
@@ -340,91 +313,113 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
                     </div>
                  ) : (
                     <p className="text-white text-lg leading-relaxed font-medium">
-                       "{comparisonInsight || (historyRecords.length === 0 ? "Esta é sua primeira avaliação. Continue assim para vermos seu progresso!" : "Analisando...")}"
+                       "{comparisonInsight || (history.length <= 1 ? "Continue treinando! Precisamos de pelo menos dois treinos para comparar sua evolução." : "Análise indisponível.")}"
                     </p>
                  )}
               </div>
 
               {/* Comparison List */}
               <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
-                 {/* Current Session (Sticky Top) */}
-                 <div className="bg-blue-600/10 border border-blue-500/30 p-4 rounded-xl flex flex-col gap-3">
+                 
+                 {/* Current Session (Always at top, marked as Current) */}
+                 <div className="bg-blue-600/10 border border-blue-500/30 p-4 rounded-xl flex flex-col gap-3 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 px-2 py-1 bg-blue-600 text-[10px] text-white font-bold rounded-bl-lg">AGORA</div>
                     <div className="flex items-center justify-between">
                         <div>
-                           <span className="text-xs text-blue-300 font-bold uppercase">Resultado Atual (Hoje)</span>
+                           <span className="text-xs text-blue-300 font-bold uppercase">Resultado Atual</span>
                            <div className="flex items-baseline gap-2">
                               <span className="text-2xl font-bold text-white">{result.score}</span>
                               <span className="text-sm text-slate-400">Score</span>
                            </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right mt-2">
                            <span className="block text-2xl font-bold text-white">
                               {result.repetitions}{isBodyCompAnalysis && '%'}
                            </span>
                            <span className="text-xs text-slate-400 uppercase">{isBodyCompAnalysis ? 'Gordura' : 'Reps'}</span>
                         </div>
                     </div>
-                    {/* Items de Avaliação (Feedback List) */}
-                    <div className="border-t border-blue-500/20 pt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-                        {result.feedback.map((f, i) => (
-                           <div key={i} className="flex justify-between text-xs">
-                              <span className="text-blue-200/70">{f.message}</span>
-                              <span className={`font-bold ${getScoreTextColor(f.score)}`}>{f.score}</span>
-                           </div>
-                        ))}
+                    {/* FEEDBACK ESPECÍFICO DO ATUAL */}
+                    <div className="border-t border-blue-500/30 pt-3 mt-1 grid grid-cols-2 gap-x-4 gap-y-2">
+                       {result.feedback.map((item, idx) => (
+                         <div key={idx} className="flex justify-between items-center text-xs">
+                           <span className="text-blue-200/80">{item.message}</span>
+                           <span className={`font-bold ${getScoreTextColor(item.score)}`}>{item.score}</span>
+                         </div>
+                       ))}
                     </div>
                  </div>
 
-                 {historyRecords.length === 0 ? (
+                 {/* History List (Filtered to remove current if duplicate) */}
+                 {history.filter(rec => {
+                     // Filtra o registro se for idêntico ao atual (evita duplicação visual se o backend já indexou)
+                     const isSameAsCurrent = 
+                        rec.result.score === result.score && 
+                        rec.result.repetitions === result.repetitions &&
+                        (Date.now() - rec.timestamp) < 120000;
+                     return !isSameAsCurrent;
+                 }).length === 0 ? (
                     <div className="text-center py-8 text-slate-500">
                        <History className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                       <p>Nenhum histórico anterior para comparação.</p>
+                       <p>Nenhum histórico anterior.</p>
                     </div>
                  ) : (
-                    historyRecords.map((rec, idx) => {
-                       const scoreDiff = result.score - rec.result.score;
-                       const isImprovement = scoreDiff > 0;
-                       const isSame = scoreDiff === 0;
+                    history
+                        .filter(rec => {
+                            // Mesma filtragem para renderização
+                             const isSameAsCurrent = 
+                                rec.result.score === result.score && 
+                                rec.result.repetitions === result.repetitions &&
+                                (Date.now() - rec.timestamp) < 120000;
+                             return !isSameAsCurrent;
+                        })
+                        .map((rec) => {
+                            const scoreDiff = result.score - rec.result.score;
+                            const isImprovement = scoreDiff > 0;
+                            const isSame = scoreDiff === 0;
 
-                       return (
-                          <div key={rec.id} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex flex-col gap-3 hover:bg-slate-800 transition-colors">
-                             <div className="flex items-center justify-between">
-                                <div className="flex flex-col">
-                                    <span className="text-xs text-slate-500 font-mono">
-                                    {new Date(rec.timestamp).toLocaleDateString()}
-                                    </span>
-                                    <div className="flex items-center gap-3 mt-1">
-                                    <span className="text-xl font-bold text-slate-300">{rec.result.score}</span>
-                                    
-                                    {/* Comparison Badge vs Current */}
-                                    {idx === 0 && (
-                                        <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-bold border ${isImprovement ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : (isSame ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20')}`}>
-                                            {isImprovement ? <TrendingUp className="w-3 h-3" /> : (isSame ? <Minus className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
-                                            {Math.abs(scoreDiff)} pts {isImprovement ? 'abaixo' : (isSame ? '' : 'acima')} de hoje
+                            return (
+                                <div key={rec.id} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex flex-col gap-3 hover:bg-slate-800 transition-colors">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex flex-col">
+                                            <span className="text-xs text-slate-500 font-mono">
+                                            {new Date(rec.timestamp).toLocaleDateString()}
+                                            </span>
+                                            <div className="flex items-center gap-3 mt-1">
+                                                <span className="text-xl font-bold text-slate-300">{rec.result.score}</span>
+                                                
+                                                {/* Badge comparando com o ATUAL (Hoje) */}
+                                                <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-bold border ${isImprovement ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : (isSame ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20')}`}>
+                                                    {isImprovement ? <TrendingUp className="w-3 h-3" /> : (isSame ? <Minus className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
+                                                    {Math.abs(scoreDiff)} pts {isImprovement ? 'abaixo' : (isSame ? '' : 'acima')} de hoje
+                                                </div>
+                                            </div>
                                         </div>
-                                    )}
+                                        
+                                        <div className="text-right">
+                                            <span className="block text-xl font-bold text-slate-400">
+                                            {rec.result.repetitions}{isBodyCompAnalysis && '%'}
+                                            </span>
+                                            <span className="text-xs text-slate-600 uppercase">{isBodyCompAnalysis ? 'Gordura' : 'Reps'}</span>
+                                        </div>
                                     </div>
-                                </div>
-                                
-                                <div className="text-right">
-                                    <span className="block text-xl font-bold text-slate-400">
-                                    {rec.result.repetitions}{isBodyCompAnalysis && '%'}
-                                    </span>
-                                    <span className="text-xs text-slate-600 uppercase">{isBodyCompAnalysis ? 'Gordura' : 'Reps'}</span>
-                                </div>
-                             </div>
+                                    
+                                    {/* FEEDBACK ESPECÍFICO DO HISTÓRICO */}
+                                    <div className="border-t border-slate-700/50 pt-3 mt-1 grid grid-cols-2 gap-x-4 gap-y-2">
+                                       {rec.result.feedback.map((item, idx) => (
+                                         <div key={idx} className="flex justify-between items-center text-xs">
+                                           <span className="text-slate-500">{item.message}</span>
+                                           <span className={`font-bold ${getScoreTextColor(item.score)}`}>{item.score}</span>
+                                         </div>
+                                       ))}
+                                    </div>
 
-                             {/* Items de Avaliação Passada */}
-                             <div className="border-t border-slate-700/50 pt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-                                {rec.result.feedback.map((f, i) => (
-                                   <div key={i} className="flex justify-between text-xs">
-                                      <span className="text-slate-500">{f.message}</span>
-                                      <span className={`font-medium ${getScoreTextColor(f.score)}`}>{f.score}</span>
-                                   </div>
-                                ))}
-                             </div>
-                          </div>
-                       );
+                                    {/* Feedback antigo resumido */}
+                                    <p className="text-xs text-slate-500 italic mt-1 border-t border-slate-700/30 pt-2">
+                                        "{rec.result.formCorrection.substring(0, 60)}..."
+                                    </p>
+                                </div>
+                            );
                     })
                  )}
               </div>
@@ -669,11 +664,11 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
             
             <button 
                 onClick={() => setShowHistoryModal(true)}
-                disabled={historyLoading && historyRecords.length === 0}
+                disabled={!history || history.length === 0}
                 className="w-full py-3 px-4 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-indigo-500/30 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-                {historyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <History className="w-4 h-4" />}
-                <span>{historyLoading ? "Carregando Histórico..." : "Comparar Evolução"}</span>
+                <History className="w-4 h-4" />
+                <span>Comparar Evolução</span>
             </button>
             
             {/* ACTION BUTTONS (Only for Body Composition) */}
