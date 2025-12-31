@@ -59,21 +59,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
         const data = await response.json();
         console.log("✅ LISTA DE USUÁRIOS RECEBIDA:", data);
         
-        // Atualiza a lista de usuários se o formato for compatível
+        // --- AJUSTE TEMPORÁRIO ---
+        // Ignoramos a atualização da tela (setUsers) para não quebrar o layout,
+        // pois o backend retorna campos diferentes (ex: 'nome' vs 'name') e faltam campos obrigatórios ('role', 'assignedExercises').
+        // Mantemos apenas o console.log acima para depuração.
+        
+        /* 
         if (Array.isArray(data)) {
             setUsers(data); 
         } else {
             console.warn("Formato de dados recebido diferente de array:", data);
         }
+        */
+
     } catch (err: any) {
         console.error("❌ Erro ao buscar usuários do backend:", err.message);
     }
   };
 
   const refreshData = () => {
-    // Carrega dados do Mock inicialmente, mas o fetchBackendUsers pode sobrescrever a lista de usuários se tiver sucesso
+    // Carrega dados do Mock inicialmente
     const mockUsers = MockDataService.getUsers();
-    // Apenas define users do mock se a lista estiver vazia (para não sobrescrever o fetch assíncrono se ele for rápido demais, embora o fetch sobrescreva depois)
+    
+    // Como comentamos o setUsers do fetchBackendUsers, isso garante que a lista Mockada permaneça na tela
     if (users.length === 0) {
         setUsers(mockUsers);
     }
@@ -82,18 +90,47 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCreateMsg('Enviando dados...');
+    
     try {
+      // --- INTEGRAÇÃO COM BACKEND ---
+      const url = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
+      
+      const payload = {
+          name: newName,
+          email: newEmail,
+          senha: "mudar123" // Senha padrão para usuários criados pelo admin
+      };
+
+      const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+          throw new Error("Erro ao cadastrar usuário no servidor.");
+      }
+
+      await response.json(); // Consome a resposta
+
+      // Opcional: Manter criação no Mock para refletir instantaneamente na UI local enquanto a listagem do backend está em modo debug
       await MockDataService.createUser(newName, newEmail);
-      setCreateMsg('Usuário criado com sucesso!');
+      
+      setCreateMsg('Usuário criado com sucesso no Backend!');
       setNewName('');
       setNewEmail('');
       refreshData();
+      fetchBackendUsers(); // Atualiza log do backend
+      
       setTimeout(() => {
         setCreateMsg('');
         setActiveTab('users');
       }, 1500);
+
     } catch (err: any) {
-      setCreateMsg(err.message);
+      console.error(err);
+      setCreateMsg("Erro: " + err.message);
     }
   };
 

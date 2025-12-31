@@ -21,11 +21,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError(null);
 
-    // --- CHAVE DE CONFIGURAÇÃO ---
-    // Defina como TRUE para usar o Backend Real via Axios.
-    // Defina como FALSE para usar o MockDataService (Simulação Local).
-    const USE_REAL_BACKEND = false; 
-
     try {
       if (isRegistering) {
         
@@ -36,55 +31,95 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
            throw new Error("Por favor, digite uma senha.");
         }
 
-        if (USE_REAL_BACKEND) {
-            // --- FLUXO DE CADASTRO COM BACKEND REAL ---
-            // URL do Backend Real
-            const url = 'https://backendai-732767853162.southamerica-east1.run.app/api/cadastrar';
-            
-            const payload = {
-              nome: name,
-              email: email,
-              senha: password
-            };
+        // --- INTEGRAÇÃO COM BACKEND (CADASTRO) ---
+        const url = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
+        
+        const payload = {
+            name: name,    // Backend mapeia para 'nome'
+            email: email,
+            senha: password
+        };
 
-            // Simplificando a chamada do Axios para evitar problemas de CORS com headers manuais desnecessários
-            const response = await axios.post(url, payload);
+        console.log("Enviando cadastro para:", url, payload);
 
-            console.log('Resposta do Servidor:', response.data);
-            alert('Cadastro realizado com sucesso! Faça login para continuar.');
-        } else {
-            // --- FLUXO DE CADASTRO MOCK (Simulação) ---
-            // Simula um delay de rede
-            await new Promise(resolve => setTimeout(resolve, 800));
-            
-            // Cria o usuário no localStorage
-            await MockDataService.createUser(name, email);
-            
-            console.log('Usuário criado via MockService (Senha ignorada na simulação local)');
-            alert('Cadastro realizado com sucesso (Simulação Local)! Faça login para continuar.');
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            // Tenta ler o erro do backend se houver
+            let errorMsg = "Erro ao cadastrar usuário.";
+            try {
+                const errData = await response.json();
+                if (errData.message) errorMsg = errData.message;
+            } catch (e) {}
+            throw new Error(errorMsg);
         }
+
+        const usuarioCriado = await response.json();
+        console.log("Sucesso:", usuarioCriado);
+        alert("Cadastro realizado com sucesso! Faça login para continuar.");
         
         // Limpar formulário e mudar para login após sucesso
         setIsRegistering(false);
         setPassword('');
         
       } else {
-        // --- FLUXO DE LOGIN (Mantido Mock ou Implementar Backend Futuro) ---
-        // Por enquanto, mantemos o login via MockDataService para não quebrar a aplicação 
-        // até que você tenha a rota de /login pronta no backend também.
+        // --- INTEGRAÇÃO COM BACKEND (LOGIN) ---
         
-        const user = await MockDataService.login(email);
-        if (user) {
-          onLogin(user);
-        } else {
-          // Fallback temporário
-          setError('Usuário não encontrado ou senha incorreta (Simulação). Verifique o e-mail digitado.');
+        if (!email.trim() || !password.trim()) {
+            throw new Error("Preencha e-mail e senha.");
         }
+
+        const loginUrl = "https://testeai-732767853162.us-west1.run.app/api/usuarios/login";
+        
+        const loginPayload = {
+            email: email,
+            senha: password
+        };
+
+        console.log("Tentando login em:", loginUrl);
+
+        const response = await fetch(loginUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(loginPayload),
+        });
+
+        if (response.status === 401 || response.status === 403) {
+             throw new Error("E-mail ou senha incorretos.");
+        }
+
+        if (!response.ok) {
+             throw new Error("Erro de conexão ao tentar realizar login.");
+        }
+
+        const usuarioLogado = await response.json();
+        console.log("Login realizado com sucesso:", usuarioLogado);
+
+        // Mapeamento de segurança para garantir que o formato User seja respeitado
+        // Caso o backend retorne 'nome' ao invés de 'name', ajustamos aqui
+        const appUser: User = {
+            id: usuarioLogado.id ? String(usuarioLogado.id) : Date.now().toString(),
+            name: usuarioLogado.name || usuarioLogado.nome || "Usuário",
+            email: usuarioLogado.email,
+            role: usuarioLogado.role || 'user',
+            avatar: usuarioLogado.avatar,
+            assignedExercises: usuarioLogado.assignedExercises || []
+        };
+        
+        // Atualiza o MockDataService apenas para manter compatibilidade com funcionalidades locais (opcional)
+        // localStorage.setItem("fitai_current_session", JSON.stringify(appUser)); 
+        
+        onLogin(appUser);
       }
     } catch (err: any) {
       console.error('Erro na operação:', err);
-      // Tratamento de erro do Axios ou do Mock
-      const mensagemErro = err.response?.data?.message || err.message || 'Ocorreu um erro. Tente novamente.';
+      const mensagemErro = err.message || 'Ocorreu um erro. Tente novamente.';
       setError(mensagemErro);
     } finally {
       setLoading(false);
@@ -187,7 +222,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     `}
                 >
                     {loading ? (
-                      'Conectando...'
+                      <span className="flex items-center gap-2">Conectando...</span>
                     ) : (
                         <>
                            {isRegistering ? 'Cadastrar' : 'Entrar'} 
