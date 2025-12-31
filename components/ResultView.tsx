@@ -43,7 +43,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
 
   // History / Evolution State
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false); // Loading state for the button
+  const [historyLoading, setHistoryLoading] = useState(false); // Loading state for the button/data
   const [historyRecords, setHistoryRecords] = useState<ExerciseRecord[]>([]);
   const [comparisonInsight, setComparisonInsight] = useState<string | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false); // Loading state for the internal AI text
@@ -68,40 +68,71 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
     }
   }, [result.gender]);
 
+  // Carregar histórico automaticamente ao montar o componente
+  useEffect(() => {
+    fetchHistory();
+  }, [exercise]);
+
   const fetchHistory = async () => {
-    setHistoryLoading(true); // Start loading feedback on button
+    setHistoryLoading(true); 
     const user = MockDataService.getCurrentUser();
     
     if (user) {
-        // Fetch previous records
-        const allRecords = MockDataService.getHistoryByExercise(user.id, exercise);
-        
-        // FIX: The current result was just saved in App.tsx before rendering this view, so it is at index 0 (newest).
-        // We need to exclude it to find the *previous* records for meaningful comparison.
-        // allRecords is sorted by timestamp desc.
-        const pastRecords = allRecords.slice(1); 
-        
-        setHistoryRecords(pastRecords);
+        // --- INTEGRAÇÃO COM BACKEND: BUSCAR EVOLUÇÃO ---
+        try {
+            const encodedExercise = encodeURIComponent(exercise);
+            const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${user.id}?exercise=${encodedExercise}`;
+            
+            const response = await fetch(historyUrl, {
+                method: "GET",
+                headers: { "Content-Type": "application/json" }
+            });
 
-        if (pastRecords.length > 0) {
-            setLoadingInsight(true);
-            try {
-                // Generate insight before opening modal to ensure content is ready
-                // Compare current 'result' with the most recent PAST result (pastRecords[0])
-                const insight = await generateProgressInsight(result, pastRecords[0].result, exercise);
-                setComparisonInsight(insight);
-            } catch (e) {
-                console.error("Failed to generate insight");
-            } finally {
-                setLoadingInsight(false);
+            if (response.ok) {
+                const allRecords: ExerciseRecord[] = await response.json();
+                
+                // Estratégia Robusta para identificar Histórico Passado vs Registro Atual (que acabou de ser salvo)
+                let pastRecords = allRecords;
+
+                if (allRecords.length > 0) {
+                    const latest = allRecords[0];
+                    // Se o registro mais recente tem o mesmo score, reps e foi criado nos últimos 2 minutos,
+                    // assumimos que é o registro atual que o backend já indexou.
+                    // Removemos ele para comparar com o "verdadeiro anterior".
+                    const isCurrentRecord = 
+                        latest.result.score === result.score && 
+                        latest.result.repetitions === result.repetitions &&
+                        (Date.now() - latest.timestamp) < 120000;
+
+                    if (isCurrentRecord) {
+                        pastRecords = allRecords.slice(1);
+                    }
+                }
+                
+                setHistoryRecords(pastRecords);
+
+                if (pastRecords.length > 0) {
+                    setLoadingInsight(true);
+                    try {
+                        const insight = await generateProgressInsight(result, pastRecords[0].result, exercise);
+                        setComparisonInsight(insight);
+                    } catch (e) {
+                        console.error("Failed to generate insight");
+                    } finally {
+                        setLoadingInsight(false);
+                    }
+                } else {
+                    setComparisonInsight(null);
+                }
+            } else {
+                console.error("Erro ao buscar histórico do backend");
             }
-        } else {
-             setComparisonInsight(null);
+
+        } catch (error) {
+            console.error("Erro de conexão ao buscar evolução:", error);
         }
     }
-    
-    setHistoryLoading(false); // Stop loading
-    setShowHistoryModal(true); // Open modal
+    setHistoryLoading(false); 
   };
 
   const handleGenerateDiet = async (e: React.FormEvent) => {
@@ -379,7 +410,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
                                     <span className="block text-xl font-bold text-slate-400">
                                     {rec.result.repetitions}{isBodyCompAnalysis && '%'}
                                     </span>
-                                    <span className="text-[10px] text-slate-600 uppercase">{isBodyCompAnalysis ? 'Gordura' : 'Reps'}</span>
+                                    <span className="text-xs text-slate-600 uppercase">{isBodyCompAnalysis ? 'Gordura' : 'Reps'}</span>
                                 </div>
                              </div>
 
@@ -637,8 +668,8 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, onRese
             </div>
             
             <button 
-                onClick={fetchHistory}
-                disabled={historyLoading}
+                onClick={() => setShowHistoryModal(true)}
+                disabled={historyLoading && historyRecords.length === 0}
                 className="w-full py-3 px-4 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-indigo-500/30 disabled:opacity-70 disabled:cursor-not-allowed"
             >
                 {historyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <History className="w-4 h-4" />}

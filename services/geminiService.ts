@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ExerciseType } from "../types";
 
@@ -22,7 +21,8 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
   });
 };
 
-export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Promise<AnalysisResult> => {
+// Agora aceita um terceiro argumento opcional: previousAnalysis
+export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previousAnalysis?: AnalysisResult | null): Promise<AnalysisResult> => {
   console.log(`Iniciando análise detalhada para: ${exerciseType}`);
   
   const mediaPart = await fileToGenerativePart(file);
@@ -33,6 +33,28 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
     1. Valide se o vídeo contém um humano realizando "${exerciseType}".
     2. Se for inválido (esporte errado, sem pessoa, meme), retorne isValidContent: false.
   `;
+
+  // Construção do contexto histórico
+  let historyContext = "";
+  if (previousAnalysis) {
+    const prevScore = previousAnalysis.score;
+    const prevImprovements = previousAnalysis.improvements?.map(i => i.instruction).join("; ") || "Nenhum registro detalhado.";
+    const prevCorrection = previousAnalysis.formCorrection;
+
+    historyContext = `
+      CONTEXTO DE EVOLUÇÃO (MUITO IMPORTANTE):
+      O usuário realizou este exercício anteriormente.
+      - Nota Anterior: ${prevScore}/100.
+      - Erros passados: "${prevImprovements}".
+      - Feedback passado: "${prevCorrection}".
+
+      SUA MISSÃO EXTRA:
+      Compare a execução ATUAL com a ANTERIOR.
+      1. Se ele corrigiu os erros passados, ELOGIE explicitamente no campo 'strengths' ou 'formCorrection'.
+      2. Se ele repetiu o mesmo erro, seja mais enfático na correção.
+      3. No campo 'formCorrection', inicie dizendo algo como "Em relação à sua última vez..." ou "Você melhorou em X...".
+    `;
+  }
 
   // Novas regras de estilo para feedback DETALHADO
   const detailedStyle = `
@@ -56,6 +78,7 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
     prompt = `
       ${validationRules}
       ${detailedStyle}
+      ${historyContext}
       Contexto: Análise Postural Estática ou Dinâmica.
       Instrução: Realize uma varredura completa. Identifique desvios como Hiperlordose, Hipercifose, Escoliose, Valgo Dinâmico, Cabeça protusa.
       Dê detalhes sobre como esses desvios afetam o dia a dia.
@@ -65,6 +88,7 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
     prompt = `
       ${validationRules}
       ${detailedStyle}
+      ${historyContext}
       Contexto: Avaliação Antropométrica Visual.
       Instrução: Estime o biotipo e a gordura corporal.
       IMPORTANTE: Identifique visualmente o sexo biológico (masculino ou feminino) para ajustar a estimativa de gordura e sugestões.
@@ -79,6 +103,7 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType): Prom
     prompt = `
       ${validationRules}
       ${detailedStyle}
+      ${historyContext}
       Contexto: Treinamento Resistido / Cardio (${exerciseType}).
       Instrução: Analise a fase concêntrica e excêntrica. Verifique a estabilidade articular.
       Identifique compensações musculares.

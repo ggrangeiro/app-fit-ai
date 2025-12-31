@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AppStep, ExerciseType, AnalysisResult, User } from './types';
+import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord } from './types';
 import { analyzeVideo } from './services/geminiService';
 import { compressVideo } from './utils/videoUtils';
 import { MockDataService } from './services/mockDataService';
@@ -149,7 +149,35 @@ const App: React.FC = () => {
       }
 
       setStep(AppStep.ANALYZING);
-      const result = await analyzeVideo(finalFile, selectedExercise);
+
+      // --- PASSO 1: BUSCAR HISTÓRICO ANTERIOR (GET) ---
+      // Buscamos o último resultado para passar como contexto para a IA
+      let previousRecord: ExerciseRecord | null = null;
+      try {
+        console.log("Buscando histórico anterior para contexto...");
+        const encodedExercise = encodeURIComponent(selectedExercise);
+        const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
+        
+        const historyResponse = await fetch(historyUrl, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" }
+        });
+
+        if (historyResponse.ok) {
+            const historyData: ExerciseRecord[] = await historyResponse.json();
+            if (historyData && historyData.length > 0) {
+                // Assume que o backend retorna ordenado por data (mais recente primeiro)
+                previousRecord = historyData[0];
+                console.log("Histórico encontrado. Score anterior:", previousRecord.result.score);
+            }
+        }
+      } catch (histErr) {
+        console.warn("Não foi possível buscar o histórico anterior. A análise continuará sem contexto de evolução.", histErr);
+      }
+
+      // --- PASSO 2: ANALISAR VÍDEO COM CONTEXTO ---
+      // Passamos o resultado anterior (se houver) para a função de IA
+      const result = await analyzeVideo(finalFile, selectedExercise, previousRecord?.result);
       
       if (!result.isValidContent) {
         setError(result.validationError || "O conteúdo enviado não condiz com um humano realizando o exercício selecionado.");
@@ -158,8 +186,39 @@ const App: React.FC = () => {
       }
       
       setAnalysisResult(result);
-      MockDataService.saveResult(currentUser.id, currentUser.name, selectedExercise, result);
       
+      // --- PASSO 3: SALVAR NOVO RESULTADO (POST) ---
+      try {
+        console.log("Salvando resultado no backend...");
+        const saveUrl = "https://testeai-732767853162.us-west1.run.app/api/historico";
+        const payload = {
+          userId: currentUser.id,
+          userName: currentUser.name,
+          exercise: selectedExercise,
+          timestamp: Date.now(),
+          result: { 
+            ...result, 
+            date: new Date().toISOString() 
+          }
+        };
+
+        const saveResponse = await fetch(saveUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (saveResponse.ok) {
+          console.log("Histórico salvo com sucesso no backend!");
+        } else {
+          console.error("Erro ao salvar no backend:", await saveResponse.text());
+        }
+      } catch (saveError) {
+        console.error("Falha na conexão ao salvar histórico:", saveError);
+      }
+
       setStep(AppStep.RESULTS);
 
     } catch (err: any) {
@@ -388,7 +447,7 @@ const App: React.FC = () => {
                  <ShieldCheck className="w-4 h-4" /> Validando presença humana e contexto...
               </p>
             </div>
-            <p className="text-slate-400 mt-6 mb-10">Aguarde enquanto nossa IA certifica a validade do conteúdo e analisa o movimento.</p>
+            <p className="text-slate-400 mt-6 mb-10">Aguarde enquanto nossa IA certifica a validade do conteúdo e analisa o movimento, comparando com seu histórico anterior.</p>
             {selectedExercise && (
               <div className="glass-panel rounded-2xl p-8 border-l-4 border-l-blue-400 shadow-2xl">
                  <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-blue-500/10 rounded-lg text-blue-400"><Lightbulb className="w-5 h-5" /></div><span className="text-blue-300 font-semibold uppercase text-xs">Dica do Coach</span></div>
