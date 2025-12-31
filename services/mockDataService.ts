@@ -240,22 +240,36 @@ export const MockDataService = {
   },
 
   deleteRecord: async (userId: string, recordId: string): Promise<boolean> => {
+    const URL = `https://testeai-732767853162.us-west1.run.app/api/historico/${userId}/${recordId}`;
+    
     try {
-        // Tentativa de remover no Backend
-        try {
-           await fetch(`https://testeai-732767853162.us-west1.run.app/api/historico/${userId}/${recordId}`, {
-               method: 'DELETE'
-           });
-           console.log("Registro removido do backend com sucesso.");
-        } catch (apiError) {
-           console.warn("Falha ao remover do backend ou API indisponível, removendo localmente...", apiError);
+        console.log("Removendo registro:", URL);
+        const response = await fetch(URL, { method: 'DELETE' });
+        
+        // Verifica se a requisição HTTP foi bem sucedida
+        if (response.ok) {
+            try {
+                const data = await response.json();
+                
+                // Validação solicitada: verifica o campo success
+                if (data.success || data.message) {
+                    // Remover do LocalStorage (Cache local para atualização imediata)
+                    const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
+                    const updatedRecords = records.filter(r => r.id !== recordId);
+                    localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
+                    return true;
+                }
+            } catch (jsonError) {
+                // Fallback: se não retornar JSON mas foi 200 OK (algumas APIs retornam 204 No Content)
+                // Assumimos sucesso e limpamos localmente
+                console.warn("Resposta sem JSON, assumindo sucesso pelo status 200/204");
+                const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
+                const updatedRecords = records.filter(r => r.id !== recordId);
+                localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
+                return true;
+            }
         }
-
-        // Remover do LocalStorage (Fallback / Cache local)
-        const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
-        const updatedRecords = records.filter(r => r.id !== recordId);
-        localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
-        return true;
+        return false;
     } catch (e) {
         console.error("Erro ao deletar registro:", e);
         return false;

@@ -131,7 +131,7 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
                       : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800'}
                   `}
                 >
-                  {/* Delete Button - Using Trash2 (Lixeira) for better UX distinct from Close X */}
+                  {/* Delete Button - Positioned absolute top-right */}
                   {onDelete && (
                       <button 
                         onClick={(e) => { e.stopPropagation(); confirmAndDelete(rec.id); }}
@@ -142,15 +142,16 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
                       </button>
                   )}
 
-                  {isCurrentSession && (
-                    <div className="absolute top-0 right-0 px-2 py-1 bg-blue-600 text-[10px] text-white font-bold rounded-bl-lg">AGORA</div>
-                  )}
-
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
-                      <span className={`text-xs font-mono ${isCurrentSession ? 'text-blue-300 font-bold uppercase' : 'text-slate-500'}`}>
-                        {isCurrentSession ? 'Resultado Atual' : new Date(rec.timestamp).toLocaleDateString()}
-                      </span>
+                      <div className="flex items-center gap-2">
+                          <span className={`text-xs font-mono ${isCurrentSession ? 'text-blue-300 font-bold uppercase' : 'text-slate-500'}`}>
+                            {isCurrentSession ? 'Resultado Atual' : new Date(rec.timestamp).toLocaleDateString()}
+                          </span>
+                          {/* Inline AGORA Badge */}
+                          {isCurrentSession && <span className="px-1.5 py-0.5 bg-blue-600 text-[9px] text-white font-bold rounded uppercase">Agora</span>}
+                      </div>
+
                       <div className="flex items-center gap-3 mt-1">
                         <span className={`text-xl font-bold ${isCurrentSession ? 'text-white' : 'text-slate-300'}`}>
                           {rec.result.score}
@@ -166,7 +167,8 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
                       </div>
                     </div>
                     
-                    <div className="text-right mt-1 mr-8 md:mr-0">
+                    {/* Stats (Reps/Fat%) - Added pr-10 to prevent overlap with Trash Icon */}
+                    <div className="text-right mt-1 pr-10">
                       <span className={`block text-xl font-bold ${isCurrentSession ? 'text-white' : 'text-slate-400'}`}>
                         {rec.result.repetitions}{isBodyCompAnalysis && '%'}
                       </span>
