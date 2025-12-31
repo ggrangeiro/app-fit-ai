@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType, ExerciseRecord } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, Save, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, ChevronRight, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History } from 'lucide-react';
 import MuscleMap from './MuscleMap';
-import { generateDietPlan, generateWorkoutPlan, generateProgressInsight } from '../services/geminiService';
+import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
+import { EvolutionModal } from './EvolutionModal';
 
 interface ResultViewProps {
   result: AnalysisResult;
   exercise: ExerciseType;
-  history: ExerciseRecord[]; // Novo prop: histórico completo passado pelo pai
+  history: ExerciseRecord[];
   onReset: () => void;
   onSave?: () => void;
 }
@@ -43,8 +44,6 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
 
   // History / Evolution State
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [comparisonInsight, setComparisonInsight] = useState<string | null>(null);
-  const [loadingInsight, setLoadingInsight] = useState(false);
 
   const isHighPerformance = result.score > 80;
   const isPostureAnalysis = exercise === ExerciseType.POSTURE_ANALYSIS;
@@ -65,48 +64,6 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
       setWorkoutFormData(prev => ({ ...prev, gender: detectedGender }));
     }
   }, [result.gender]);
-
-  // Inicializa o Insight de Comparação baseado no histórico recebido
-  useEffect(() => {
-    generateComparison();
-  }, [history]);
-
-  const generateComparison = async () => {
-    if (!history || history.length === 0) return;
-
-    let previousRecord: ExerciseRecord | null = null;
-    
-    // Tenta encontrar o registro "anterior" verdadeiro.
-    // O backend pode ter retornado o registro atual no topo da lista se ele já foi indexado.
-    const latest = history[0];
-    
-    const isLatestTheCurrent = 
-        latest.result.score === result.score && 
-        latest.result.repetitions === result.repetitions &&
-        (Date.now() - latest.timestamp) < 120000;
-
-    if (isLatestTheCurrent) {
-        // Se o atual está na lista, o anterior é o próximo
-        previousRecord = history.length > 1 ? history[1] : null;
-    } else {
-        // Se o atual não está na lista, o anterior é o primeiro
-        previousRecord = history[0];
-    }
-
-    if (previousRecord) {
-        setLoadingInsight(true);
-        try {
-            const insight = await generateProgressInsight(result, previousRecord.result, exercise);
-            setComparisonInsight(insight);
-        } catch (e) {
-            console.error("Erro ao gerar insight:", e);
-        } finally {
-            setLoadingInsight(false);
-        }
-    } else {
-        setComparisonInsight(null);
-    }
-  };
 
   const handleGenerateDiet = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,12 +110,6 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
     if (score >= 70) return "Muito Bom!";
     if (score >= 50) return isPostureAnalysis ? "Atenção Moderada" : "Caminho Certo";
     return "Precisa de Ajustes";
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return "bg-emerald-500";
-    if (score >= 60) return "bg-yellow-500";
-    return "bg-red-500";
   };
 
   const getScoreTextColor = (score: number) => {
@@ -280,152 +231,21 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
     return renderGeneratedPlan(workoutPlanHtml, "Plano de Treino", <Dumbbell className="w-8 h-8" />, () => setWorkoutPlanHtml(null), false);
   }
 
+  // Prepara o histórico para o modal, garantindo que o item atual esteja visível se já foi salvo/incluso
+  // No ResultView, assumimos que 'history' já contém o resultado atual (foi atualizado no App.tsx após salvar)
+  // Portanto, passamos highlightLatestAsCurrent={true} para que o modal saiba tratar o index 0 como "Agora".
+  
   return (
     <div className="w-full max-w-6xl mx-auto animate-fade-in pb-10">
       
       {/* HISTORY / EVOLUTION MODAL */}
-      {showHistoryModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
-           <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-2xl relative shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-              <button onClick={() => setShowHistoryModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white z-10">
-                 <X className="w-6 h-6" />
-              </button>
-
-              <div className="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4">
-                 <div className="p-3 bg-indigo-500/20 text-indigo-400 rounded-full">
-                    <History className="w-6 h-6" />
-                 </div>
-                 <div>
-                    <h3 className="text-2xl font-bold text-white">Sua Evolução</h3>
-                    <p className="text-slate-400 text-sm">Histórico de {exercise}</p>
-                 </div>
-              </div>
-
-              {/* Latest AI Insight */}
-              <div className="mb-6 bg-gradient-to-r from-slate-800 to-slate-800/50 p-5 rounded-2xl border border-slate-700/50 relative">
-                 <div className="absolute -top-3 -right-3">
-                    <Sparkles className="w-8 h-8 text-yellow-500 fill-yellow-500/20 animate-pulse" />
-                 </div>
-                 <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">Análise de Progresso (IA)</h4>
-                 {loadingInsight ? (
-                    <div className="flex items-center gap-2 text-slate-400 text-sm">
-                       <Loader2 className="w-4 h-4 animate-spin" /> Comparando com a última sessão...
-                    </div>
-                 ) : (
-                    <p className="text-white text-lg leading-relaxed font-medium">
-                       "{comparisonInsight || (history.length <= 1 ? "Continue treinando! Precisamos de pelo menos dois treinos para comparar sua evolução." : "Análise indisponível.")}"
-                    </p>
-                 )}
-              </div>
-
-              {/* Comparison List */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
-                 
-                 {/* Current Session (Always at top, marked as Current) */}
-                 <div className="bg-blue-600/10 border border-blue-500/30 p-4 rounded-xl flex flex-col gap-3 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 px-2 py-1 bg-blue-600 text-[10px] text-white font-bold rounded-bl-lg">AGORA</div>
-                    <div className="flex items-center justify-between">
-                        <div>
-                           <span className="text-xs text-blue-300 font-bold uppercase">Resultado Atual</span>
-                           <div className="flex items-baseline gap-2">
-                              <span className="text-2xl font-bold text-white">{result.score}</span>
-                              <span className="text-sm text-slate-400">Score</span>
-                           </div>
-                        </div>
-                        <div className="text-right mt-2">
-                           <span className="block text-2xl font-bold text-white">
-                              {result.repetitions}{isBodyCompAnalysis && '%'}
-                           </span>
-                           <span className="text-xs text-slate-400 uppercase">{isBodyCompAnalysis ? 'Gordura' : 'Reps'}</span>
-                        </div>
-                    </div>
-                    {/* FEEDBACK ESPECÍFICO DO ATUAL */}
-                    <div className="border-t border-blue-500/30 pt-3 mt-1 grid grid-cols-2 gap-x-4 gap-y-2">
-                       {result.feedback.map((item, idx) => (
-                         <div key={idx} className="flex justify-between items-center text-xs">
-                           <span className="text-blue-200/80">{item.message}</span>
-                           <span className={`font-bold ${getScoreTextColor(item.score)}`}>{item.score}</span>
-                         </div>
-                       ))}
-                    </div>
-                 </div>
-
-                 {/* History List (Filtered to remove current if duplicate) */}
-                 {history.filter(rec => {
-                     // Filtra o registro se for idêntico ao atual (evita duplicação visual se o backend já indexou)
-                     const isSameAsCurrent = 
-                        rec.result.score === result.score && 
-                        rec.result.repetitions === result.repetitions &&
-                        (Date.now() - rec.timestamp) < 120000;
-                     return !isSameAsCurrent;
-                 }).length === 0 ? (
-                    <div className="text-center py-8 text-slate-500">
-                       <History className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                       <p>Nenhum histórico anterior.</p>
-                    </div>
-                 ) : (
-                    history
-                        .filter(rec => {
-                            // Mesma filtragem para renderização
-                             const isSameAsCurrent = 
-                                rec.result.score === result.score && 
-                                rec.result.repetitions === result.repetitions &&
-                                (Date.now() - rec.timestamp) < 120000;
-                             return !isSameAsCurrent;
-                        })
-                        .map((rec) => {
-                            const scoreDiff = result.score - rec.result.score;
-                            const isImprovement = scoreDiff > 0;
-                            const isSame = scoreDiff === 0;
-
-                            return (
-                                <div key={rec.id} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex flex-col gap-3 hover:bg-slate-800 transition-colors">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex flex-col">
-                                            <span className="text-xs text-slate-500 font-mono">
-                                            {new Date(rec.timestamp).toLocaleDateString()}
-                                            </span>
-                                            <div className="flex items-center gap-3 mt-1">
-                                                <span className="text-xl font-bold text-slate-300">{rec.result.score}</span>
-                                                
-                                                {/* Badge comparando com o ATUAL (Hoje) */}
-                                                <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-bold border ${isImprovement ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : (isSame ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20')}`}>
-                                                    {isImprovement ? <TrendingUp className="w-3 h-3" /> : (isSame ? <Minus className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />)}
-                                                    {Math.abs(scoreDiff)} pts {isImprovement ? 'abaixo' : (isSame ? '' : 'acima')} de hoje
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="text-right">
-                                            <span className="block text-xl font-bold text-slate-400">
-                                            {rec.result.repetitions}{isBodyCompAnalysis && '%'}
-                                            </span>
-                                            <span className="text-xs text-slate-600 uppercase">{isBodyCompAnalysis ? 'Gordura' : 'Reps'}</span>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* FEEDBACK ESPECÍFICO DO HISTÓRICO */}
-                                    <div className="border-t border-slate-700/50 pt-3 mt-1 grid grid-cols-2 gap-x-4 gap-y-2">
-                                       {rec.result.feedback.map((item, idx) => (
-                                         <div key={idx} className="flex justify-between items-center text-xs">
-                                           <span className="text-slate-500">{item.message}</span>
-                                           <span className={`font-bold ${getScoreTextColor(item.score)}`}>{item.score}</span>
-                                         </div>
-                                       ))}
-                                    </div>
-
-                                    {/* Feedback antigo resumido */}
-                                    <p className="text-xs text-slate-500 italic mt-1 border-t border-slate-700/30 pt-2">
-                                        "{rec.result.formCorrection.substring(0, 60)}..."
-                                    </p>
-                                </div>
-                            );
-                    })
-                 )}
-              </div>
-           </div>
-        </div>
-      )}
+      <EvolutionModal 
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        history={history}
+        exerciseType={exercise}
+        highlightLatestAsCurrent={true}
+      />
 
       {/* Modal Form for Diet */}
       {showDietForm && (

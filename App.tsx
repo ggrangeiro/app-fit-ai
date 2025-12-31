@@ -7,7 +7,8 @@ import ExerciseCard from './components/ExerciseCard';
 import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History } from 'lucide-react';
+import { EvolutionModal } from './components/EvolutionModal';
 
 const DEFAULT_EXERCISE_IMAGES: Record<ExerciseType, string> = {
   [ExerciseType.SQUAT]: "https://images.unsplash.com/photo-1434682881908-b43d0467b798?q=80&w=800&auto=format&fit=crop",
@@ -60,6 +61,8 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(DEFAULT_EXERCISE_IMAGES);
+  const [showEvolutionModal, setShowEvolutionModal] = useState(false); // Modal solto no dashboard
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -131,6 +134,39 @@ const App: React.FC = () => {
       setMediaFile(file);
       setMediaPreview(URL.createObjectURL(file));
       setError(null);
+    }
+  };
+
+  const handleViewHistory = async () => {
+    if (!selectedExercise || !currentUser) return;
+    
+    setLoadingHistory(true);
+    try {
+        console.log("Buscando histórico para visualização...");
+        const encodedExercise = encodeURIComponent(selectedExercise);
+        const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
+        
+        const response = await fetch(historyUrl, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" }
+        });
+
+        if (response.ok) {
+            const data: ExerciseRecord[] = await response.json();
+            if (data && data.length > 0) {
+                setHistoryRecords(data);
+                setShowEvolutionModal(true);
+            } else {
+                alert("Você ainda não realizou este exercício nenhuma vez.");
+            }
+        } else {
+            alert("Não foi possível carregar o histórico. Tente novamente.");
+        }
+    } catch (e) {
+        console.error("Erro ao buscar histórico:", e);
+        alert("Erro de conexão ao buscar histórico.");
+    } finally {
+        setLoadingHistory(false);
     }
   };
 
@@ -320,7 +356,10 @@ const App: React.FC = () => {
               </button>
               <div className="flex flex-col gap-3">
                 {hasPostureAccess ? (
-                  <button className="glass-panel p-5 rounded-2xl flex items-center gap-4 group hover:bg-emerald-600/20 transition-all border-2 border-emerald-500/30 flex-1" onClick={() => { setSelectedExercise(ExerciseType.POSTURE_ANALYSIS); setStep(AppStep.UPLOAD_VIDEO); }}>
+                  <button 
+                    className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${selectedExercise === ExerciseType.POSTURE_ANALYSIS ? 'border-emerald-500 bg-emerald-600/20' : 'border-emerald-500/30 hover:bg-emerald-600/20'}`}
+                    onClick={() => setSelectedExercise(ExerciseType.POSTURE_ANALYSIS)}
+                  >
                      <div className="p-3 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><ScanLine className="w-5 h-5" /></div>
                      <div className="text-left"><h3 className="text-white font-bold text-lg">Analisar Postura</h3><p className="text-slate-400 text-xs">Biofeedback Postural</p></div>
                   </button>
@@ -332,7 +371,10 @@ const App: React.FC = () => {
                 )}
 
                 {hasBodyCompAccess ? (
-                  <button className="glass-panel p-5 rounded-2xl flex items-center gap-4 group hover:bg-violet-600/20 transition-all border-2 border-violet-500/30 flex-1" onClick={() => { setSelectedExercise(ExerciseType.BODY_COMPOSITION); setStep(AppStep.UPLOAD_VIDEO); }}>
+                  <button 
+                    className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${selectedExercise === ExerciseType.BODY_COMPOSITION ? 'border-violet-500 bg-violet-600/20' : 'border-violet-500/30 hover:bg-violet-600/20'}`}
+                    onClick={() => setSelectedExercise(ExerciseType.BODY_COMPOSITION)}
+                  >
                      <div className="p-3 bg-violet-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Scale className="w-5 h-5" /></div>
                      <div className="text-left"><h3 className="text-white font-bold text-lg">Análise Corporal</h3><p className="text-slate-400 text-xs">Biotipo & % Gordura</p></div>
                   </button>
@@ -356,11 +398,39 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
-
-            <button disabled={!selectedExercise} onClick={() => setStep(AppStep.UPLOAD_VIDEO)} className={`w-full md:w-auto group flex items-center justify-center gap-3 px-10 py-5 rounded-full text-lg font-bold transition-all duration-300 sticky bottom-8 z-40 shadow-2xl ${selectedExercise ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'opacity-0 pointer-events-none'}`}>
-              Continuar <ArrowRight className="w-5 h-5" />
-            </button>
+            
+            <div className={`sticky bottom-8 z-40 flex items-center gap-4 transition-all duration-300 justify-center ${selectedExercise ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
+                {selectedExercise && (
+                    <button 
+                        onClick={handleViewHistory}
+                        disabled={loadingHistory}
+                        className="group flex items-center justify-center gap-3 px-6 py-5 rounded-full text-lg font-bold bg-slate-700 hover:bg-slate-600 text-white shadow-2xl transition-all"
+                    >
+                        {loadingHistory ? <Loader2 className="w-5 h-5 animate-spin" /> : <History className="w-5 h-5" />}
+                        <span className="hidden md:inline">Comparar Evolução</span>
+                    </button>
+                )}
+                
+                <button 
+                    disabled={!selectedExercise} 
+                    onClick={() => setStep(AppStep.UPLOAD_VIDEO)} 
+                    className="group flex items-center justify-center gap-3 px-10 py-5 rounded-full text-lg font-bold transition-all duration-300 shadow-2xl bg-blue-600 hover:bg-blue-500 text-white"
+                >
+                    Continuar <ArrowRight className="w-5 h-5" />
+                </button>
+            </div>
           </div>
+        )}
+
+        {/* Modal de Evolução Separado (Acionado pelo dashboard) */}
+        {selectedExercise && (
+             <EvolutionModal 
+                isOpen={showEvolutionModal}
+                onClose={() => setShowEvolutionModal(false)}
+                history={historyRecords}
+                exerciseType={selectedExercise}
+                highlightLatestAsCurrent={false} // No dashboard, apenas mostramos o histórico, sem "AGORA"
+            />
         )}
 
         {step === AppStep.UPLOAD_VIDEO && (
