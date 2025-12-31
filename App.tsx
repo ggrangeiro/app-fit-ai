@@ -9,6 +9,7 @@ import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
+import LoadingScreen from './components/LoadingScreen';
 
 const DEFAULT_EXERCISE_IMAGES: Record<string, string> = {
   'SQUAT': "https://images.unsplash.com/photo-1434682881908-b43d0467b798?q=80&w=800&auto=format&fit=crop",
@@ -544,6 +545,11 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* LOADING STATE UI - NEW COMPONENT */}
+        {(step === AppStep.ANALYZING || step === AppStep.COMPRESSING) && selectedExercise && (
+           <LoadingScreen step={step} tip={getExerciseTip()} exerciseType={selectedExercise} />
         )}
 
         {step === AppStep.RESULTS && analysisResult && selectedExercise && (

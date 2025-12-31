@@ -35,6 +35,33 @@ const DEFAULT_TEST_USER: User = {
 // Helper to simulate delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// --- HELPER: MAP BACKEND NAMES TO INTERNAL IDS ---
+// Isso garante que "Agachamento (Squat)" vire "SQUAT" para carregar a imagem e as regras corretas.
+const mapBackendToInternalId = (backendName: string): string => {
+  const lower = backendName.toLowerCase();
+  
+  if (lower.includes('squat') || lower.includes('agachamento')) return 'SQUAT';
+  if (lower.includes('push-up') || lower.includes('flexão')) return 'PUSHUP';
+  if (lower.includes('lunge') || lower.includes('afundo')) return 'LUNGE';
+  if (lower.includes('burpee')) return 'BURPEE';
+  if (lower.includes('plank') || lower.includes('prancha')) return 'PLANK';
+  if (lower.includes('jumping') || lower.includes('polichinelo')) return 'JUMPING_JACK';
+  if (lower.includes('mountain') || lower.includes('escalador')) return 'MOUNTAIN_CLIMBER';
+  if (lower.includes('crunch') || lower.includes('abdominal')) return 'CRUNCH';
+  if (lower.includes('pull-up') || lower.includes('barra')) return 'PULLUP';
+  if (lower.includes('bridge') || lower.includes('pélvica')) return 'BRIDGE';
+  if (lower.includes('búlgaro') || lower.includes('bulgarian')) return 'BULGARIAN_SQUAT';
+  if (lower.includes('deadlift') || lower.includes('terra')) return 'DEADLIFT';
+  if (lower.includes('dips') || lower.includes('tríceps')) return 'TRICEP_DIP';
+  if (lower.includes('bicep') || lower.includes('rosca')) return 'BICEP_CURL';
+  if (lower.includes('cross over') || lower.includes('crucifixo')) return 'CABLE_CROSSOVER';
+  if (lower.includes('postura') || lower.includes('biofeedback')) return 'POSTURE_ANALYSIS';
+  if (lower.includes('biotipo') || lower.includes('gordura') || lower.includes('corporal')) return 'BODY_COMPOSITION';
+  
+  // Fallback: Retorna o próprio nome limpo como ID se não reconhecer
+  return backendName.toUpperCase().replace(/\s+/g, '_');
+};
+
 export const MockDataService = {
   
   // --- EXERCISES (GLOBAL LIST - For Admin or Fallback) ---
@@ -52,7 +79,15 @@ export const MockDataService = {
           if (response.ok) {
               const data = await response.json();
               if (Array.isArray(data) && data.length > 0) {
-                  return data;
+                   // Aplica o mesmo mapeamento caso o admin use essa rota
+                   return data.map((item: any) => {
+                      const internalId = mapBackendToInternalId(item.exercicio || item.name);
+                      return {
+                          id: internalId,
+                          name: item.exercicio || item.name,
+                          category: (internalId === 'POSTURE_ANALYSIS' || internalId === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
+                      };
+                  });
               }
           }
           return FALLBACK_EXERCISES;
@@ -73,9 +108,25 @@ export const MockDataService = {
       
       if (response.ok) {
         const data = await response.json();
-        // Garante que é um array
+        
         if (Array.isArray(data)) {
-            return data;
+            console.log("Exercícios RAW do backend:", data);
+            
+            // MAP TRANSFORM: Backend Format -> Frontend ExerciseDTO
+            const mappedExercises: ExerciseDTO[] = data.map((item: any) => {
+                // Backend retorna: { id: 4, exercicio: "Agachamento (Squat)" }
+                // Frontend precisa: { id: "SQUAT", name: "Agachamento (Squat)" }
+                
+                const internalId = mapBackendToInternalId(item.exercicio);
+                
+                return {
+                    id: internalId, // Usamos o ID interno para mapear as imagens
+                    name: item.exercicio, // Exibimos o nome que vem do banco
+                    category: (internalId === 'POSTURE_ANALYSIS' || internalId === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
+                };
+            });
+            
+            return mappedExercises;
         }
       }
       console.warn(`API de exercícios do usuário retornou status ${response.status} ou formato inválido.`);
