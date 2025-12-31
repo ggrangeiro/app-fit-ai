@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, History, Sparkles, Loader2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { ExerciseRecord, ExerciseType } from '../types';
+import { ExerciseRecord, ExerciseType, SPECIAL_EXERCISES } from '../types';
 import { generateProgressInsight } from '../services/geminiService';
 
 interface EvolutionModalProps {
@@ -21,7 +21,7 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
   const [comparisonInsight, setComparisonInsight] = useState<string | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
 
-  const isBodyCompAnalysis = exerciseType === ExerciseType.BODY_COMPOSITION;
+  const isBodyCompAnalysis = exerciseType === SPECIAL_EXERCISES.BODY_COMPOSITION;
 
   useEffect(() => {
     if (isOpen && history.length >= 2) {

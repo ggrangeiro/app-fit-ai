@@ -1,27 +1,21 @@
 
-export enum ExerciseType {
-  SQUAT = 'Agachamento (Squat)',
-  PUSHUP = 'Flexão de Braço (Push-up)',
-  LUNGE = 'Afundo (Lunge)',
-  BURPEE = 'Burpee',
-  PLANK = 'Prancha (Plank)',
-  JUMPING_JACK = 'Polichinelo (Jumping Jacks)',
-  MOUNTAIN_CLIMBER = 'Escalador (Mountain Climber)',
-  CRUNCH = 'Abdominal Supra (Crunch)',
-  PULLUP = 'Barra Fixa (Pull-up)',
-  BRIDGE = 'Elevação Pélvica (Glute Bridge)',
-  
-  // New Exercises
-  BULGARIAN_SQUAT = 'Agachamento Búlgaro',
-  DEADLIFT = 'Levantamento Terra (Deadlift)',
-  TRICEP_DIP = 'Tríceps Banco (Dips)',
-  BICEP_CURL = 'Rosca Direta (Bicep Curl)',
-  CABLE_CROSSOVER = 'Crucifixo no Cross Over',
-  
-  // Special Analysis
-  POSTURE_ANALYSIS = 'Análise de Postura (Biofeedback)',
-  BODY_COMPOSITION = 'Análise Corporal (Biotipo & Gordura)'
+// Mantemos como type string para compatibilidade com o resto do código,
+// mas removemos o ENUM hardcoded de valores.
+export type ExerciseType = string;
+
+// Interface para o objeto de exercício vindo do Backend
+export interface ExerciseDTO {
+  id: string; // ex: 'SQUAT'
+  name: string; // ex: 'Agachamento (Squat)'
+  category?: 'STANDARD' | 'SPECIAL';
+  image_url?: string;
+  description?: string;
 }
+
+export const SPECIAL_EXERCISES = {
+  POSTURE: 'POSTURE_ANALYSIS',
+  BODY_COMPOSITION: 'BODY_COMPOSITION'
+};
 
 export interface FeedbackItem {
   message: string;
@@ -69,14 +63,14 @@ export interface User {
   email: string;
   role: UserRole;
   avatar?: string;
-  assignedExercises: ExerciseType[]; 
+  assignedExercises: string[]; // Agora é string[] pois vem do banco dinâmico
 }
 
 export interface ExerciseRecord {
   id: string;
   userId: string;
   userName: string;
-  exercise: ExerciseType;
+  exercise: string; // Alterado de ExerciseType para string
   result: AnalysisResult;
   timestamp: number;
 }

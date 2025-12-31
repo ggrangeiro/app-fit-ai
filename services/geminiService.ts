@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { AnalysisResult, ExerciseType } from "../types";
+import { AnalysisResult, ExerciseType, SPECIAL_EXERCISES } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -67,7 +67,7 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
 
   let prompt = '';
 
-  if (exerciseType === ExerciseType.POSTURE_ANALYSIS) {
+  if (exerciseType === SPECIAL_EXERCISES.POSTURE) {
     prompt = `
       ${validationRules}
       ${detailedStyle}
@@ -77,7 +77,7 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
       Dê detalhes sobre como esses desvios afetam o dia a dia.
       Responda EXCLUSIVAMENTE em JSON.
     `;
-  } else if (exerciseType === ExerciseType.BODY_COMPOSITION) {
+  } else if (exerciseType === SPECIAL_EXERCISES.BODY_COMPOSITION) {
     prompt = `
       ${validationRules}
       ${detailedStyle}
@@ -276,7 +276,7 @@ export const generateProgressInsight = async (
   previousResult: AnalysisResult,
   exerciseType: string
 ): Promise<string> => {
-  const isBodyComp = exerciseType === ExerciseType.BODY_COMPOSITION;
+  const isBodyComp = exerciseType === SPECIAL_EXERCISES.BODY_COMPOSITION;
   
   const prompt = `
     Atue como um Coach Esportivo Parceiro e Analítico.

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AnalysisResult, ExerciseType, ExerciseRecord } from '../types';
+import { AnalysisResult, ExerciseType, ExerciseRecord, SPECIAL_EXERCISES } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
 import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History } from 'lucide-react';
 import MuscleMap from './MuscleMap';
@@ -46,8 +46,8 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const isHighPerformance = result.score > 80;
-  const isPostureAnalysis = exercise === ExerciseType.POSTURE_ANALYSIS;
-  const isBodyCompAnalysis = exercise === ExerciseType.BODY_COMPOSITION;
+  const isPostureAnalysis = exercise === SPECIAL_EXERCISES.POSTURE;
+  const isBodyCompAnalysis = exercise === SPECIAL_EXERCISES.BODY_COMPOSITION;
 
   useEffect(() => {
     if (onSave && !saved) {

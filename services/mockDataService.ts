@@ -1,11 +1,18 @@
 
-import { ExerciseType, ExerciseRecord, User, UserRole, AnalysisResult } from "../types";
+import { ExerciseDTO, ExerciseRecord, User, UserRole, AnalysisResult } from "../types";
 
 // Keys for LocalStorage
 const USERS_KEY = 'fitai_users';
 const RECORDS_KEY = 'fitai_records';
 const CURRENT_USER_KEY = 'fitai_current_session';
 const IMAGES_KEY = 'fitai_exercise_images';
+
+// Fallback exercises caso a API falhe, para o app não quebrar totalmente
+const FALLBACK_EXERCISES: ExerciseDTO[] = [
+  { id: 'SQUAT', name: 'Agachamento (Squat)', category: 'STANDARD' },
+  { id: 'PUSHUP', name: 'Flexão de Braço (Push-up)', category: 'STANDARD' },
+  { id: 'POSTURE_ANALYSIS', name: 'Análise de Postura', category: 'SPECIAL' }
+];
 
 // Initial Seed Data (Default Admin)
 const DEFAULT_ADMIN: User = {
@@ -22,7 +29,7 @@ const DEFAULT_TEST_USER: User = {
   name: 'Teste',
   email: 'teste@teste.com',
   role: 'user',
-  assignedExercises: Object.values(ExerciseType) // Todos habilitados
+  assignedExercises: ['SQUAT', 'PUSHUP', 'POSTURE_ANALYSIS', 'BODY_COMPOSITION'] 
 };
 
 // Helper to simulate delay
@@ -30,6 +37,55 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const MockDataService = {
   
+  // --- EXERCISES (GLOBAL LIST - For Admin or Fallback) ---
+  fetchExercises: async (): Promise<ExerciseDTO[]> => {
+      try {
+          const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/usuarios/exercises", {
+             method: 'GET',
+             mode: 'cors',
+             headers: { 
+                 'Content-Type': 'application/json',
+                 'Accept': 'application/json'
+             }
+          });
+          
+          if (response.ok) {
+              const data = await response.json();
+              if (Array.isArray(data) && data.length > 0) {
+                  return data;
+              }
+          }
+          return FALLBACK_EXERCISES;
+      } catch (e) {
+          console.error("Erro ao buscar exercícios globais:", e);
+          return FALLBACK_EXERCISES;
+      }
+  },
+
+  // --- NEW: FETCH USER SPECIFIC EXERCISES ---
+  fetchUserExercises: async (userId: string): Promise<ExerciseDTO[]> => {
+    const URL = `https://testeai-732767853162.us-west1.run.app/api/usuarios/${userId}/exercicios`;
+    try {
+      const response = await fetch(URL, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Garante que é um array
+        if (Array.isArray(data)) {
+            return data;
+        }
+      }
+      console.warn(`API de exercícios do usuário retornou status ${response.status} ou formato inválido.`);
+      return [];
+    } catch (error) {
+      console.error("Erro de conexão ao buscar exercícios do usuário:", error);
+      return [];
+    }
+  },
+
   // --- AUTH ---
 
   init: () => {
@@ -59,9 +115,6 @@ export const MockDataService = {
     const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     
-    // Na versão mock, a senha não é validada estritamente, permitindo acesso simplificado
-    // O usuário 'teste@teste.com' funcionará com a senha 'teste' (ou qualquer outra).
-    
     if (user) {
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
       return user;
@@ -84,7 +137,7 @@ export const MockDataService = {
     return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
   },
 
-  createUser: async (name: string, email: string, initialExercises?: ExerciseType[]): Promise<User> => {
+  createUser: async (name: string, email: string, initialExercises?: string[]): Promise<User> => {
     await delay(800);
     const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
     
@@ -92,9 +145,8 @@ export const MockDataService = {
       throw new Error("Este e-mail já possui cadastro.");
     }
 
-    // If no specific exercises are passed (self-registration), assign ALL exercises by default
-    // so the user has content to interact with immediately.
-    const defaultExercises = initialExercises || Object.values(ExerciseType);
+    // If no specific exercises are passed, assign defaults
+    const defaultExercises = initialExercises || ['SQUAT', 'PUSHUP']; 
 
     const newUser: User = {
       id: Date.now().toString(),
@@ -109,7 +161,7 @@ export const MockDataService = {
     return newUser;
   },
 
-  updateUserExercises: (userId: string, exercises: ExerciseType[]) => {
+  updateUserExercises: (userId: string, exercises: string[]) => {
     const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
     const updatedUsers = users.map(u => {
       if (u.id === userId) {
@@ -122,7 +174,7 @@ export const MockDataService = {
 
   // --- RECORDS / HISTORY ---
 
-  saveResult: (userId: string, userName: string, exercise: ExerciseType, result: AnalysisResult) => {
+  saveResult: (userId: string, userName: string, exercise: string, result: AnalysisResult) => {
     const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
     const newRecord: ExerciseRecord = {
       id: Date.now().toString(),
@@ -144,7 +196,7 @@ export const MockDataService = {
   },
 
   // Novo método para pegar histórico filtrado por exercício (ignorando o registro atual se ele acabou de ser salvo)
-  getHistoryByExercise: (userId: string, exercise: ExerciseType): ExerciseRecord[] => {
+  getHistoryByExercise: (userId: string, exercise: string): ExerciseRecord[] => {
     const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
     return records
       .filter(r => r.userId === userId && r.exercise === exercise)
