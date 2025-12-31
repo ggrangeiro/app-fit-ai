@@ -7,7 +7,7 @@ import ExerciseCard from './components/ExerciseCard';
 import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import LoadingScreen from './components/LoadingScreen';
 
@@ -370,12 +370,6 @@ const App: React.FC = () => {
         {step === AppStep.SELECT_EXERCISE && (
           <div className="w-full max-w-6xl animate-fade-in flex flex-col items-center">
             
-            {loadingExercises && (
-              <div className="absolute top-20 right-10 flex items-center gap-2 text-slate-400">
-                <Loader2 className="w-4 h-4 animate-spin" /> Carregando exercícios...
-              </div>
-            )}
-
             <div className="text-center mb-8">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-semibold uppercase mb-4 border border-blue-500/20">
                 <Sparkles className="w-3 h-3" /> Sua Área de Treino
@@ -384,9 +378,16 @@ const App: React.FC = () => {
             </div>
             
             <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-              <button className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 group hover:bg-blue-600/20 transition-all border-dashed border-2 border-slate-700 h-full min-h-[160px]" onClick={() => document.getElementById('exercise-grid')?.scrollIntoView({ behavior: 'smooth' })}>
-                 <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Video className="w-8 h-8" /></div>
-                 <h3 className="text-white font-bold text-xl">Gravar Treino</h3>
+              {/* Gravar Treino - Disabled */}
+              <button 
+                disabled
+                className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-dashed border-2 border-slate-700/50 h-full min-h-[160px] opacity-40 cursor-not-allowed bg-slate-800/20"
+              >
+                 <div className="p-4 bg-slate-700 rounded-full text-slate-400 shadow-none"><Video className="w-8 h-8" /></div>
+                 <div className="text-center">
+                   <h3 className="text-slate-400 font-bold text-xl">Gravar Treino</h3>
+                   <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1 border border-slate-600 rounded px-2 py-0.5 inline-block">Em Breve</span>
+                 </div>
               </button>
               
               <div className="flex flex-col gap-3">
@@ -414,21 +415,28 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div id="exercise-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 w-full mb-12">
-              {standardExercises.length > 0 ? (
-                standardExercises.map((ex) => (
-                  <ExerciseCard 
-                    key={ex.id} 
-                    type={ex.name} 
-                    imageUrl={exerciseImages[ex.id] || DEFAULT_EXERCISE_IMAGES[ex.id] || DEFAULT_EXERCISE_IMAGES['SQUAT']} 
-                    selected={selectedExercise === ex.id} 
-                    onClick={() => setSelectedExercise(ex.id)} 
-                  />
-                ))
-              ) : (
-                <div className="col-span-full text-center py-10 text-slate-400">
-                  <p>Nenhum exercício de força atribuído para você.</p>
+            <div id="exercise-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 w-full mb-12 min-h-[300px]">
+              {loadingExercises ? (
+                <div className="col-span-full flex flex-col items-center justify-center py-12 bg-slate-800/30 rounded-3xl border border-slate-700/50 backdrop-blur-sm animate-pulse">
+                   <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-3" />
+                   <p className="text-slate-300 font-medium">Sincronizando catálogo de exercícios...</p>
                 </div>
+              ) : (
+                standardExercises.length > 0 ? (
+                  standardExercises.map((ex) => (
+                    <ExerciseCard 
+                      key={ex.id} 
+                      type={ex.name} 
+                      imageUrl={exerciseImages[ex.id] || DEFAULT_EXERCISE_IMAGES[ex.id] || DEFAULT_EXERCISE_IMAGES['SQUAT']} 
+                      selected={selectedExercise === ex.id} 
+                      onClick={() => setSelectedExercise(ex.id)} 
+                    />
+                  ))
+                ) : (
+                  <div className="col-span-full text-center py-10 text-slate-400">
+                    <p>Nenhum exercício de força atribuído para você.</p>
+                  </div>
+                )
               )}
             </div>
             
