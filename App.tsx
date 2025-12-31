@@ -210,6 +210,18 @@ const App: React.FC = () => {
     }
   };
 
+  // --- DELETE RECORD HANDLER ---
+  const handleDeleteRecord = async (recordId: string) => {
+    if (!currentUser) return;
+    const success = await MockDataService.deleteRecord(currentUser.id, recordId);
+    if (success) {
+        // Update local state to reflect deletion immediately
+        setHistoryRecords(prev => prev.filter(r => r.id !== recordId));
+    } else {
+        alert("Não foi possível remover o registro. Tente novamente.");
+    }
+  };
+
   const handleAnalysis = async () => {
     if (!mediaFile || !selectedExercise || !currentUser) return;
 
@@ -450,7 +462,8 @@ const App: React.FC = () => {
                 onClose={() => setShowEvolutionModal(false)}
                 history={historyRecords}
                 exerciseType={selectedExercise}
-                highlightLatestAsCurrent={false} // No dashboard, apenas mostramos o histórico, sem "AGORA"
+                highlightLatestAsCurrent={false}
+                onDelete={handleDeleteRecord} // Passando a função de deletar
             />
         )}
 
@@ -557,7 +570,8 @@ const App: React.FC = () => {
             result={analysisResult} 
             exercise={selectedExercise} 
             history={historyRecords} // Passa o histórico atualizado
-            onReset={resetAnalysis} 
+            onReset={resetAnalysis}
+            onDeleteRecord={handleDeleteRecord} // Passando a função também para o ResultView
           />
         )}
       </main>

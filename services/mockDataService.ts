@@ -239,6 +239,29 @@ export const MockDataService = {
     localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
   },
 
+  deleteRecord: async (userId: string, recordId: string): Promise<boolean> => {
+    try {
+        // Tentativa de remover no Backend
+        try {
+           await fetch(`https://testeai-732767853162.us-west1.run.app/api/historico/${userId}/${recordId}`, {
+               method: 'DELETE'
+           });
+           console.log("Registro removido do backend com sucesso.");
+        } catch (apiError) {
+           console.warn("Falha ao remover do backend ou API indisponível, removendo localmente...", apiError);
+        }
+
+        // Remover do LocalStorage (Fallback / Cache local)
+        const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
+        const updatedRecords = records.filter(r => r.id !== recordId);
+        localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
+        return true;
+    } catch (e) {
+        console.error("Erro ao deletar registro:", e);
+        return false;
+    }
+  },
+
   getUserHistory: (userId: string): ExerciseRecord[] => {
     const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
     return records

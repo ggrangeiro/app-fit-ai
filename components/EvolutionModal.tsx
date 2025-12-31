@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, History, Sparkles, Loader2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { X, History, Sparkles, Loader2, TrendingUp, TrendingDown, Minus, Trash2 } from 'lucide-react';
 import { ExerciseRecord, ExerciseType, SPECIAL_EXERCISES } from '../types';
 import { generateProgressInsight } from '../services/geminiService';
 
@@ -9,6 +9,7 @@ interface EvolutionModalProps {
   history: ExerciseRecord[];
   exerciseType: ExerciseType;
   highlightLatestAsCurrent?: boolean; // Se true, marca o primeiro item como "AGORA"
+  onDelete?: (recordId: string) => void;
 }
 
 export const EvolutionModal: React.FC<EvolutionModalProps> = ({ 
@@ -16,7 +17,8 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
   onClose, 
   history, 
   exerciseType,
-  highlightLatestAsCurrent = false
+  highlightLatestAsCurrent = false,
+  onDelete
 }) => {
   const [comparisonInsight, setComparisonInsight] = useState<string | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
@@ -52,13 +54,19 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
     if (score >= 60) return "text-yellow-400";
     return "text-red-400";
   };
+  
+  const confirmAndDelete = (recordId: string) => {
+      if (confirm("Tem certeza que deseja remover esta análise do histórico?")) {
+          if (onDelete) onDelete(recordId);
+      }
+  };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
       <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-2xl relative shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white z-10">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white z-10 p-2">
           <X className="w-6 h-6" />
         </button>
 
@@ -117,12 +125,23 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
                 <div 
                   key={rec.id} 
                   className={`
-                    p-4 rounded-xl flex flex-col gap-3 transition-colors border
+                    p-4 rounded-xl flex flex-col gap-3 transition-colors border relative group
                     ${isCurrentSession 
                       ? 'bg-blue-600/10 border-blue-500/30 relative overflow-hidden' 
                       : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800'}
                   `}
                 >
+                  {/* Delete Button - Using Trash2 (Lixeira) for better UX distinct from Close X */}
+                  {onDelete && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); confirmAndDelete(rec.id); }}
+                        className="absolute top-3 right-3 p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-100 md:opacity-0 group-hover:opacity-100 z-20"
+                        title="Remover do histórico"
+                      >
+                         <Trash2 className="w-4 h-4" />
+                      </button>
+                  )}
+
                   {isCurrentSession && (
                     <div className="absolute top-0 right-0 px-2 py-1 bg-blue-600 text-[10px] text-white font-bold rounded-bl-lg">AGORA</div>
                   )}
@@ -147,7 +166,7 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
                       </div>
                     </div>
                     
-                    <div className="text-right mt-1">
+                    <div className="text-right mt-1 mr-8 md:mr-0">
                       <span className={`block text-xl font-bold ${isCurrentSession ? 'text-white' : 'text-slate-400'}`}>
                         {rec.result.repetitions}{isBodyCompAnalysis && '%'}
                       </span>

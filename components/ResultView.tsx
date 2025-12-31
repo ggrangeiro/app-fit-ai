@@ -12,9 +12,10 @@ interface ResultViewProps {
   history: ExerciseRecord[];
   onReset: () => void;
   onSave?: () => void;
+  onDeleteRecord?: (recordId: string) => void;
 }
 
-export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, history, onReset, onSave }) => {
+export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, history, onReset, onSave, onDeleteRecord }) => {
   const [saved, setSaved] = useState(false);
   
   // Diet Plan State
@@ -245,6 +246,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
         history={history}
         exerciseType={exercise}
         highlightLatestAsCurrent={true}
+        onDelete={onDeleteRecord} // Passando a função de deletar
       />
 
       {/* Modal Form for Diet */}
