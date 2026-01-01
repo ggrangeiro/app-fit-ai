@@ -7,7 +7,7 @@ import ExerciseCard from './components/ExerciseCard';
 import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import LoadingScreen from './components/LoadingScreen';
 
@@ -48,7 +48,8 @@ const EXERCISE_TIPS: Record<string, string[]> = {
   'BICEP_CURL': ["Cotovelos colados.", "Sem balançar o tronco.", "Descida lenta."],
   'CABLE_CROSSOVER': ["Abraço circular.", "Foco no peito.", "Controle a volta."],
   'POSTURE_ANALYSIS': ["Posição relaxada.", "Corpo inteiro visível.", "Local bem iluminado."],
-  'BODY_COMPOSITION': ["Roupa justa/banho.", "Frente e Lado.", "Pose natural."]
+  'BODY_COMPOSITION': ["Roupa justa/banho.", "Frente e Lado.", "Pose natural."],
+  'FREE_ANALYSIS_MODE': ["Certifique-se que o corpo todo aparece.", "Boa iluminação ajuda na detecção.", "Execute o movimento completo."]
 };
 
 const App: React.FC = () => {
@@ -168,10 +169,23 @@ const App: React.FC = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith('video/') && !file.type.startsWith('image/')) {
-        setError("Envie vídeo ou imagem.");
-        return;
+      const isVideo = file.type.startsWith('video/');
+      const isImage = file.type.startsWith('image/');
+
+      if (isSpecialMode) {
+          // Postura e Biotipo aceitam ambos
+          if (!isVideo && !isImage) {
+            setError("Envie vídeo ou imagem.");
+            return;
+          }
+      } else {
+          // Exercícios Padrão e MODO LIVRE aceitam APENAS vídeo
+          if (!isVideo) {
+            setError("Para este modo, envie apenas vídeo.");
+            return;
+          }
       }
+
       setMediaFile(file);
       setMediaPreview(URL.createObjectURL(file));
       setError(null);
@@ -181,6 +195,9 @@ const App: React.FC = () => {
   const handleViewHistory = async () => {
     if (!selectedExercise || !currentUser) return;
     
+    // No modo livre, não carregamos histórico
+    if (selectedExercise === SPECIAL_EXERCISES.FREE_MODE) return;
+
     setLoadingHistory(true);
     try {
         const encodedExercise = encodeURIComponent(selectedExercise);
@@ -241,18 +258,22 @@ const App: React.FC = () => {
       setStep(AppStep.ANALYZING);
 
       let previousRecord: ExerciseRecord | null = null;
-      try {
-        const encodedExercise = encodeURIComponent(selectedExercise);
-        const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
-        const historyResponse = await fetch(historyUrl, { method: "GET" });
-        if (historyResponse.ok) {
-            const historyData: ExerciseRecord[] = await historyResponse.json();
-            if (historyData && historyData.length > 0) {
-                previousRecord = historyData[0];
+      
+      // Apenas busca histórico se NÃO for modo livre
+      if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
+          try {
+            const encodedExercise = encodeURIComponent(selectedExercise);
+            const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
+            const historyResponse = await fetch(historyUrl, { method: "GET" });
+            if (historyResponse.ok) {
+                const historyData: ExerciseRecord[] = await historyResponse.json();
+                if (historyData && historyData.length > 0) {
+                    previousRecord = historyData[0];
+                }
             }
-        }
-      } catch (histErr) {
-        console.warn("Sem histórico para contexto.", histErr);
+          } catch (histErr) {
+            console.warn("Sem histórico para contexto.", histErr);
+          }
       }
 
       const result = await analyzeVideo(finalFile, selectedExercise, previousRecord?.result);
@@ -265,34 +286,39 @@ const App: React.FC = () => {
       
       setAnalysisResult(result);
       
-      try {
-        const saveUrl = "https://testeai-732767853162.us-west1.run.app/api/historico";
-        const payload = {
-          userId: currentUser.id,
-          userName: currentUser.name,
-          exercise: selectedExercise,
-          timestamp: Date.now(),
-          result: { ...result, date: new Date().toISOString() }
-        };
-        await fetch(saveUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      } catch (saveError) {
-        console.error("Falha ao salvar:", saveError);
-      }
+      // Apenas salva no histórico se NÃO for modo livre
+      if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
+          try {
+            const saveUrl = "https://testeai-732767853162.us-west1.run.app/api/historico";
+            const payload = {
+              userId: currentUser.id,
+              userName: currentUser.name,
+              exercise: selectedExercise,
+              timestamp: Date.now(),
+              result: { ...result, date: new Date().toISOString() }
+            };
+            await fetch(saveUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            
+            // Recarrega histórico local para a view de resultados
+            try {
+                const encodedExercise = encodeURIComponent(selectedExercise);
+                const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
+                const historyResponse = await fetch(historyUrl, { method: "GET" });
+                if (historyResponse.ok) {
+                    const fullHistoryData: ExerciseRecord[] = await historyResponse.json();
+                    setHistoryRecords(fullHistoryData);
+                }
+            } catch (e) {
+                console.error("Erro atualização histórico:", e);
+            }
 
-      try {
-          const encodedExercise = encodeURIComponent(selectedExercise);
-          const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
-          const historyResponse = await fetch(historyUrl, { method: "GET" });
-          if (historyResponse.ok) {
-              const fullHistoryData: ExerciseRecord[] = await historyResponse.json();
-              setHistoryRecords(fullHistoryData);
+          } catch (saveError) {
+            console.error("Falha ao salvar:", saveError);
           }
-      } catch (e) {
-          console.error("Erro atualização histórico:", e);
       }
 
       setStep(AppStep.RESULTS);
@@ -322,18 +348,19 @@ const App: React.FC = () => {
   const hasPostureAccess = !!postureExercise;
   const hasBodyCompAccess = !!bodyCompExercise;
 
-  // Check if selected exercise is 'special' mode
+  // Check if selected exercise is 'special' mode (Allows Images)
+  // REMOVED FREE_MODE from here to force VIDEO ONLY behavior
   const isSpecialMode = selectedExercise && 
     (selectedExercise === SPECIAL_EXERCISES.POSTURE || selectedExercise === SPECIAL_EXERCISES.BODY_COMPOSITION);
 
   // Get selected exercise display name
-  const selectedExerciseName = selectedExercise 
-    ? exercisesList.find(e => e.id === selectedExercise)?.name || selectedExercise 
-    : '';
+  const selectedExerciseName = selectedExercise === SPECIAL_EXERCISES.FREE_MODE
+    ? "Análise Livre"
+    : (selectedExercise ? exercisesList.find(e => e.id === selectedExercise)?.name || selectedExercise : '');
 
   const getExerciseTip = () => {
     if (!selectedExercise) return "";
-    const tips = EXERCISE_TIPS[selectedExercise] || ["Mantenha a postura correta."];
+    const tips = EXERCISE_TIPS[selectedExercise] || EXERCISE_TIPS['FREE_ANALYSIS_MODE'] || ["Mantenha a postura correta."];
     return tips[currentTipIndex % tips.length];
   }
 
@@ -377,7 +404,7 @@ const App: React.FC = () => {
               <h2 className="text-3xl md:text-5xl font-bold text-white">Olá! <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">O que vamos fazer hoje?</span></h2>
             </div>
             
-            <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               {/* Gravar Treino - Disabled */}
               <button 
                 disabled
@@ -387,6 +414,20 @@ const App: React.FC = () => {
                  <div className="text-center">
                    <h3 className="text-slate-400 font-bold text-xl">Gravar Treino</h3>
                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1 border border-slate-600 rounded px-2 py-0.5 inline-block">Em Breve</span>
+                 </div>
+              </button>
+
+              {/* Novo Card de Análise Livre */}
+              <button 
+                 onClick={() => setSelectedExercise(SPECIAL_EXERCISES.FREE_MODE)}
+                 className={`glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 h-full min-h-[160px] group ${selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? 'border-yellow-500 bg-yellow-600/10' : 'border-yellow-500/30 hover:bg-yellow-600/10'}`}
+              >
+                 <div className={`p-4 rounded-full text-white shadow-lg transition-transform ${selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? 'bg-yellow-500' : 'bg-yellow-600/80 group-hover:scale-110'}`}>
+                    <HelpCircle className="w-8 h-8" />
+                 </div>
+                 <div className="text-center">
+                   <h3 className="text-white font-bold text-xl">Análise Livre</h3>
+                   <p className="text-slate-400 text-xs mt-1">Exercício não listado? Envie aqui.</p>
                  </div>
               </button>
               
@@ -441,7 +482,8 @@ const App: React.FC = () => {
             </div>
             
             <div className={`sticky bottom-8 z-40 flex items-center gap-4 transition-all duration-300 justify-center ${selectedExercise ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
-                {selectedExercise && (
+                {/* Botão de Histórico só aparece para exercícios normais, não para análise livre */}
+                {selectedExercise && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE && (
                     <button 
                         onClick={handleViewHistory}
                         disabled={loadingHistory}

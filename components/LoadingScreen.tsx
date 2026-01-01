@@ -31,6 +31,13 @@ const POSTURE_STEPS = [
   { id: 4, label: "Compilando Relatório Ortopédico", icon: FileText, duration: 3000 },
 ];
 
+const FREE_MODE_STEPS = [
+  { id: 1, label: "Detectando Movimento Global", icon: ScanFace, duration: 1500 },
+  { id: 2, label: "Identificando Padrão do Exercício", icon: Search, duration: 2000 },
+  { id: 3, label: "Validando Biomecânica Específica", icon: Activity, duration: 2500 },
+  { id: 4, label: "Gerando Dicas de Correção", icon: BrainCircuit, duration: 3000 },
+];
+
 const LoadingScreen: React.FC<LoadingScreenProps> = ({ step, tip, exerciseType }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
@@ -47,6 +54,10 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ step, tip, exerciseType }
     currentSteps = POSTURE_STEPS;
     headerTitle = "Posture Scan";
     headerSubtitle = "A IA está avaliando seu alinhamento postural.";
+  } else if (exerciseType === SPECIAL_EXERCISES.FREE_MODE) {
+    currentSteps = FREE_MODE_STEPS;
+    headerTitle = "Auto-Detect";
+    headerSubtitle = "A IA está identificando e avaliando o exercício.";
   }
 
   useEffect(() => {

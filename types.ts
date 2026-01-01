@@ -14,7 +14,8 @@ export interface ExerciseDTO {
 
 export const SPECIAL_EXERCISES = {
   POSTURE: 'POSTURE_ANALYSIS',
-  BODY_COMPOSITION: 'BODY_COMPOSITION'
+  BODY_COMPOSITION: 'BODY_COMPOSITION',
+  FREE_MODE: 'FREE_ANALYSIS_MODE'
 };
 
 export interface FeedbackItem {
@@ -43,6 +44,7 @@ export interface AnalysisResult {
   formCorrection: string;
   muscleGroups: string[];
   date?: string;
+  identifiedExercise?: string; // Nome do exercício identificado no modo livre
 }
 
 export enum AppStep {

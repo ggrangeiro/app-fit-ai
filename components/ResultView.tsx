@@ -49,6 +49,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
   const isHighPerformance = result.score > 80;
   const isPostureAnalysis = exercise === SPECIAL_EXERCISES.POSTURE;
   const isBodyCompAnalysis = exercise === SPECIAL_EXERCISES.BODY_COMPOSITION;
+  const isFreeMode = exercise === SPECIAL_EXERCISES.FREE_MODE;
 
   useEffect(() => {
     if (onSave && !saved) {
@@ -415,7 +416,11 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
             Relatório Biomecânico
           </span>
           <h2 className="text-3xl md:text-4xl font-bold mt-4 text-white">
-            {isBodyCompAnalysis ? 'Avaliação Corporal Detalhada' : `Análise de ${exercise}`}
+            {isBodyCompAnalysis 
+                ? 'Avaliação Corporal Detalhada' 
+                : (isFreeMode 
+                    ? `${result.identifiedExercise || 'Exercício'} - Análise Livre (Sem histórico)` 
+                    : `Análise de ${exercise}`)}
           </h2>
         </div>
 
@@ -484,14 +489,16 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
                  {renderStatsBox()}
             </div>
             
-            <button 
-                onClick={() => setShowHistoryModal(true)}
-                disabled={!history || history.length === 0}
-                className="w-full py-3 px-4 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-indigo-500/30 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-                <History className="w-4 h-4" />
-                <span>Comparar Evolução</span>
-            </button>
+            {!isFreeMode && (
+                <button 
+                    onClick={() => setShowHistoryModal(true)}
+                    disabled={!history || history.length === 0}
+                    className="w-full py-3 px-4 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-indigo-500/30 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                    <History className="w-4 h-4" />
+                    <span>Comparar Evolução</span>
+                </button>
+            )}
             
             {/* ACTION BUTTONS (Only for Body Composition) */}
             {isBodyCompAnalysis && (

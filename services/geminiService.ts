@@ -27,12 +27,22 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
   
   const mediaPart = await fileToGenerativePart(file);
 
-  const validationRules = `
-    REGRA DE OURO: VOCÊ É UM FILTRO DE CONTEXTO FITNESS ULTRA-RIGOROSO.
-    
-    1. Valide se o vídeo contém um humano realizando "${exerciseType}".
-    2. Se for inválido (esporte errado, sem pessoa, meme), retorne isValidContent: false.
-  `;
+  // Configuração base de validação
+  let validationRules = "";
+  
+  if (exerciseType === SPECIAL_EXERCISES.FREE_MODE) {
+    validationRules = `
+      1. Identifique QUALQUER exercício de fitness ou musculação que o humano esteja fazendo.
+      2. Se for um exercício reconhecível, isValidContent: true.
+      3. Se não houver exercício claro (apenas parado, dançando, comendo), isValidContent: false.
+    `;
+  } else {
+    validationRules = `
+      REGRA DE OURO: VOCÊ É UM FILTRO DE CONTEXTO FITNESS ULTRA-RIGOROSO.
+      1. Valide se o vídeo contém um humano realizando "${exerciseType}".
+      2. Se for inválido (esporte errado, sem pessoa, meme), retorne isValidContent: false.
+    `;
+  }
 
   // Construção do contexto histórico (Apenas para conhecimento da IA, não para o texto final da Dica de Mestre)
   let historyContext = "";
@@ -92,6 +102,17 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
       Preencha "gender" com 'masculino' ou 'feminino'.
       Responda EXCLUSIVAMENTE em JSON.
     `;
+  } else if (exerciseType === SPECIAL_EXERCISES.FREE_MODE) {
+    prompt = `
+      ${validationRules}
+      ${detailedStyle}
+      Contexto: O usuário enviou um vídeo de um exercício DESCONHECIDO.
+      Instrução:
+      1. Identifique o nome do exercício e preencha OBRIGATORIAMENTE o campo "identifiedExercise" (ex: "Agachamento Livre", "Supino Reto").
+      2. Realize a análise biomecânica completa do movimento identificado.
+      3. Analise a fase concêntrica e excêntrica. Verifique a estabilidade articular.
+      Responda EXCLUSIVAMENTE em JSON.
+    `;
   } else {
     prompt = `
       ${validationRules}
@@ -120,6 +141,7 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
             score: { type: Type.NUMBER },
             repetitions: { type: Type.NUMBER },
             gender: { type: Type.STRING, description: "Sexo estimado: 'masculino' ou 'feminino'" },
+            identifiedExercise: { type: Type.STRING, description: "Nome do exercício identificado (apenas para modo livre)" },
             
             // Novos campos detalhados
             strengths: { 
