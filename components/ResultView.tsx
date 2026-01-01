@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType, ExerciseRecord, SPECIAL_EXERCISES } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download, Lightbulb } from 'lucide-react';
 import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { EvolutionModal } from './EvolutionModal';
@@ -10,13 +10,25 @@ interface ResultViewProps {
   result: AnalysisResult;
   exercise: ExerciseType;
   history: ExerciseRecord[];
+  userId: string;
   onReset: () => void;
   onSave?: () => void;
   onDeleteRecord?: (recordId: string) => void;
-  isHistoricalView?: boolean; // New prop to control button visibility
+  onWorkoutSaved?: () => void; // Nova prop para notificar o App
+  isHistoricalView?: boolean;
 }
 
-export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, history, onReset, onSave, onDeleteRecord, isHistoricalView = false }) => {
+export const ResultView: React.FC<ResultViewProps> = ({ 
+  result, 
+  exercise, 
+  history, 
+  userId, 
+  onReset, 
+  onSave, 
+  onDeleteRecord, 
+  onWorkoutSaved,
+  isHistoricalView = false 
+}) => {
   const [saved, setSaved] = useState(false);
   
   // Diet Plan State
@@ -93,9 +105,41 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
     e.preventDefault();
     setWorkoutLoading(true);
     try {
+      // 1. Gera o treino com IA
       const planHtml = await generateWorkoutPlan(workoutFormData, result);
+      
+      // 2. Envia para o Backend
+      try {
+        const payload = {
+            userId: userId,
+            content: planHtml,
+            goal: workoutFormData.goal
+        };
+
+        const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/treinos", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            console.log("Treino salvo no backend com sucesso.");
+            // Notifica o componente pai (App) para atualizar a lista de treinos na home
+            if (onWorkoutSaved) {
+                onWorkoutSaved();
+            }
+        } else {
+            console.warn("Falha ao salvar treino no backend.");
+        }
+
+      } catch (backendError) {
+          console.error("Erro de conexão ao salvar treino:", backendError);
+      }
+
+      // Atualiza UI apenas depois de tentar salvar
       setWorkoutPlanHtml(planHtml);
       setShowWorkoutForm(false);
+
     } catch (error) {
       alert("Erro ao gerar treino. Tente novamente.");
     } finally {
@@ -292,10 +336,6 @@ ${strengthsText}${improvementsText}
     return renderGeneratedPlan(workoutPlanHtml, "Plano de Treino", <Dumbbell className="w-8 h-8" />, () => setWorkoutPlanHtml(null), false);
   }
 
-  // Prepara o histórico para o modal, garantindo que o item atual esteja visível se já foi salvo/incluso
-  // No ResultView, assumimos que 'history' já contém o resultado atual (foi atualizado no App.tsx após salvar)
-  // Portanto, passamos highlightLatestAsCurrent={true} para que o modal saiba tratar o index 0 como "Agora".
-  
   return (
     <div className="w-full max-w-6xl mx-auto animate-fade-in pb-10">
       <style>{`
@@ -578,157 +618,134 @@ ${strengthsText}${improvementsText}
                  ))}
                </div>
             </div>
-
-            <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col items-center justify-center gap-2 print:bg-white print:border-slate-300">
-                 {renderStatsBox()}
-            </div>
             
-            {!isFreeMode && (
-                <button 
-                    onClick={() => setShowHistoryModal(true)}
-                    disabled={!history || history.length === 0}
-                    className="w-full py-3 px-4 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-indigo-500/30 disabled:opacity-70 disabled:cursor-not-allowed no-print"
-                >
-                    <History className="w-4 h-4" />
-                    <span>Comparar Evolução</span>
-                </button>
-            )}
-            
-            {/* ACTION BUTTONS (Only for Body Composition) */}
-            {isBodyCompAnalysis && (
-              <div className="flex flex-col gap-3 no-print">
-                  <button 
-                    onClick={() => setShowDietForm(true)}
-                    className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl shadow-lg font-bold flex items-center justify-center gap-2 transition-transform hover:scale-[1.02] border border-emerald-500/30 text-sm"
-                  >
-                    <Utensils className="w-4 h-4" /> 
-                    <span>Gerar Dieta</span>
-                  </button>
-                  <button 
-                    onClick={() => setShowWorkoutForm(true)}
-                    className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl shadow-lg font-bold flex items-center justify-center gap-2 transition-transform hover:scale-[1.02] border border-blue-500/30 text-sm"
-                  >
-                    <Dumbbell className="w-4 h-4" /> 
-                    <span>Gerar Treino</span>
-                  </button>
-              </div>
-            )}
-
-          </div>
-
-          {/* Details Column (Middle) */}
-          <div className="lg:col-span-4 flex flex-col gap-6">
-            <div className="flex flex-col h-full gap-6">
-              
-              {/* Pontos Fortes */}
-              {result.strengths && result.strengths.length > 0 && (
-                <div className="bg-emerald-900/10 rounded-3xl p-6 border border-emerald-500/20 print:bg-white print:border-emerald-200">
-                   <h3 className="text-lg font-bold mb-4 flex items-center gap-3 text-emerald-400 print:text-emerald-700">
-                    <ThumbsUp className="w-5 h-5" /> Pontos Fortes
-                  </h3>
-                  <ul className="space-y-3">
-                    {result.strengths.map((strength, index) => (
-                      <li key={index} className="flex items-start gap-3">
-                        <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                        <span className="text-slate-200 text-sm leading-relaxed print:text-black">{strength}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Ajustes Necessários */}
-              <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex-grow print:bg-white print:border-slate-300">
-                <h3 className="text-lg font-bold mb-5 flex items-center gap-3 text-white border-b border-slate-700/50 pb-4 print:text-black print:border-slate-200">
-                  <AlertTriangle className="text-yellow-400 w-5 h-5" /> 
-                  {isBodyCompAnalysis ? 'Recomendações' : 'Ajustes Técnicos'}
-                </h3>
-                
-                {result.improvements ? (
-                   <div className="space-y-4 overflow-y-auto max-h-[500px] pr-2 custom-scrollbar">
-                     {result.improvements.map((item, index) => (
-                       <div key={index} className="bg-slate-800/30 rounded-xl p-4 border-l-4 border-l-yellow-500 border-t border-r border-b border-slate-700/30 hover:bg-slate-800/50 transition-colors print:bg-slate-50 print:border-slate-200 print:text-black">
-                          <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2 print:text-black">
-                             {item.instruction}
-                          </h4>
-                          <div className="flex items-start gap-2 text-xs text-slate-400 bg-black/20 p-2 rounded-lg print:bg-transparent print:text-slate-700 print:p-0">
-                             <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                             <p className="leading-relaxed">{item.detail}</p>
-                          </div>
-                       </div>
-                     ))}
-                   </div>
-                ) : (
-                  // Fallback para análises antigas
-                   <ul className="space-y-4 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
-                    {result.feedback.filter(f => f.score < 70).map((item, index) => (
-                      <li key={index} className="flex flex-col gap-2 p-4 bg-slate-800/30 rounded-xl">
-                         <span className="text-slate-200 font-medium text-sm">{item.message}</span>
-                         <span className="text-xs text-red-400">Pontuação baixa detectada nesta região. Reveja a execução.</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+            <div className="bg-slate-800/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col items-center justify-center text-center gap-2 print:bg-white print:border-slate-300">
+               {renderStatsBox()}
             </div>
           </div>
 
-          {/* Muscle Map & Correction (Right) */}
-          <div className="lg:col-span-4 flex flex-col gap-6">
-             {/* Muscle Map Card */}
-             <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col relative overflow-hidden print:bg-white print:border-slate-300">
-                <div className="absolute top-0 right-0 p-3 opacity-5 no-print">
-                   <Activity className="w-24 h-24 text-blue-500" />
-                </div>
-                <h3 className="text-lg font-bold mb-2 flex items-center gap-3 text-white z-10 print:text-black">
-                  <User className="text-blue-400 w-5 h-5" /> {isBodyCompAnalysis ? 'Regiões em Destaque' : 'Anatomia da Ativação'}
-                </h3>
-                <div className="flex-grow flex flex-col items-center">
-                   <MuscleMap muscles={result.muscleGroups} />
-                   <div className="flex flex-wrap justify-center gap-1.5 mt-2 z-10">
-                    {result.muscleGroups.map((muscle, idx) => (
-                      <span key={idx} className="px-2 py-0.5 bg-blue-500/10 text-blue-300 rounded-full text-[10px] font-bold border border-blue-500/20 uppercase tracking-wide print:text-blue-800 print:bg-blue-100 print:border-blue-200">
-                        {muscle}
-                      </span>
-                    ))}
+          {/* Details Column (Right) */}
+          <div className="lg:col-span-8 flex flex-col gap-6">
+            
+            {/* Muscle Map & Key Metrics */}
+            <div className="bg-slate-800/40 rounded-3xl p-6 border border-slate-700/50 print:bg-white print:border-slate-300 min-h-[300px] flex flex-col relative overflow-hidden">
+               <div className="absolute top-4 right-4 z-10 opacity-30">
+                  <Activity className="w-6 h-6 text-white" />
+               </div>
+               <h3 className="text-lg font-bold text-white mb-4 print:text-black flex items-center gap-2">
+                 <Dumbbell className="w-4 h-4 text-blue-400" />
+                 Grupos Musculares Ativados
+               </h3>
+               
+               <div className="flex-grow">
+                 <MuscleMap muscles={result.muscleGroups} />
+               </div>
+               
+               <div className="flex justify-center gap-2 mt-4 flex-wrap">
+                 {result.muscleGroups.map((m, i) => (
+                    <span key={i} className="text-[10px] uppercase font-bold px-2 py-1 bg-slate-700 rounded text-slate-300 border border-slate-600 print:bg-slate-100 print:text-black print:border-slate-300">
+                      {m}
+                    </span>
+                 ))}
+               </div>
+            </div>
+
+            {/* Strengths & Improvements Grid */}
+            <div className="grid md:grid-cols-2 gap-6">
+               {/* Strengths */}
+               <div className="bg-emerald-900/10 rounded-2xl p-6 border border-emerald-500/20 print:bg-white print:border-emerald-500">
+                  <div className="flex items-center gap-3 mb-4 text-emerald-400 font-bold">
+                    <CheckCircle className="w-5 h-5" /> Pontos Fortes
                   </div>
-                </div>
-             </div>
+                  <ul className="space-y-3">
+                    {result.strengths && result.strengths.length > 0 ? (
+                        result.strengths.map((str, idx) => (
+                          <li key={idx} className="flex gap-2 text-sm text-slate-300 print:text-black">
+                             <span className="text-emerald-500 mt-0.5">•</span>
+                             {str}
+                          </li>
+                        ))
+                    ) : (
+                      <li className="text-sm text-slate-500 italic">Continue praticando para destacar seus pontos fortes!</li>
+                    )}
+                  </ul>
+               </div>
 
-             {/* Correction Card */}
-             <div className="bg-gradient-to-br from-indigo-600/20 to-blue-600/20 rounded-3xl p-6 border border-indigo-500/30 relative overflow-hidden flex-1 flex flex-col justify-center print:bg-white print:border-indigo-200">
-                <div className="absolute top-0 right-0 p-4 opacity-10 no-print">
-                  <MessageCircleHeart className="w-24 h-24 text-indigo-400" />
-                </div>
-                <h3 className="text-sm font-bold mb-3 flex items-center gap-2 text-indigo-300 uppercase tracking-wider relative z-10 print:text-indigo-800">
-                  <MessageCircleHeart className="w-4 h-4" /> 
-                  {isPostureAnalysis ? 'Resumo Postural' : (isBodyCompAnalysis ? 'Conclusão' : 'Dica de Mestre')}
-                </h3>
-                <p className="text-white font-medium text-lg leading-relaxed relative z-10 print:text-black">
-                  "{result.formCorrection}"
-                </p>
+               {/* Improvements */}
+               <div className="bg-yellow-900/10 rounded-2xl p-6 border border-yellow-500/20 print:bg-white print:border-yellow-500">
+                  <div className="flex items-center gap-3 mb-4 text-yellow-400 font-bold">
+                    <AlertTriangle className="w-5 h-5" /> Correções Necessárias
+                  </div>
+                  <ul className="space-y-3">
+                     {result.improvements && result.improvements.length > 0 ? (
+                        result.improvements.map((imp, idx) => (
+                          <li key={idx} className="text-sm text-slate-300 print:text-black">
+                             <p className="font-semibold text-yellow-100 print:text-black flex items-start gap-2">
+                                <span className="text-yellow-500 mt-0.5">→</span> {imp.instruction}
+                             </p>
+                             <p className="text-xs text-slate-500 ml-5 mt-1">{imp.detail}</p>
+                          </li>
+                        ))
+                     ) : (
+                       <li className="text-sm text-slate-500 italic">Nenhuma correção crítica detectada. Parabéns!</li>
+                     )}
+                  </ul>
+               </div>
             </div>
+
+            {/* Coach Tip (Footer Full Width) */}
+            <div className="bg-gradient-to-r from-blue-900/20 to-indigo-900/20 rounded-2xl p-6 border border-blue-500/20 relative overflow-hidden print:bg-white print:border-blue-500">
+               <div className="absolute top-0 right-0 p-4 opacity-10">
+                  <Lightbulb className="w-24 h-24 text-blue-400" />
+               </div>
+               <h4 className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-2 flex items-center gap-2">
+                 <Sparkles className="w-3 h-3" /> Dica de Mestre (IA)
+               </h4>
+               <p className="text-slate-200 text-lg font-medium leading-relaxed relative z-10 print:text-black">
+                 "{result.formCorrection}"
+               </p>
+            </div>
+
+            {/* ACTIONS - (Visible Only on Screen) */}
+            <div className="no-print grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+              <button 
+                onClick={() => setShowWorkoutForm(true)}
+                className="flex items-center justify-center gap-2 py-4 px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 border border-blue-400/20 group"
+              >
+                <Dumbbell className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                Gerar Treino com IA
+              </button>
+              
+              <button 
+                onClick={() => setShowDietForm(true)}
+                className="flex items-center justify-center gap-2 py-4 px-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/20 border border-emerald-400/20 group"
+              >
+                <Utensils className="w-5 h-5 group-hover:-rotate-12 transition-transform" />
+                Gerar Dieta do Dia
+              </button>
+            </div>
+
           </div>
         </div>
 
-        <div className="flex gap-4 no-print">
-           <button 
+        <div className="flex justify-between items-center pt-8 border-t border-slate-700/50 no-print">
+          <button
             onClick={onReset}
-            className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-5 rounded-2xl transition-all text-lg tracking-wide flex items-center justify-center gap-2"
+            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" /> {isHistoricalView ? 'Fechar Detalhes' : 'Voltar ao Menu'}
+            <ArrowLeft className="w-4 h-4" /> Nova Análise
           </button>
           
-          {!isHistoricalView && (
-            <button 
-              onClick={onReset}
-              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-2xl transition-all shadow-xl shadow-blue-900/20 text-lg tracking-wide hover:scale-[1.01] flex items-center justify-center gap-2"
-            >
-              <Repeat className="w-5 h-5" /> Nova Análise
-            </button>
+          {history.length > 0 && !isFreeMode && (
+             <button
+               onClick={() => setShowHistoryModal(true)}
+               className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors text-sm font-bold bg-blue-500/10 px-4 py-2 rounded-lg border border-blue-500/20"
+             >
+               <History className="w-4 h-4" /> Ver Evolução ({history.length})
+             </button>
           )}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 };

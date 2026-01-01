@@ -12,6 +12,14 @@ export interface ExerciseDTO {
   description?: string;
 }
 
+export interface WorkoutPlan {
+  id: number;
+  userId: string;
+  goal: string;
+  content: string; // HTML content
+  createdAt?: string;
+}
+
 export const SPECIAL_EXERCISES = {
   POSTURE: 'POSTURE_ANALYSIS',
   BODY_COMPOSITION: 'BODY_COMPOSITION',

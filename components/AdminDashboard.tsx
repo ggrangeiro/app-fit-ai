@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, ExerciseRecord, ExerciseDTO } from '../types';
 import { MockDataService } from '../services/mockDataService';
 import { generateExerciseThumbnail } from '../services/geminiService';
@@ -53,6 +53,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
         setUserHistoryList([]);
     }
   }, [selectedUser]);
+
+  // --- GROUPING LOGIC ---
+  // Agrupa a lista plana de históricos por tipo de exercício para exibição visual organizada
+  const groupedRecords = useMemo(() => {
+    const groups: Record<string, ExerciseRecord[]> = {};
+    userHistoryList.forEach(record => {
+        // Usa o nome do exercício como chave
+        const key = record.exercise;
+        if (!groups[key]) {
+            groups[key] = [];
+        }
+        groups[key].push(record);
+    });
+    return groups;
+  }, [userHistoryList]);
 
   const fetchExercises = async () => {
     const data = await MockDataService.fetchExercises();
@@ -109,7 +124,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     }
   };
 
-  // --- NEW: FETCH FULL LIST OF RECORDS FOR SELECTED USER ---
+  // --- FETCH FULL LIST OF RECORDS FOR SELECTED USER ---
   const fetchUserHistory = async (userId: string) => {
     setLoadingHistory(true);
     const API_URL = `https://testeai-732767853162.us-west1.run.app/api/historico/${userId}`;
@@ -122,13 +137,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
 
         if (response.ok) {
             const data = await response.json();
+            
+            let allRecords: ExerciseRecord[] = [];
+
+            // Cenário 1: Backend retorna Array direto (formato antigo)
             if (Array.isArray(data)) {
-                // Sort by timestamp desc (newest first)
-                const sorted = data.sort((a: any, b: any) => b.timestamp - a.timestamp);
-                setUserHistoryList(sorted);
+                allRecords = data;
+            } 
+            // Cenário 2: Backend retorna Objeto Agrupado (formato novo)
+            else if (typeof data === 'object' && data !== null) {
+                // Pega todos os arrays dentro das chaves e junta em um só para o estado interno
+                // O useMemo se encarregará de reagrupar para exibição
+                allRecords = Object.values(data).flat() as ExerciseRecord[];
             }
+
+            // Ordena por data (mais recente primeiro)
+            const sorted = allRecords.sort((a: any, b: any) => b.timestamp - a.timestamp);
+            setUserHistoryList(sorted);
         } else {
-             // Fallback to local storage if API fails or user has no records there yet but has locally
+             // Fallback to local storage if API fails
              console.warn("Backend history fetch failed, falling back to local.");
              setUserHistoryList(MockDataService.getUserHistory(userId));
         }
@@ -331,7 +358,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     }
   };
 
-  // --- NEW: Fetch full history for modal ---
+  // --- FETCH FULL HISTORY FOR MODAL ---
   const handleViewRecordDetails = async (record: ExerciseRecord) => {
     // Normalize exercise ID if needed
     let normalizedRecord = { ...record };
@@ -426,6 +453,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                     result={viewingRecord.result}
                     exercise={viewingRecord.exercise}
                     history={detailedHistory}
+                    userId={selectedUser.id} // Added userId prop
                     onReset={() => setViewingRecord(null)}
                     onDeleteRecord={handleDeleteRecord}
                     isHistoricalView={true}
@@ -479,7 +507,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                 <span className="text-2xl font-bold text-white block">{users.length}</span>
                 <span className="text-sm text-slate-500">Usuários Ativos (DB)</span>
               </div>
-              {/* Note: Total records count is harder to get without full fetch, removing for now or needs separate endpoint */}
             </div>
           </div>
         </div>
@@ -624,7 +651,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                      {loadingHistory && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
                   </div>
                   
-                  {userHistoryList.length === 0 ? (
+                  {/* EMPTY STATE */}
+                  {userHistoryList.length === 0 && (
                     <div className="text-center py-10 text-slate-500 bg-slate-800/20 rounded-2xl border border-dashed border-slate-700 flex flex-col items-center gap-2">
                         {loadingHistory ? (
                             <>
@@ -638,41 +666,57 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                             </>
                         )}
                     </div>
-                  ) : (
-                    userHistoryList.map(record => {
-                      const metric = getMetricDisplay(record);
-                      return (
-                      <div 
-                        key={record.id} 
-                        // Call the new handler that fetches detailed history
-                        onClick={() => handleViewRecordDetails(record)}
-                        className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 transition-all cursor-pointer group relative overflow-hidden"
-                      >
-                         <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <ChevronRight className="w-5 h-5 text-blue-400" />
-                         </div>
-                         <div className="flex justify-between items-start mb-2 pr-8">
-                           <div className="flex items-center gap-2">
-                               {getExerciseIcon(record.exercise)}
-                               <span className="text-white font-bold text-sm">{allExercises.find(e => e.id === record.exercise)?.name || record.exercise}</span>
-                           </div>
-                           <span className="text-xs text-slate-500">{new Date(record.timestamp).toLocaleDateString()}</span>
-                         </div>
-                         <div className="flex items-center gap-4">
-                           <div className={`text-2xl font-bold ${getScoreColor(record.result.score).split(' ')[0]}`}>{record.result.score}</div>
-                           <div className="flex-1">
-                              <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                <div className={`h-full ${getScoreColor(record.result.score).includes('emerald') ? 'bg-emerald-500' : (record.result.score > 50 ? 'bg-yellow-500' : 'bg-red-500')}`} style={{ width: `${record.result.score}%` }} />
-                              </div>
-                           </div>
-                           <div className="text-right pr-8 min-w-[80px]">
-                               <span className="block text-white font-bold text-sm">{metric.value}</span>
-                               <span className="text-[10px] text-slate-500 uppercase font-bold">{metric.label}</span>
-                           </div>
-                         </div>
-                      </div>
-                    )})
                   )}
+
+                  {/* GROUPED RECORDS RENDER */}
+                  {Object.entries(groupedRecords).map(([exerciseName, records]) => {
+                     // Tenta encontrar um nome amigável para o cabeçalho
+                     const friendlyName = allExercises.find(e => e.id === exerciseName)?.name || exerciseName;
+                     
+                     return (
+                         <div key={exerciseName} className="mb-6 animate-in slide-in-from-bottom-2">
+                            <h5 className="text-white font-bold text-md mb-3 border-b border-slate-700/50 pb-2 flex items-center gap-2 sticky top-0 bg-slate-900/90 p-2 rounded-lg backdrop-blur-sm z-10">
+                                <div className="p-1.5 bg-slate-800 rounded-lg">
+                                  {getExerciseIcon(exerciseName)}
+                                </div>
+                                <span className="truncate">{friendlyName}</span>
+                                <span className="text-xs text-slate-500 font-normal ml-auto bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">{records.length} registros</span>
+                            </h5>
+                            
+                            <div className="space-y-3 pl-2 border-l-2 border-slate-800 ml-3">
+                                {records.map(record => {
+                                    const metric = getMetricDisplay(record);
+                                    return (
+                                        <div 
+                                            key={record.id} 
+                                            onClick={() => handleViewRecordDetails(record)}
+                                            className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 transition-all cursor-pointer group relative overflow-hidden ml-2"
+                                        >
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <ChevronRight className="w-5 h-5 text-blue-400" />
+                                            </div>
+                                            <div className="flex justify-between items-start mb-2 pr-8">
+                                                <span className="text-xs text-slate-500">{new Date(record.timestamp).toLocaleDateString()} às {new Date(record.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <div className={`text-2xl font-bold ${getScoreColor(record.result.score).split(' ')[0]}`}>{record.result.score}</div>
+                                                <div className="flex-1">
+                                                    <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                                        <div className={`h-full ${getScoreColor(record.result.score).includes('emerald') ? 'bg-emerald-500' : (record.result.score > 50 ? 'bg-yellow-500' : 'bg-red-500')}`} style={{ width: `${record.result.score}%` }} />
+                                                    </div>
+                                                </div>
+                                                <div className="text-right pr-8 min-w-[80px]">
+                                                    <span className="block text-white font-bold text-sm">{metric.value}</span>
+                                                    <span className="text-[10px] text-slate-500 uppercase font-bold">{metric.label}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                         </div>
+                     );
+                  })}
                 </div>
               </div>
             </div>

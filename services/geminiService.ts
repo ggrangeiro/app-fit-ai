@@ -239,12 +239,15 @@ export const generateDietPlan = async (
 
 export const generateWorkoutPlan = async (
   userData: { weight: string; height: string; goal: string; level: string; frequency: string; observations: string; gender: string },
-  analysisContext: AnalysisResult
+  analysisContext?: AnalysisResult
 ): Promise<string> => {
-  // Serializar os pontos de melhoria para o prompt
-  const technicalAdjustments = analysisContext.improvements 
-    ? analysisContext.improvements.map(i => `${i.instruction} (${i.detail})`).join("; ")
-    : analysisContext.formCorrection;
+  // Serializar os pontos de melhoria para o prompt SE houver análise prévia
+  let technicalAdjustments = "Foco em condicionamento geral e objetivo do aluno.";
+  if (analysisContext) {
+      technicalAdjustments = analysisContext.improvements 
+        ? analysisContext.improvements.map(i => `${i.instruction} (${i.detail})`).join("; ")
+        : analysisContext.formCorrection;
+  }
 
   const prompt = `
     Atue como um Personal Trainer de elite e Especialista em Biomecânica e Reabilitação.
@@ -258,12 +261,12 @@ export const generateWorkoutPlan = async (
     - Frequência: ${userData.frequency} dias
     
     OBSERVAÇÕES: "${userData.observations || 'Nenhuma.'}"
-    ANÁLISE BIOMECÂNICA: "${technicalAdjustments}"
+    ${analysisContext ? `ANÁLISE BIOMECÂNICA (IA): "${technicalAdjustments}"` : ''}
     
     INSTRUÇÕES DE INTEGRAÇÃO E GÊNERO:
     1. Considere diferenças fisiológicas para o sexo ${userData.gender} (ex: volume de treino, recuperação, ênfases estéticas comuns se não especificado o contrário).
     2. Se houver dor relatada, adapte.
-    3. Use aquecimento para corrigir biomecânica detectada na análise.
+    3. Use aquecimento para corrigir biomecânica detectada (se houver análise).
     
     DIRETRIZES DE DESIGN E HTML (LEGIBILIDADE TOTAL):
     1. Estrutura Visual: Padrão "Card/Grid" moderno.

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES } from './types';
-import { analyzeVideo } from './services/geminiService';
+import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, WorkoutPlan } from './types';
+import { analyzeVideo, generateWorkoutPlan } from './services/geminiService';
 import { compressVideo } from './utils/videoUtils';
 import { MockDataService } from './services/mockDataService';
 import ExerciseCard from './components/ExerciseCard';
 import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import LoadingScreen from './components/LoadingScreen';
 
@@ -69,6 +69,25 @@ const App: React.FC = () => {
   // Dynamic Exercises State
   const [exercisesList, setExercisesList] = useState<ExerciseDTO[]>([]);
   const [loadingExercises, setLoadingExercises] = useState(false);
+
+  // Saved Workouts State
+  const [savedWorkouts, setSavedWorkouts] = useState<WorkoutPlan[]>([]);
+  const [loadingWorkouts, setLoadingWorkouts] = useState(false);
+  const [showWorkoutModal, setShowWorkoutModal] = useState(false); // View
+  const [showGenerateWorkoutForm, setShowGenerateWorkoutForm] = useState(false); // Create
+  const [generatingWorkout, setGeneratingWorkout] = useState(false);
+  const [viewingWorkoutHtml, setViewingWorkoutHtml] = useState<string | null>(null);
+
+  // Workout Form State
+  const [workoutFormData, setWorkoutFormData] = useState({
+    weight: '',
+    height: '',
+    goal: 'hipertrofia',
+    level: 'iniciante',
+    frequency: '4',
+    observations: '',
+    gender: 'masculino'
+  });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -93,6 +112,24 @@ const App: React.FC = () => {
     }
   };
 
+  const fetchUserWorkouts = async (userId: string) => {
+    setLoadingWorkouts(true);
+    try {
+      const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/treinos/${userId}`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSavedWorkouts(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error("Error fetching workouts:", e);
+    } finally {
+      setLoadingWorkouts(false);
+    }
+  };
+
   // Initialize Data
   useEffect(() => {
     const init = async () => {
@@ -104,6 +141,9 @@ const App: React.FC = () => {
         
         // Load specific exercises for this session
         await loadExercisesList(user);
+
+        // Load existing workouts if any
+        await fetchUserWorkouts(user.id);
       }
 
       // Custom Images
@@ -132,14 +172,15 @@ const App: React.FC = () => {
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     setStep(user.role === 'admin' ? AppStep.ADMIN_DASHBOARD : AppStep.SELECT_EXERCISE);
-    // Load exercises after successful login with the user context
     loadExercisesList(user);
+    fetchUserWorkouts(user.id);
   };
 
   const handleLogout = () => {
     MockDataService.logout();
     setCurrentUser(null);
     setExercisesList([]); // Clear list on logout
+    setSavedWorkouts([]);
     resetAnalysis();
     setStep(AppStep.LOGIN);
   };
@@ -329,6 +370,64 @@ const App: React.FC = () => {
     }
   };
 
+  const handleGenerateWorkout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    setGeneratingWorkout(true);
+    try {
+        const planHtml = await generateWorkoutPlan(workoutFormData);
+        
+        // Save to backend
+        const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/treinos", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                userId: currentUser.id,
+                goal: workoutFormData.goal,
+                content: planHtml
+            })
+        });
+
+        if (response.ok) {
+            await fetchUserWorkouts(currentUser.id); // Refresh list
+            setShowGenerateWorkoutForm(false);
+            // Optionally open the view immediately
+            const data = await response.json();
+            setViewingWorkoutHtml(data.content || planHtml);
+            setShowWorkoutModal(true);
+        } else {
+            throw new Error("Erro ao salvar treino");
+        }
+    } catch (err: any) {
+        alert("Erro ao gerar/salvar treino: " + err.message);
+    } finally {
+        setGeneratingWorkout(false);
+    }
+  };
+
+  const handleDeleteWorkout = async () => {
+    if (!currentUser || savedWorkouts.length === 0) return;
+    
+    if (!confirm("Tem certeza que deseja apagar seu treino atual?")) return;
+
+    try {
+        const workoutId = savedWorkouts[0].id;
+        const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/treinos/${workoutId}`, {
+            method: "DELETE"
+        });
+
+        if (response.ok) {
+            setSavedWorkouts([]);
+            setShowWorkoutModal(false);
+            setViewingWorkoutHtml(null);
+            alert("Treino removido com sucesso.");
+        }
+    } catch (e) {
+        alert("Erro ao remover treino.");
+    }
+  };
+
   const handleGoBackToSelect = () => {
     clearSelectedMedia();
     setStep(AppStep.SELECT_EXERCISE);
@@ -364,6 +463,42 @@ const App: React.FC = () => {
     return tips[currentTipIndex % tips.length];
   }
 
+  // --- RENDER HELPERS ---
+  const renderWorkoutModal = () => (
+    <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
+      <div className="min-h-screen p-4 md:p-8 relative">
+          <div className="flex justify-between items-center max-w-7xl mx-auto mb-6">
+             <button 
+                onClick={() => { setShowWorkoutModal(false); setViewingWorkoutHtml(null); }}
+                className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
+             >
+                <ArrowLeft className="w-5 h-5" /> Voltar
+             </button>
+             <div className="flex gap-3">
+                 <button onClick={() => window.print()} className="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white">
+                    <Printer className="w-5 h-5" />
+                 </button>
+                 <button onClick={handleDeleteWorkout} className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white">
+                    <Trash2 className="w-5 h-5" />
+                 </button>
+             </div>
+          </div>
+          
+          <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
+             <style>{`
+                 #workout-view-content { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
+                 @media print {
+                   body * { visibility: hidden; }
+                   #workout-view-content, #workout-view-content * { visibility: visible; }
+                   #workout-view-content { position: absolute; left: 0; top: 0; width: 100%; }
+                 }
+             `}</style>
+             <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: viewingWorkoutHtml || (savedWorkouts[0]?.content || '') }} />
+          </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen flex flex-col font-[Plus Jakarta Sans]">
       <header className="sticky top-0 z-50 glass-panel border-b-0">
@@ -389,6 +524,102 @@ const App: React.FC = () => {
         </div>
       </header>
 
+      {/* WORKOUT VIEW MODAL */}
+      {showWorkoutModal && renderWorkoutModal()}
+
+      {/* GENERATE WORKOUT FORM MODAL */}
+      {showGenerateWorkoutForm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+             <button onClick={() => setShowGenerateWorkoutForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+               <X className="w-6 h-6" />
+             </button>
+             
+             <div className="flex flex-col items-center mb-6">
+               <div className="p-3 bg-blue-600/20 text-blue-400 rounded-full mb-3">
+                 <Dumbbell className="w-8 h-8" />
+               </div>
+               <h3 className="text-2xl font-bold text-white">Criar Ficha de Treino</h3>
+               <p className="text-slate-400 text-center text-sm">A IA criará um plano personalizado para você.</p>
+             </div>
+
+             <form onSubmit={handleGenerateWorkout} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Peso (kg)</label>
+                    <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={workoutFormData.weight} onChange={e => setWorkoutFormData({...workoutFormData, weight: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
+                    <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={workoutFormData.height} onChange={e => setWorkoutFormData({...workoutFormData, height: e.target.value})} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Sexo Biológico</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={workoutFormData.gender} onChange={e => setWorkoutFormData({...workoutFormData, gender: e.target.value})}>
+                    <option value="masculino">Masculino</option>
+                    <option value="feminino">Feminino</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={workoutFormData.goal} onChange={e => setWorkoutFormData({...workoutFormData, goal: e.target.value})}>
+                    <option value="hipertrofia">Hipertrofia (Crescer)</option>
+                    <option value="definicao">Definição (Secar)</option>
+                    <option value="emagrecimento">Emagrecimento (Perder Peso)</option>
+                    <option value="forca">Força Pura</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Nível de Experiência</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={workoutFormData.level} onChange={e => setWorkoutFormData({...workoutFormData, level: e.target.value})}>
+                    <option value="iniciante">Iniciante (Começando agora)</option>
+                    <option value="intermediario">Intermediário (Já treina)</option>
+                    <option value="avancado">Avançado (Atleta/Experiente)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Dias por Semana</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={workoutFormData.frequency} onChange={e => setWorkoutFormData({...workoutFormData, frequency: e.target.value})}>
+                    <option value="2">2 dias</option>
+                    <option value="3">3 dias</option>
+                    <option value="4">4 dias</option>
+                    <option value="5">5 dias</option>
+                    <option value="6">6 dias</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Observações / Limitações</label>
+                  <textarea 
+                    rows={3}
+                    placeholder="Ex: Tenho condromalácia no joelho esquerdo, prefiro treinos curtos, sinto dor no ombro..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder-slate-500 text-sm"
+                    value={workoutFormData.observations}
+                    onChange={e => setWorkoutFormData({...workoutFormData, observations: e.target.value})}
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">A IA usará isso para adaptar ou remover exercícios.</p>
+                </div>
+
+                <button type="submit" disabled={generatingWorkout} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                  {generatingWorkout ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                  {generatingWorkout ? "Gerando..." : "Gerar Treino"}
+                </button>
+             </form>
+          </div>
+        </div>
+      )}
+
       <main className="flex-grow flex items-center justify-center p-4 md:p-8">
         {step === AppStep.ADMIN_DASHBOARD && currentUser?.role === 'admin' && (
           <AdminDashboard currentUser={currentUser} onRefreshData={() => {}} />
@@ -405,17 +636,44 @@ const App: React.FC = () => {
             </div>
             
             <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              {/* Gravar Treino - Disabled */}
-              <button 
-                disabled
-                className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-dashed border-2 border-slate-700/50 h-full min-h-[160px] opacity-40 cursor-not-allowed bg-slate-800/20"
-              >
-                 <div className="p-4 bg-slate-700 rounded-full text-slate-400 shadow-none"><Video className="w-8 h-8" /></div>
-                 <div className="text-center">
-                   <h3 className="text-slate-400 font-bold text-xl">Gravar Treino</h3>
-                   <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1 border border-slate-600 rounded px-2 py-0.5 inline-block">Em Breve</span>
+              
+              {/* CARD DE TREINO DINÂMICO (GERAR ou VISUALIZAR) */}
+              {loadingWorkouts ? (
+                 <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-dashed border-2 border-slate-700/50 h-full min-h-[160px] animate-pulse">
+                    <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                    <span className="text-slate-500 text-xs">Buscando treinos...</span>
                  </div>
-              </button>
+              ) : (
+                savedWorkouts.length > 0 ? (
+                  /* MODO: VISUALIZAR TREINO EXISTENTE */
+                  <button 
+                    onClick={() => setShowWorkoutModal(true)}
+                    className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
+                  >
+                     <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform">
+                        <Calendar className="w-8 h-8" />
+                     </div>
+                     <div className="text-center">
+                       <h3 className="text-emerald-400 font-bold text-xl">Ver Meu Treino</h3>
+                       <p className="text-slate-400 text-xs mt-1">Ficha ativa disponível</p>
+                     </div>
+                  </button>
+                ) : (
+                  /* MODO: GERAR NOVO TREINO */
+                  <button 
+                    onClick={() => setShowGenerateWorkoutForm(true)}
+                    className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
+                  >
+                     <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform">
+                        <Dumbbell className="w-8 h-8" />
+                     </div>
+                     <div className="text-center">
+                       <h3 className="text-blue-400 font-bold text-xl">Gerar Treino IA</h3>
+                       <p className="text-slate-400 text-xs mt-1">Crie sua ficha personalizada</p>
+                     </div>
+                  </button>
+                )
+              )}
 
               {/* Novo Card de Análise Livre */}
               <button 
@@ -620,8 +878,10 @@ const App: React.FC = () => {
             result={analysisResult} 
             exercise={selectedExercise} 
             history={historyRecords} // Passa o histórico atualizado
+            userId={currentUser?.id || ''} // Added userId prop
             onReset={resetAnalysis}
             onDeleteRecord={handleDeleteRecord} // Passando a função também para o ResultView
+            onWorkoutSaved={() => currentUser && fetchUserWorkouts(currentUser.id)} // Passa a função de recarregar treinos
           />
         )}
       </main>
