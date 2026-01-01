@@ -11,7 +11,9 @@ const IMAGES_KEY = 'fitai_exercise_images';
 const FALLBACK_EXERCISES: ExerciseDTO[] = [
   { id: 'SQUAT', name: 'Agachamento (Squat)', category: 'STANDARD' },
   { id: 'PUSHUP', name: 'Flexão de Braço (Push-up)', category: 'STANDARD' },
-  { id: 'POSTURE_ANALYSIS', name: 'Análise de Postura', category: 'SPECIAL' }
+  { id: 'POSTURE_ANALYSIS', name: 'Análise de Postura', category: 'SPECIAL' },
+  { id: 'BODY_COMPOSITION', name: 'Composição Corporal', category: 'SPECIAL' },
+  { id: 'FREE_ANALYSIS_MODE', name: 'Análise Livre', category: 'SPECIAL' }
 ];
 
 // Initial Seed Data (Default Admin)

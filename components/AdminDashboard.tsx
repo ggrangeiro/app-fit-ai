@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { User, ExerciseRecord, ExerciseDTO } from '../types';
 import { MockDataService } from '../services/mockDataService';
 import { generateExerciseThumbnail } from '../services/geminiService';
-import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle } from 'lucide-react';
+import { ResultView } from './ResultView';
+import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle } from 'lucide-react';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -12,8 +13,16 @@ interface AdminDashboardProps {
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets'>('users');
   const [users, setUsers] = useState<User[]>([]);
-  const [records, setRecords] = useState<ExerciseRecord[]>([]);
+  // const [records, setRecords] = useState<ExerciseRecord[]>([]); // Removed local records dependency for user detail
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  
+  // State for User History List (Backend)
+  const [userHistoryList, setUserHistoryList] = useState<ExerciseRecord[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // State for Detailed View Modal
+  const [viewingRecord, setViewingRecord] = useState<ExerciseRecord | null>(null);
+  const [detailedHistory, setDetailedHistory] = useState<ExerciseRecord[]>([]);
   
   // Exercise List State
   const [allExercises, setAllExercises] = useState<ExerciseDTO[]>([]);
@@ -31,7 +40,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
   const [editingAssignments, setEditingAssignments] = useState<string[]>([]);
 
   useEffect(() => {
-    refreshData();
+    // refreshData(); // Not strictly needed for list view anymore as we fetch live
     fetchBackendUsers();
     fetchExercises();
   }, []);
@@ -39,12 +48,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
   useEffect(() => {
     if (selectedUser) {
         setEditingAssignments(selectedUser.assignedExercises || []);
+        fetchUserHistory(selectedUser.id);
+    } else {
+        setUserHistoryList([]);
     }
   }, [selectedUser]);
 
   const fetchExercises = async () => {
     const data = await MockDataService.fetchExercises();
-    setAllExercises(data);
+    
+    // Garante que os exercícios especiais estejam na lista para mapeamento correto de nomes
+    const specialExercises: ExerciseDTO[] = [
+        { id: 'POSTURE_ANALYSIS', name: 'Análise de Postura', category: 'SPECIAL' },
+        { id: 'BODY_COMPOSITION', name: 'Composição Corporal', category: 'SPECIAL' },
+        { id: 'FREE_ANALYSIS_MODE', name: 'Análise Livre', category: 'SPECIAL' }
+    ];
+
+    // Merge garantindo que não haja duplicatas de ID
+    const combined = [...data];
+    specialExercises.forEach(sp => {
+        if (!combined.find(c => c.id === sp.id)) {
+            combined.push(sp);
+        }
+    });
+
+    setAllExercises(combined);
   };
 
   // Função para buscar usuários no Backend real
@@ -73,7 +101,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
         }));
 
         setUsers(mappedUsers);
-        console.log("Usuários carregados do backend:", mappedUsers.length);
         
     } catch (err: any) {
         console.error("Erro ao buscar usuários do backend:", err.message);
@@ -82,9 +109,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     }
   };
 
-  const refreshData = () => {
-    // Apenas recarrega registros locais de histórico
-    setRecords(MockDataService.getAllHistory());
+  // --- NEW: FETCH FULL LIST OF RECORDS FOR SELECTED USER ---
+  const fetchUserHistory = async (userId: string) => {
+    setLoadingHistory(true);
+    const API_URL = `https://testeai-732767853162.us-west1.run.app/api/historico/${userId}`;
+    
+    try {
+        const response = await fetch(API_URL, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data)) {
+                // Sort by timestamp desc (newest first)
+                const sorted = data.sort((a: any, b: any) => b.timestamp - a.timestamp);
+                setUserHistoryList(sorted);
+            }
+        } else {
+             // Fallback to local storage if API fails or user has no records there yet but has locally
+             console.warn("Backend history fetch failed, falling back to local.");
+             setUserHistoryList(MockDataService.getUserHistory(userId));
+        }
+    } catch (e) {
+        console.error("Error fetching user history list:", e);
+        setUserHistoryList(MockDataService.getUserHistory(userId));
+    } finally {
+        setLoadingHistory(false);
+    }
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -172,8 +225,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
              setProgressMsg(`Atualizando: ${user.name}...`);
              
              try {
-                // Monta payload. Como é PUT, enviamos dados completos ou parciais dependendo da API.
-                // Assumindo que o backend aceita atualização parcial ou reenvio dos dados.
                 const payload = {
                     nome: user.name,
                     email: user.email,
@@ -221,9 +272,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
   const saveAssignments = async () => {
     if (!selectedUser) return;
     
-    const originalText = "Salvar Permissões";
-    // UI Feedback is tricky without state, using alert for now or simple logic
-    
     try {
         // Update Backend
         const payload = {
@@ -265,8 +313,61 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     setEditingAssignments([]);
   };
 
-  const getUserRecords = (userId: string) => {
-    return records.filter(r => r.userId === userId);
+  const handleDeleteRecord = async (recordId: string) => {
+    if (!selectedUser) return;
+    if (confirm("Tem certeza que deseja apagar este registro permanentemente?")) {
+        const success = await MockDataService.deleteRecord(selectedUser.id, recordId);
+        if (success) {
+            // Update lists immediately
+            setUserHistoryList(prev => prev.filter(r => r.id !== recordId));
+            setDetailedHistory(prev => prev.filter(r => r.id !== recordId));
+            
+            if (viewingRecord?.id === recordId) {
+                setViewingRecord(null);
+            }
+        } else {
+            alert("Erro ao apagar registro.");
+        }
+    }
+  };
+
+  // --- NEW: Fetch full history for modal ---
+  const handleViewRecordDetails = async (record: ExerciseRecord) => {
+    // Normalize exercise ID if needed
+    let normalizedRecord = { ...record };
+    const lowerEx = record.exercise.toLowerCase();
+    
+    if (lowerEx.includes('postura') || lowerEx.includes('posture')) {
+        normalizedRecord.exercise = 'POSTURE_ANALYSIS';
+    } else if (lowerEx.includes('gordura') || lowerEx.includes('body') || lowerEx.includes('corporal')) {
+        normalizedRecord.exercise = 'BODY_COMPOSITION';
+    }
+    
+    setViewingRecord(normalizedRecord);
+    
+    // Initial state with simple array to prevent blink
+    setDetailedHistory([normalizedRecord]);
+    
+    try {
+        const encodedExercise = encodeURIComponent(record.exercise);
+        const url = `https://testeai-732767853162.us-west1.run.app/api/historico/${record.userId}?exercise=${encodedExercise}`;
+        
+        const response = await fetch(url, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" }
+        });
+
+        if (response.ok) {
+            const data: ExerciseRecord[] = await response.json();
+            if (data && data.length > 0) {
+                // Sort by timestamp desc (newest first)
+                const sortedHistory = data.sort((a, b) => b.timestamp - a.timestamp);
+                setDetailedHistory(sortedHistory);
+            }
+        }
+    } catch (e) {
+        console.error("Error fetching detailed history:", e);
+    }
   };
 
   const getScoreColor = (score: number) => {
@@ -275,8 +376,65 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     return "text-red-400 border-red-500/30 bg-red-500/10";
   };
 
+  // Helper to determine display text for metrics
+  const getMetricDisplay = (record: ExerciseRecord) => {
+    const lowerEx = record.exercise.toLowerCase();
+    
+    if (lowerEx.includes('postura') || lowerEx.includes('posture') || record.exercise === 'POSTURE_ANALYSIS') {
+        return { value: 'Check-up', label: 'Status' };
+    }
+    
+    if (lowerEx.includes('gordura') || lowerEx.includes('body') || lowerEx.includes('corporal') || record.exercise === 'BODY_COMPOSITION') {
+        return { value: `${record.result.repetitions}%`, label: 'Gordura' };
+    }
+
+    return { value: `${record.result.repetitions}`, label: 'reps' };
+  };
+  
+  // Helper for icon
+  const getExerciseIcon = (exercise: string) => {
+    const lowerEx = exercise.toLowerCase();
+    if (lowerEx.includes('postura') || lowerEx.includes('posture')) return <ScanLine className="w-5 h-5 text-blue-400" />;
+    if (lowerEx.includes('gordura') || lowerEx.includes('body')) return <Scale className="w-5 h-5 text-violet-400" />;
+    return <Activity className="w-5 h-5 text-slate-400" />;
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto p-4 animate-fade-in">
+      
+      {/* DETAILED VIEW MODAL */}
+      {viewingRecord && selectedUser && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
+           <div className="min-h-screen p-4 md:p-8 relative">
+              <button 
+                onClick={() => setViewingRecord(null)}
+                className="fixed top-4 right-4 z-[110] p-2 bg-slate-800 rounded-full text-white hover:bg-slate-700 hover:text-red-400 transition-colors shadow-lg border border-slate-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              
+              <div className="max-w-6xl mx-auto pt-8">
+                 <div className="flex items-center gap-4 mb-6 text-slate-400 text-sm">
+                     <button onClick={() => setViewingRecord(null)} className="hover:text-white transition-colors">Admin Dashboard</button>
+                     <ChevronRight className="w-4 h-4" />
+                     <span>{selectedUser.name}</span>
+                     <ChevronRight className="w-4 h-4" />
+                     <span className="text-white font-bold">Análise Detalhada</span>
+                 </div>
+
+                 <ResultView
+                    result={viewingRecord.result}
+                    exercise={viewingRecord.exercise}
+                    history={detailedHistory}
+                    onReset={() => setViewingRecord(null)}
+                    onDeleteRecord={handleDeleteRecord}
+                    isHistoricalView={true}
+                 />
+              </div>
+           </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row gap-6 h-full min-h-[600px]">
         
         {/* Sidebar */}
@@ -321,10 +479,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                 <span className="text-2xl font-bold text-white block">{users.length}</span>
                 <span className="text-sm text-slate-500">Usuários Ativos (DB)</span>
               </div>
-              <div>
-                <span className="text-2xl font-bold text-emerald-400 block">{records.length}</span>
-                <span className="text-sm text-slate-500">Exercícios Realizados</span>
-              </div>
+              {/* Note: Total records count is harder to get without full fetch, removing for now or needs separate endpoint */}
             </div>
           </div>
         </div>
@@ -408,13 +563,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                 {users.length === 0 && <div className="text-slate-500 col-span-full text-center py-10">Nenhum usuário encontrado no backend.</div>}
                 
                 {users.filter(u => u.role !== 'admin').map(user => {
-                  const userHistory = getUserRecords(user.id);
-                  const avgScore = userHistory.length > 0 ? Math.round(userHistory.reduce((acc, curr) => acc + curr.result.score, 0) / userHistory.length) : '-';
                   return (
                     <div key={user.id} onClick={() => setSelectedUser(user)} className="bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 rounded-2xl p-5 cursor-pointer transition-all group">
                       <div className="flex justify-between items-start mb-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold">{user.name.charAt(0)}</div>
-                        <div className={`px-2 py-1 rounded text-xs font-bold ${getScoreColor(typeof avgScore === 'number' ? avgScore : 0)}`}>Média: {avgScore}</div>
+                        <div className="px-2 py-1 rounded text-xs font-bold text-slate-500 bg-slate-700/30">Aluno</div>
                       </div>
                       <h3 className="text-white font-bold text-lg truncate">{user.name}</h3>
                       <p className="text-slate-400 text-sm truncate mb-4">{user.email}</p>
@@ -422,7 +575,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                          <span className={user.assignedExercises && user.assignedExercises.length > 0 ? 'text-emerald-400' : 'text-slate-500'}>
                              {user.assignedExercises?.length || 0} exercícios
                          </span>
-                         <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">Ver perfil <ChevronRight className="w-3 h-3" /></span>
+                         <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">Ver histórico <ChevronRight className="w-3 h-3" /></span>
                       </div>
                     </div>
                   );
@@ -466,14 +619,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                 </div>
 
                 <div className="md:w-2/3 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
-                  <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider sticky top-0 bg-transparent mb-2">Histórico de Execuções</h4>
-                  {getUserRecords(selectedUser.id).length === 0 ? (
-                    <div className="text-center py-10 text-slate-500 bg-slate-800/20 rounded-2xl border border-dashed border-slate-700">Nenhum exercício realizado ainda.</div>
+                  <div className="flex justify-between items-center mb-2">
+                     <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Histórico de Execuções</h4>
+                     {loadingHistory && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
+                  </div>
+                  
+                  {userHistoryList.length === 0 ? (
+                    <div className="text-center py-10 text-slate-500 bg-slate-800/20 rounded-2xl border border-dashed border-slate-700 flex flex-col items-center gap-2">
+                        {loadingHistory ? (
+                            <>
+                                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                                <p>Buscando histórico...</p>
+                            </>
+                        ) : (
+                            <>
+                                <AlertCircle className="w-8 h-8 opacity-20" />
+                                <p>Nenhum exercício realizado ainda.</p>
+                            </>
+                        )}
+                    </div>
                   ) : (
-                    getUserRecords(selectedUser.id).map(record => (
-                      <div key={record.id} className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:bg-slate-800 transition-colors">
-                         <div className="flex justify-between items-start mb-2">
-                           <span className="text-white font-bold text-sm">{allExercises.find(e => e.id === record.exercise)?.name || record.exercise}</span>
+                    userHistoryList.map(record => {
+                      const metric = getMetricDisplay(record);
+                      return (
+                      <div 
+                        key={record.id} 
+                        // Call the new handler that fetches detailed history
+                        onClick={() => handleViewRecordDetails(record)}
+                        className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 transition-all cursor-pointer group relative overflow-hidden"
+                      >
+                         <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <ChevronRight className="w-5 h-5 text-blue-400" />
+                         </div>
+                         <div className="flex justify-between items-start mb-2 pr-8">
+                           <div className="flex items-center gap-2">
+                               {getExerciseIcon(record.exercise)}
+                               <span className="text-white font-bold text-sm">{allExercises.find(e => e.id === record.exercise)?.name || record.exercise}</span>
+                           </div>
                            <span className="text-xs text-slate-500">{new Date(record.timestamp).toLocaleDateString()}</span>
                          </div>
                          <div className="flex items-center gap-4">
@@ -483,10 +665,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                                 <div className={`h-full ${getScoreColor(record.result.score).includes('emerald') ? 'bg-emerald-500' : (record.result.score > 50 ? 'bg-yellow-500' : 'bg-red-500')}`} style={{ width: `${record.result.score}%` }} />
                               </div>
                            </div>
-                           <span className="text-xs text-slate-400 font-mono">{record.result.repetitions} reps</span>
+                           <div className="text-right pr-8 min-w-[80px]">
+                               <span className="block text-white font-bold text-sm">{metric.value}</span>
+                               <span className="text-[10px] text-slate-500 uppercase font-bold">{metric.label}</span>
+                           </div>
                          </div>
                       </div>
-                    ))
+                    )})
                   )}
                 </div>
               </div>

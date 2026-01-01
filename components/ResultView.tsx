@@ -13,9 +13,10 @@ interface ResultViewProps {
   onReset: () => void;
   onSave?: () => void;
   onDeleteRecord?: (recordId: string) => void;
+  isHistoricalView?: boolean; // New prop to control button visibility
 }
 
-export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, history, onReset, onSave, onDeleteRecord }) => {
+export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, history, onReset, onSave, onDeleteRecord, isHistoricalView = false }) => {
   const [saved, setSaved] = useState(false);
   
   // Diet Plan State
@@ -715,15 +716,17 @@ ${strengthsText}${improvementsText}
             onClick={onReset}
             className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-5 rounded-2xl transition-all text-lg tracking-wide flex items-center justify-center gap-2"
           >
-            <ArrowLeft className="w-5 h-5" /> Voltar ao Menu
+            <ArrowLeft className="w-5 h-5" /> {isHistoricalView ? 'Fechar Detalhes' : 'Voltar ao Menu'}
           </button>
           
-          <button 
-            onClick={onReset}
-            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-2xl transition-all shadow-xl shadow-blue-900/20 text-lg tracking-wide hover:scale-[1.01] flex items-center justify-center gap-2"
-          >
-            <Repeat className="w-5 h-5" /> Nova Análise
-          </button>
+          {!isHistoricalView && (
+            <button 
+              onClick={onReset}
+              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-5 rounded-2xl transition-all shadow-xl shadow-blue-900/20 text-lg tracking-wide hover:scale-[1.01] flex items-center justify-center gap-2"
+            >
+              <Repeat className="w-5 h-5" /> Nova Análise
+            </button>
+          )}
         </div>
       </div>
     );
