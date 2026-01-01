@@ -707,13 +707,13 @@ ${strengthsText}${improvementsText}
             </div>
 
             {/* ACTIONS - (Visible Only on Screen) */}
-            <div className="no-print grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+            <div className="no-print grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
               <button 
                 onClick={() => setShowWorkoutForm(true)}
                 className="flex items-center justify-center gap-2 py-4 px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 border border-blue-400/20 group"
               >
                 <Dumbbell className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                Gerar Treino com IA
+                Gerar Treino
               </button>
               
               <button 
@@ -721,8 +721,21 @@ ${strengthsText}${improvementsText}
                 className="flex items-center justify-center gap-2 py-4 px-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/20 border border-emerald-400/20 group"
               >
                 <Utensils className="w-5 h-5 group-hover:-rotate-12 transition-transform" />
-                Gerar Dieta do Dia
+                Gerar Dieta
               </button>
+
+              {/* Botão de Evolução MOVIDO PARA CÁ e com visibilidade condicional */}
+              {history.length > 0 && !isFreeMode ? (
+                  <button 
+                    onClick={() => setShowHistoryModal(true)}
+                    className="flex items-center justify-center gap-2 py-4 px-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-900/20 border border-indigo-400/20 group"
+                  >
+                    <History className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    Ver Evolução ({history.length})
+                  </button>
+              ) : (
+                 <div className="hidden lg:block"></div> /* Spacer para manter o grid bonito se não tiver histórico */
+              )}
             </div>
 
           </div>
@@ -736,14 +749,7 @@ ${strengthsText}${improvementsText}
             <ArrowLeft className="w-4 h-4" /> Nova Análise
           </button>
           
-          {history.length > 0 && !isFreeMode && (
-             <button
-               onClick={() => setShowHistoryModal(true)}
-               className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors text-sm font-bold bg-blue-500/10 px-4 py-2 rounded-lg border border-blue-500/20"
-             >
-               <History className="w-4 h-4" /> Ver Evolução ({history.length})
-             </button>
-          )}
+          {/* Botão antigo de histórico removido daqui para limpar o rodapé */}
         </div>
       </div>
     </div>
