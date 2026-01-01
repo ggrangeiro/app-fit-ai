@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType, ExerciseRecord, SPECIAL_EXERCISES } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download } from 'lucide-react';
 import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { EvolutionModal } from './EvolutionModal';
@@ -50,6 +50,13 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
   const isPostureAnalysis = exercise === SPECIAL_EXERCISES.POSTURE;
   const isBodyCompAnalysis = exercise === SPECIAL_EXERCISES.BODY_COMPOSITION;
   const isFreeMode = exercise === SPECIAL_EXERCISES.FREE_MODE;
+  
+  // Nome amigável do exercício
+  const exerciseDisplayName = isBodyCompAnalysis 
+    ? 'Avaliação Corporal' 
+    : (isFreeMode 
+        ? (result.identifiedExercise || 'Exercício Livre') 
+        : exercise);
 
   useEffect(() => {
     if (onSave && !saved) {
@@ -99,6 +106,57 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
     window.print();
   };
 
+  const handleShare = async () => {
+    // Construção do Texto Rico
+    const dateStr = new Date().toLocaleDateString();
+    
+    // Métrica principal (Reps ou Gordura)
+    const metricLabel = isBodyCompAnalysis ? '⚖️ Gordura Estimada' : '🔄 Repetições';
+    const metricValue = `${result.repetitions}${isBodyCompAnalysis ? '%' : ''}`;
+
+    // Listas formatadas
+    let strengthsText = "";
+    if (result.strengths && result.strengths.length > 0) {
+      strengthsText = `\n✅ *Mandou bem:*\n${result.strengths.slice(0, 3).map(s => `• ${s}`).join('\n')}\n`;
+    }
+
+    let improvementsText = "";
+    if (result.improvements && result.improvements.length > 0) {
+      improvementsText = `\n⚠️ *Ajustes Técnicos:*\n${result.improvements.slice(0, 3).map(i => `• ${i.instruction}`).join('\n')}\n`;
+    }
+
+    const shareText = 
+`📊 *Relatório FitAI Analyzer*
+📅 ${dateStr}
+
+🏋️ *${exerciseDisplayName}*
+🏆 Score Técnico: ${result.score}/100
+${metricLabel}: ${metricValue}
+${strengthsText}${improvementsText}
+💡 *Dica de Mestre:*
+"${result.formCorrection}"
+
+🚀 _Analise seus treinos com Inteligência Artificial!_`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Meu Resultado no FitAI',
+          text: shareText,
+        });
+      } catch (err) {
+        console.log('User closed share dialog');
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareText);
+        alert('Resumo detalhado copiado para a área de transferência!');
+      } catch (err) {
+        alert('Não foi possível compartilhar neste dispositivo.');
+      }
+    }
+  };
+
   const scoreData = [
     { 
       name: 'Score', 
@@ -127,7 +185,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
             <div className="p-3 bg-blue-500/20 text-blue-400 rounded-full mb-1">
               <Activity className="w-6 h-6" />
             </div>
-            <span className="text-xl font-bold text-white">Check-up</span>
+            <span className="text-xl font-bold text-white print:text-black">Check-up</span>
             <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Status da Análise</span>
         </>
       );
@@ -139,10 +197,10 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
             <div className="p-3 bg-violet-500/20 text-violet-400 rounded-full mb-1">
               <Scale className="w-6 h-6" />
             </div>
-            <span className="text-4xl font-bold text-white">{result.repetitions}%</span>
+            <span className="text-4xl font-bold text-white print:text-black">{result.repetitions}%</span>
             <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Gordura Estimada</span>
             {result.gender && (
-               <span className="text-[10px] text-slate-500 mt-1 uppercase font-bold bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+               <span className="text-[10px] text-slate-500 mt-1 uppercase font-bold bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700 print:border-slate-300 print:bg-slate-100">
                  {result.gender}
                </span>
             )}
@@ -155,7 +213,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
           <div className="p-3 bg-blue-500/20 text-blue-400 rounded-full mb-1">
             <Repeat className="w-6 h-6" />
           </div>
-          <span className="text-4xl font-bold text-white">{result.repetitions}</span>
+          <span className="text-4xl font-bold text-white print:text-black">{result.repetitions}</span>
           <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Repetições Válidas</span>
       </>
     );
@@ -239,7 +297,22 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
   
   return (
     <div className="w-full max-w-6xl mx-auto animate-fade-in pb-10">
-      
+      <style>{`
+        @media print {
+          body { background: white !important; color: black !important; }
+          .glass-panel { background: white !important; border: 1px solid #ddd !important; box-shadow: none !important; color: black !important; }
+          .no-print, button { display: none !important; }
+          .text-white { color: black !important; }
+          .text-slate-200, .text-slate-300, .text-slate-400 { color: #333 !important; }
+          .bg-slate-900, .bg-slate-800, .bg-slate-700 { background: white !important; border: 1px solid #eee !important; }
+          h2, h3, span { text-shadow: none !important; }
+          .absolute.inset-0 { display: none !important; } /* Hide backgrounds */
+          .print:text-black { color: black !important; }
+          /* Ensure charts and maps are visible */
+          svg { filter: none !important; }
+        }
+      `}</style>
+
       {/* HISTORY / EVOLUTION MODAL */}
       <EvolutionModal 
         isOpen={showHistoryModal}
@@ -247,7 +320,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
         history={history}
         exerciseType={exercise}
         highlightLatestAsCurrent={true}
-        onDelete={onDeleteRecord} // Passando a função de deletar
+        onDelete={onDeleteRecord} 
       />
 
       {/* Modal Form for Diet */}
@@ -405,23 +478,42 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
         
         {/* Confetti / Celebration Background Effect */}
         {isHighPerformance && (
-          <div className="absolute inset-0 pointer-events-none z-0 opacity-30">
+          <div className="absolute inset-0 pointer-events-none z-0 opacity-30 no-print">
              <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(251,191,36,0.15),transparent_70%)] animate-pulse" />
           </div>
         )}
+        
+        {/* Share / Print Buttons (Top Right) - Only visible on screen */}
+        <div className="absolute top-6 right-6 flex items-center gap-3 no-print z-30">
+            <button 
+                onClick={handlePrint}
+                className="p-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-full transition-all shadow-lg border border-slate-600/50"
+                title="Imprimir ou Salvar PDF"
+            >
+                <Printer className="w-5 h-5" />
+            </button>
+            <button 
+                onClick={handleShare}
+                className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-all shadow-lg shadow-blue-900/20 border border-blue-500/50"
+                title="Compartilhar Resultado"
+            >
+                <Share2 className="w-5 h-5" />
+            </button>
+        </div>
 
         {/* Header */}
         <div className="text-center mb-10 relative z-10">
-          <span className="px-4 py-1.5 rounded-full bg-slate-700/50 text-slate-300 text-sm font-medium border border-slate-600/50">
+          <span className="px-4 py-1.5 rounded-full bg-slate-700/50 text-slate-300 text-sm font-medium border border-slate-600/50 print:border-slate-300 print:text-slate-600">
             Relatório Biomecânico
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mt-4 text-white">
+          <h2 className="text-3xl md:text-4xl font-bold mt-4 text-white print:text-black">
             {isBodyCompAnalysis 
                 ? 'Avaliação Corporal Detalhada' 
                 : (isFreeMode 
                     ? `${result.identifiedExercise || 'Exercício'} - Análise Livre (Sem histórico)` 
                     : `Análise de ${exercise}`)}
           </h2>
+          <p className="text-slate-400 mt-2 text-sm print:text-slate-600">{new Date().toLocaleDateString()} • FitAI Analyzer</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8 relative z-10">
@@ -431,13 +523,14 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
             <div className={`
               bg-slate-900/40 rounded-3xl p-8 border border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-1000
               ${isHighPerformance ? 'shadow-[0_0_40px_rgba(251,191,36,0.15)] border-yellow-500/30' : ''}
+              print:shadow-none print:border-slate-300 print:bg-white
             `}>
               {/* Decorative Trophy or Sparkles */}
-              <div className="absolute top-0 right-0 p-4 opacity-10">
+              <div className="absolute top-0 right-0 p-4 opacity-10 no-print">
                 <Trophy className={`w-32 h-32 ${isHighPerformance ? 'text-yellow-400' : 'text-white'}`} />
               </div>
               
-              <h3 className={`text-lg font-medium mb-2 ${isHighPerformance ? 'text-yellow-100' : 'text-slate-300'}`}>
+              <h3 className={`text-lg font-medium mb-2 print:text-black ${isHighPerformance ? 'text-yellow-100' : 'text-slate-300'}`}>
                 {isPostureAnalysis ? 'Alinhamento Global' : (isBodyCompAnalysis ? 'Índice de Composição' : 'Score Técnico')}
               </h3>
               
@@ -461,14 +554,14 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className={`
-                    text-5xl font-bold tracking-tighter
+                    text-5xl font-bold tracking-tighter print:text-black
                     ${isHighPerformance 
                       ? 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-200 animate-text-shimmer drop-shadow-lg' 
                       : 'text-white'}
                   `}>
                     {result.score}
                   </span>
-                  <span className={`text-xs font-bold uppercase tracking-wider mt-1 ${isHighPerformance ? 'text-yellow-400' : 'text-slate-400'}`}>
+                  <span className={`text-xs font-bold uppercase tracking-wider mt-1 print:text-black ${isHighPerformance ? 'text-yellow-400' : 'text-slate-400'}`}>
                     {getScoreMessage(result.score)}
                   </span>
                 </div>
@@ -477,7 +570,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
                {/* Segmentation Score List */}
                <div className="w-full mt-4 space-y-2">
                  {result.feedback.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-1">
+                    <div key={idx} className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-1 print:text-black print:border-slate-200">
                        <span>{item.message}</span>
                        <span className={getScoreTextColor(item.score)}>{item.score}/100</span>
                     </div>
@@ -485,7 +578,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
                </div>
             </div>
 
-            <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col items-center justify-center gap-2">
+            <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col items-center justify-center gap-2 print:bg-white print:border-slate-300">
                  {renderStatsBox()}
             </div>
             
@@ -493,7 +586,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
                 <button 
                     onClick={() => setShowHistoryModal(true)}
                     disabled={!history || history.length === 0}
-                    className="w-full py-3 px-4 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-indigo-500/30 disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="w-full py-3 px-4 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border border-indigo-500/30 disabled:opacity-70 disabled:cursor-not-allowed no-print"
                 >
                     <History className="w-4 h-4" />
                     <span>Comparar Evolução</span>
@@ -502,7 +595,7 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
             
             {/* ACTION BUTTONS (Only for Body Composition) */}
             {isBodyCompAnalysis && (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 no-print">
                   <button 
                     onClick={() => setShowDietForm(true)}
                     className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl shadow-lg font-bold flex items-center justify-center gap-2 transition-transform hover:scale-[1.02] border border-emerald-500/30 text-sm"
@@ -528,15 +621,15 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
               
               {/* Pontos Fortes */}
               {result.strengths && result.strengths.length > 0 && (
-                <div className="bg-emerald-900/10 rounded-3xl p-6 border border-emerald-500/20">
-                   <h3 className="text-lg font-bold mb-4 flex items-center gap-3 text-emerald-400">
+                <div className="bg-emerald-900/10 rounded-3xl p-6 border border-emerald-500/20 print:bg-white print:border-emerald-200">
+                   <h3 className="text-lg font-bold mb-4 flex items-center gap-3 text-emerald-400 print:text-emerald-700">
                     <ThumbsUp className="w-5 h-5" /> Pontos Fortes
                   </h3>
                   <ul className="space-y-3">
                     {result.strengths.map((strength, index) => (
                       <li key={index} className="flex items-start gap-3">
                         <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                        <span className="text-slate-200 text-sm leading-relaxed">{strength}</span>
+                        <span className="text-slate-200 text-sm leading-relaxed print:text-black">{strength}</span>
                       </li>
                     ))}
                   </ul>
@@ -544,8 +637,8 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
               )}
 
               {/* Ajustes Necessários */}
-              <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex-grow">
-                <h3 className="text-lg font-bold mb-5 flex items-center gap-3 text-white border-b border-slate-700/50 pb-4">
+              <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex-grow print:bg-white print:border-slate-300">
+                <h3 className="text-lg font-bold mb-5 flex items-center gap-3 text-white border-b border-slate-700/50 pb-4 print:text-black print:border-slate-200">
                   <AlertTriangle className="text-yellow-400 w-5 h-5" /> 
                   {isBodyCompAnalysis ? 'Recomendações' : 'Ajustes Técnicos'}
                 </h3>
@@ -553,11 +646,11 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
                 {result.improvements ? (
                    <div className="space-y-4 overflow-y-auto max-h-[500px] pr-2 custom-scrollbar">
                      {result.improvements.map((item, index) => (
-                       <div key={index} className="bg-slate-800/30 rounded-xl p-4 border-l-4 border-l-yellow-500 border-t border-r border-b border-slate-700/30 hover:bg-slate-800/50 transition-colors">
-                          <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
+                       <div key={index} className="bg-slate-800/30 rounded-xl p-4 border-l-4 border-l-yellow-500 border-t border-r border-b border-slate-700/30 hover:bg-slate-800/50 transition-colors print:bg-slate-50 print:border-slate-200 print:text-black">
+                          <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2 print:text-black">
                              {item.instruction}
                           </h4>
-                          <div className="flex items-start gap-2 text-xs text-slate-400 bg-black/20 p-2 rounded-lg">
+                          <div className="flex items-start gap-2 text-xs text-slate-400 bg-black/20 p-2 rounded-lg print:bg-transparent print:text-slate-700 print:p-0">
                              <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                              <p className="leading-relaxed">{item.detail}</p>
                           </div>
@@ -582,18 +675,18 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
           {/* Muscle Map & Correction (Right) */}
           <div className="lg:col-span-4 flex flex-col gap-6">
              {/* Muscle Map Card */}
-             <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-3 opacity-5">
+             <div className="bg-slate-900/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col relative overflow-hidden print:bg-white print:border-slate-300">
+                <div className="absolute top-0 right-0 p-3 opacity-5 no-print">
                    <Activity className="w-24 h-24 text-blue-500" />
                 </div>
-                <h3 className="text-lg font-bold mb-2 flex items-center gap-3 text-white z-10">
+                <h3 className="text-lg font-bold mb-2 flex items-center gap-3 text-white z-10 print:text-black">
                   <User className="text-blue-400 w-5 h-5" /> {isBodyCompAnalysis ? 'Regiões em Destaque' : 'Anatomia da Ativação'}
                 </h3>
                 <div className="flex-grow flex flex-col items-center">
                    <MuscleMap muscles={result.muscleGroups} />
                    <div className="flex flex-wrap justify-center gap-1.5 mt-2 z-10">
                     {result.muscleGroups.map((muscle, idx) => (
-                      <span key={idx} className="px-2 py-0.5 bg-blue-500/10 text-blue-300 rounded-full text-[10px] font-bold border border-blue-500/20 uppercase tracking-wide">
+                      <span key={idx} className="px-2 py-0.5 bg-blue-500/10 text-blue-300 rounded-full text-[10px] font-bold border border-blue-500/20 uppercase tracking-wide print:text-blue-800 print:bg-blue-100 print:border-blue-200">
                         {muscle}
                       </span>
                     ))}
@@ -602,22 +695,22 @@ export const ResultView: React.FC<ResultViewProps> = ({ result, exercise, histor
              </div>
 
              {/* Correction Card */}
-             <div className="bg-gradient-to-br from-indigo-600/20 to-blue-600/20 rounded-3xl p-6 border border-indigo-500/30 relative overflow-hidden flex-1 flex flex-col justify-center">
-                <div className="absolute top-0 right-0 p-4 opacity-10">
+             <div className="bg-gradient-to-br from-indigo-600/20 to-blue-600/20 rounded-3xl p-6 border border-indigo-500/30 relative overflow-hidden flex-1 flex flex-col justify-center print:bg-white print:border-indigo-200">
+                <div className="absolute top-0 right-0 p-4 opacity-10 no-print">
                   <MessageCircleHeart className="w-24 h-24 text-indigo-400" />
                 </div>
-                <h3 className="text-sm font-bold mb-3 flex items-center gap-2 text-indigo-300 uppercase tracking-wider relative z-10">
+                <h3 className="text-sm font-bold mb-3 flex items-center gap-2 text-indigo-300 uppercase tracking-wider relative z-10 print:text-indigo-800">
                   <MessageCircleHeart className="w-4 h-4" /> 
                   {isPostureAnalysis ? 'Resumo Postural' : (isBodyCompAnalysis ? 'Conclusão' : 'Dica de Mestre')}
                 </h3>
-                <p className="text-white font-medium text-lg leading-relaxed relative z-10">
+                <p className="text-white font-medium text-lg leading-relaxed relative z-10 print:text-black">
                   "{result.formCorrection}"
                 </p>
             </div>
           </div>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex gap-4 no-print">
            <button 
             onClick={onReset}
             className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-5 rounded-2xl transition-all text-lg tracking-wide flex items-center justify-center gap-2"
