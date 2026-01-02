@@ -74,9 +74,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     
     // Garante que os exercícios especiais estejam na lista para mapeamento correto de nomes
     const specialExercises: ExerciseDTO[] = [
-        { id: 'POSTURE_ANALYSIS', name: 'Análise de Postura', category: 'SPECIAL' },
-        { id: 'BODY_COMPOSITION', name: 'Composição Corporal', category: 'SPECIAL' },
-        { id: 'FREE_ANALYSIS_MODE', name: 'Análise Livre', category: 'SPECIAL' }
+        { id: 'POSTURE_ANALYSIS', alias: 'POSTURE_ANALYSIS', name: 'Análise de Postura', category: 'SPECIAL' },
+        { id: 'BODY_COMPOSITION', alias: 'BODY_COMPOSITION', name: 'Composição Corporal', category: 'SPECIAL' },
+        { id: 'FREE_ANALYSIS_MODE', alias: 'FREE_ANALYSIS_MODE', name: 'Análise Livre', category: 'SPECIAL' }
     ];
 
     // Merge garantindo que não haja duplicatas de ID

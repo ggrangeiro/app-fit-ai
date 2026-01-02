@@ -9,11 +9,11 @@ const IMAGES_KEY = 'fitai_exercise_images';
 
 // Fallback exercises caso a API falhe, para o app não quebrar totalmente
 const FALLBACK_EXERCISES: ExerciseDTO[] = [
-  { id: 'SQUAT', name: 'Agachamento (Squat)', category: 'STANDARD' },
-  { id: 'PUSHUP', name: 'Flexão de Braço (Push-up)', category: 'STANDARD' },
-  { id: 'POSTURE_ANALYSIS', name: 'Análise de Postura', category: 'SPECIAL' },
-  { id: 'BODY_COMPOSITION', name: 'Composição Corporal', category: 'SPECIAL' },
-  { id: 'FREE_ANALYSIS_MODE', name: 'Análise Livre', category: 'SPECIAL' }
+  { id: 'SQUAT', alias: 'SQUAT', name: 'Agachamento (Squat)', category: 'STANDARD' },
+  { id: 'PUSHUP', alias: 'PUSHUP', name: 'Flexão de Braço (Push-up)', category: 'STANDARD' },
+  { id: 'POSTURE_ANALYSIS', alias: 'POSTURE_ANALYSIS', name: 'Análise de Postura', category: 'SPECIAL' },
+  { id: 'BODY_COMPOSITION', alias: 'BODY_COMPOSITION', name: 'Composição Corporal', category: 'SPECIAL' },
+  { id: 'FREE_ANALYSIS_MODE', alias: 'FREE_ANALYSIS_MODE', name: 'Análise Livre', category: 'SPECIAL' }
 ];
 
 // Initial Seed Data (Default Admin)
@@ -43,6 +43,7 @@ const mapBackendToInternalId = (backendName: string): string => {
   const lower = backendName.toLowerCase();
   
   if (lower.includes('squat') || lower.includes('agachamento')) return 'SQUAT';
+  if (lower.includes('bench') || lower.includes('supino')) return 'BENCH_PRESS'; // Adicionado Supino antes de validações genéricas de barra
   if (lower.includes('push-up') || lower.includes('flexão')) return 'PUSHUP';
   if (lower.includes('lunge') || lower.includes('afundo')) return 'LUNGE';
   if (lower.includes('burpee')) return 'BURPEE';
@@ -50,11 +51,15 @@ const mapBackendToInternalId = (backendName: string): string => {
   if (lower.includes('jumping') || lower.includes('polichinelo')) return 'JUMPING_JACK';
   if (lower.includes('mountain') || lower.includes('escalador')) return 'MOUNTAIN_CLIMBER';
   if (lower.includes('crunch') || lower.includes('abdominal')) return 'CRUNCH';
-  if (lower.includes('pull-up') || lower.includes('barra')) return 'PULLUP';
+  
+  // Refinado para evitar falso positivo com "Supino com Barra" ou "Agachamento com Barra"
+  // Só marca como PULLUP se for "barra fixa", "barra" isolado ou "pull-up"
+  if (lower.includes('pull-up') || (lower.includes('barra') && !lower.includes('com barra')) || lower.includes('barra fixa')) return 'PULLUP';
+  
   if (lower.includes('bridge') || lower.includes('pélvica')) return 'BRIDGE';
   if (lower.includes('búlgaro') || lower.includes('bulgarian')) return 'BULGARIAN_SQUAT';
   if (lower.includes('deadlift') || lower.includes('terra')) return 'DEADLIFT';
-  if (lower.includes('dips') || lower.includes('tríceps')) return 'TRICEP_DIP';
+  if (lower.includes('dips') || lower.includes('tríceps') || lower.includes('mergulho')) return 'TRICEP_DIP';
   if (lower.includes('bicep') || lower.includes('rosca')) return 'BICEP_CURL';
   if (lower.includes('cross over') || lower.includes('crucifixo')) return 'CABLE_CROSSOVER';
   if (lower.includes('postura') || lower.includes('biofeedback')) return 'POSTURE_ANALYSIS';
@@ -83,11 +88,13 @@ export const MockDataService = {
               if (Array.isArray(data) && data.length > 0) {
                    // Aplica o mesmo mapeamento caso o admin use essa rota
                    return data.map((item: any) => {
-                      const internalId = mapBackendToInternalId(item.exercicio || item.name);
+                      const alias = mapBackendToInternalId(item.exercicio || item.name);
                       return {
-                          id: internalId,
+                          // Se tiver ID do banco usa, senão usa o nome como fallback de ID único
+                          id: item.id ? String(item.id) : (item.exercicio || item.name), 
+                          alias: alias,
                           name: item.exercicio || item.name,
-                          category: (internalId === 'POSTURE_ANALYSIS' || internalId === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
+                          category: (alias === 'POSTURE_ANALYSIS' || alias === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
                       };
                   });
               }
@@ -117,14 +124,19 @@ export const MockDataService = {
             // MAP TRANSFORM: Backend Format -> Frontend ExerciseDTO
             const mappedExercises: ExerciseDTO[] = data.map((item: any) => {
                 // Backend retorna: { id: 4, exercicio: "Agachamento (Squat)" }
-                // Frontend precisa: { id: "SQUAT", name: "Agachamento (Squat)" }
                 
-                const internalId = mapBackendToInternalId(item.exercicio);
+                // 1. Alias: Identificador de TIPO (ex: 'SQUAT') para imagens/regras
+                const alias = mapBackendToInternalId(item.exercicio);
                 
+                // 2. ID: Identificador ÚNICO (ex: "4") para seleção na UI
+                // Se não vier ID, usamos o próprio nome para garantir unicidade relativa
+                const uniqueId = item.id ? String(item.id) : item.exercicio;
+
                 return {
-                    id: internalId, // Usamos o ID interno para mapear as imagens
-                    name: item.exercicio, // Exibimos o nome que vem do banco
-                    category: (internalId === 'POSTURE_ANALYSIS' || internalId === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
+                    id: uniqueId, 
+                    alias: alias,
+                    name: item.exercicio, 
+                    category: (alias === 'POSTURE_ANALYSIS' || alias === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
                 };
             });
             

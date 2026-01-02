@@ -5,7 +5,8 @@ export type ExerciseType = string;
 
 // Interface para o objeto de exercício vindo do Backend
 export interface ExerciseDTO {
-  id: string; // ex: 'SQUAT'
+  id: string; // ID ÚNICO (ex: "45" ou "uuid")
+  alias: string; // ID DE TIPO/LÓGICA (ex: 'SQUAT') - usado para imagens/regras
   name: string; // ex: 'Agachamento (Squat)'
   category?: 'STANDARD' | 'SPECIAL';
   image_url?: string;
@@ -13,6 +14,14 @@ export interface ExerciseDTO {
 }
 
 export interface WorkoutPlan {
+  id: number;
+  userId: string;
+  goal: string;
+  content: string; // HTML content
+  createdAt?: string;
+}
+
+export interface DietPlan {
   id: number;
   userId: string;
   goal: string;

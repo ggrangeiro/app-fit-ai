@@ -14,7 +14,8 @@ interface ResultViewProps {
   onReset: () => void;
   onSave?: () => void;
   onDeleteRecord?: (recordId: string) => void;
-  onWorkoutSaved?: () => void; // Nova prop para notificar o App
+  onWorkoutSaved?: () => void;
+  onDietSaved?: () => void; // Nova prop para atualizar a dieta na home
   isHistoricalView?: boolean;
 }
 
@@ -27,6 +28,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
   onSave, 
   onDeleteRecord, 
   onWorkoutSaved,
+  onDietSaved,
   isHistoricalView = false 
 }) => {
   const [saved, setSaved] = useState(false);
@@ -39,7 +41,8 @@ export const ResultView: React.FC<ResultViewProps> = ({
     weight: '',
     height: '',
     goal: 'emagrecer',
-    gender: 'masculino'
+    gender: 'masculino',
+    observations: ''
   });
 
   // Workout Plan State
@@ -91,7 +94,38 @@ export const ResultView: React.FC<ResultViewProps> = ({
     e.preventDefault();
     setDietLoading(true);
     try {
+      // 1. Gera o HTML da dieta com a IA
       const planHtml = await generateDietPlan(dietFormData, result);
+      
+      // 2. Salva no Backend automaticamente
+      try {
+        const payload = {
+            userId: userId,
+            content: planHtml,
+            goal: dietFormData.goal
+        };
+
+        console.log("Salvando dieta no backend...", payload);
+
+        const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/dietas", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            console.log("Dieta salva com sucesso.");
+            // Notifica o App.tsx para atualizar a lista de dietas
+            if (onDietSaved) {
+                onDietSaved();
+            }
+        } else {
+            console.warn("Falha ao salvar dieta no backend.");
+        }
+      } catch (backendError) {
+        console.error("Erro de conexão ao salvar dieta:", backendError);
+      }
+      
       setDietPlanHtml(planHtml);
       setShowDietForm(false);
     } catch (error) {
@@ -367,7 +401,7 @@ ${strengthsText}${improvementsText}
       {/* Modal Form for Diet */}
       {showDietForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
              <button onClick={() => setShowDietForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
                <X className="w-6 h-6" />
              </button>
@@ -413,6 +447,18 @@ ${strengthsText}${improvementsText}
                     <option value="definicao">Definição Muscular</option>
                   </select>
                 </div>
+                
+                <div>
+                   <label className="block text-sm font-medium text-slate-300 mb-1">Observações / Restrições</label>
+                   <textarea 
+                     rows={3}
+                     placeholder="Ex: Sou vegano, tenho alergia a amendoim, faço jejum intermitente..."
+                     className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none resize-none placeholder-slate-500 text-sm"
+                     value={dietFormData.observations}
+                     onChange={e => setDietFormData({...dietFormData, observations: e.target.value})}
+                   />
+                </div>
+
                 <button type="submit" disabled={dietLoading} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
                   {dietLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
                   {dietLoading ? "Gerando..." : "Gerar Dieta"}

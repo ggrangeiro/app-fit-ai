@@ -192,16 +192,23 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
 };
 
 export const generateDietPlan = async (
-  userData: { weight: string; height: string; goal: string; gender: string },
-  analysisContext: AnalysisResult
+  userData: { weight: string; height: string; goal: string; gender: string; observations?: string },
+  analysisContext?: AnalysisResult
 ): Promise<string> => {
   const prompt = `
-    Atue como um nutricionista esportivo de elite com foco em UI/UX moderno.
+    Atue como um nutricionista esportivo de elite com foco em UI/UX moderno e flexibilidade.
     
-    Crie um plano alimentar semanal visualmente incrível e moderno, baseado nestes dados:
+    Crie um plano alimentar semanal visualmente incrível e moderno.
+    
+    PERFIL DO USUÁRIO:
     - Peso: ${userData.weight}kg | Altura: ${userData.height}cm | Sexo: ${userData.gender}
     - Objetivo: ${userData.goal}
-    - Contexto IA: ${analysisContext.formCorrection}
+    
+    OBSERVAÇÕES ALIMENTARES (CRUCIAL):
+    "${userData.observations || 'Nenhuma restrição informada.'}"
+    (Se houver alergias, aversões ou preferências como 'vegano' ou 'jejum', VOCÊ DEVE RESPEITAR RIGOROSAMENTE).
+
+    ${analysisContext ? `- Contexto Biomecânico/Visual (IA): ${analysisContext.formCorrection}` : ''}
     
     INSTRUÇÕES ESPECÍFICAS DE GÊNERO:
     - Ajuste as calorias e macronutrientes considerando o metabolismo basal típico do sexo ${userData.gender}.
