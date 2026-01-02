@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { User, ExerciseType } from '../types';
 import { MockDataService } from '../services/mockDataService';
 import { Dumbbell, ArrowRight, Lock, Mail, UserPlus, User as UserIcon } from 'lucide-react';
-import axios from 'axios';
+import { ToastType } from './Toast';
 
 interface LoginProps {
   onLogin: (user: User) => void;
+  showToast: (message: string, type: ToastType) => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState(''); // New field for registration
@@ -58,8 +59,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             throw new Error(errorMsg);
         }
 
-        const usuarioCriado = await response.json();
-        alert("Cadastro realizado com sucesso! Faça login para continuar.");
+        await response.json();
+        showToast("Cadastro realizado com sucesso! Faça login.", 'success');
         
         // Limpar formulário e mudar para login após sucesso
         setIsRegistering(false);
@@ -105,9 +106,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             avatar: usuarioLogado.avatar,
             assignedExercises: usuarioLogado.assignedExercises || []
         };
-        
-        // Atualiza o MockDataService apenas para manter compatibilidade com funcionalidades locais (opcional)
-        // localStorage.setItem("fitai_current_session", JSON.stringify(appUser)); 
         
         onLogin(appUser);
       }

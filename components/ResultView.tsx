@@ -5,6 +5,7 @@ import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, ArrowLeft, Messa
 import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { EvolutionModal } from './EvolutionModal';
+import { ToastType } from './Toast';
 
 interface ResultViewProps {
   result: AnalysisResult;
@@ -17,6 +18,8 @@ interface ResultViewProps {
   onWorkoutSaved?: () => void;
   onDietSaved?: () => void; // Nova prop para atualizar a dieta na home
   isHistoricalView?: boolean;
+  showToast?: (message: string, type: ToastType) => void;
+  triggerConfirm?: (title: string, message: string, onConfirm: () => void, isDestructive?: boolean) => void;
 }
 
 export const ResultView: React.FC<ResultViewProps> = ({ 
@@ -29,7 +32,9 @@ export const ResultView: React.FC<ResultViewProps> = ({
   onDeleteRecord, 
   onWorkoutSaved,
   onDietSaved,
-  isHistoricalView = false 
+  isHistoricalView = false,
+  showToast = () => {}, // Default empty function if not passed
+  triggerConfirm = () => {} // Default empty
 }) => {
   const [saved, setSaved] = useState(false);
   
@@ -122,8 +127,9 @@ export const ResultView: React.FC<ResultViewProps> = ({
       
       setDietPlanHtml(planHtml);
       setShowDietForm(false);
+      showToast("Dieta gerada com sucesso!", 'success');
     } catch (error) {
-      alert("Erro ao gerar dieta. Tente novamente.");
+      showToast("Erro ao gerar dieta. Tente novamente.", 'error');
     } finally {
       setDietLoading(false);
     }
@@ -163,9 +169,10 @@ export const ResultView: React.FC<ResultViewProps> = ({
       // Atualiza UI apenas depois de tentar salvar
       setWorkoutPlanHtml(planHtml);
       setShowWorkoutForm(false);
+      showToast("Treino gerado com sucesso!", 'success');
 
     } catch (error) {
-      alert("Erro ao gerar treino. Tente novamente.");
+      showToast("Erro ao gerar treino. Tente novamente.", 'error');
     } finally {
       setWorkoutLoading(false);
     }
@@ -218,9 +225,9 @@ ${strengthsText}${improvementsText}
     } else {
       try {
         await navigator.clipboard.writeText(shareText);
-        alert('Resumo detalhado copiado para a área de transferência!');
+        showToast('Resumo copiado para a área de transferência!', 'success');
       } catch (err) {
-        alert('Não foi possível compartilhar neste dispositivo.');
+        showToast('Não foi possível compartilhar neste dispositivo.', 'error');
       }
     }
   };
@@ -384,7 +391,8 @@ ${strengthsText}${improvementsText}
         history={history}
         exerciseType={exercise}
         highlightLatestAsCurrent={true}
-        onDelete={onDeleteRecord} 
+        onDelete={onDeleteRecord}
+        triggerConfirm={triggerConfirm}
       />
 
       {/* Modal Form for Diet */}

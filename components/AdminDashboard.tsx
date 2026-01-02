@@ -4,6 +4,8 @@ import { MockDataService } from '../services/mockDataService';
 import { generateExerciseThumbnail } from '../services/geminiService';
 import { ResultView } from './ResultView';
 import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
+import Toast, { ToastType } from './Toast';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -34,10 +36,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
   // Create User State
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
-  const [createMsg, setCreateMsg] = useState('');
-
+  
   // Local state for assignments editing
   const [editingAssignments, setEditingAssignments] = useState<string[]>([]);
+
+  // --- NEW LOCAL UI STATES FOR ADMIN ---
+  const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
+    message: '', type: 'info', isVisible: false
+  });
+  
+  const [confirmModal, setConfirmModal] = useState<{ 
+    isOpen: boolean; 
+    title: string; 
+    message: string; 
+    onConfirm: () => void; 
+    isDestructive?: boolean;
+  }>({
+    isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false
+  });
+
+  const showToast = (message: string, type: ToastType = 'info') => {
+    setToast({ message, type, isVisible: true });
+  };
+
+  const closeToast = () => {
+    setToast(prev => ({ ...prev, isVisible: false }));
+  };
+
+  const triggerConfirm = (title: string, message: string, onConfirm: () => void, isDestructive = false) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      },
+      isDestructive
+    });
+  };
 
   useEffect(() => {
     // refreshData(); // Not strictly needed for list view anymore as we fetch live
@@ -166,7 +203,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreateMsg('Enviando dados...');
     
     try {
       const url = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
@@ -183,18 +219,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
 
       await MockDataService.createUser(newName, newEmail); // Mantém sync local
       
-      setCreateMsg('Usuário criado com sucesso no Backend!');
+      showToast('Usuário criado com sucesso!', 'success');
       setNewName('');
       setNewEmail('');
       fetchBackendUsers(); // Recarrega lista real
       
       setTimeout(() => {
-        setCreateMsg('');
         setActiveTab('users');
       }, 1500);
 
     } catch (err: any) {
-      setCreateMsg("Erro: " + err.message);
+      showToast("Erro: " + err.message, 'error');
     }
   };
 
@@ -232,50 +267,55 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
   };
 
   // --- SCRIPT DE ATRIBUIÇÃO EM MASSA ---
-  const runAssignmentScript = async () => {
+  const runAssignmentScript = () => {
     if (processing) return;
-    if (!confirm("Isso atribuirá TODOS os exercícios a TODOS os usuários listados. Tem certeza?")) return;
     
-    setProcessing(true);
-    setProgressMsg("Iniciando script de atribuição...");
+    triggerConfirm(
+        "Executar Script em Massa?",
+        "Isso atribuirá TODOS os exercícios a TODOS os usuários listados. Essa ação não pode ser desfeita facilmente.",
+        async () => {
+            setProcessing(true);
+            setProgressMsg("Iniciando script de atribuição...");
 
-    const allExerciseIds = allExercises.map(e => e.id);
+            const allExerciseIds = allExercises.map(e => e.id);
 
-    try {
-        let count = 0;
-        for (const user of users) {
-             setProgressMsg(`Atualizando: ${user.name}...`);
-             
-             try {
-                const payload = {
-                    nome: user.name,
-                    email: user.email,
-                    assignedExercises: allExerciseIds
-                };
+            try {
+                let count = 0;
+                for (const user of users) {
+                     setProgressMsg(`Atualizando: ${user.name}...`);
+                     
+                     try {
+                        const payload = {
+                            nome: user.name,
+                            email: user.email,
+                            assignedExercises: allExerciseIds
+                        };
 
-                const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/usuarios/${user.id}`, {
-                    method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
+                        const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/usuarios/${user.id}`, {
+                            method: 'PUT',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(payload)
+                        });
 
-                if (response.ok) {
-                    count++;
-                } else {
+                        if (response.ok) {
+                            count++;
+                        }
+                     } catch (err) {
+                     }
                 }
-             } catch (err) {
-             }
-        }
-        setProgressMsg(`Sucesso! ${count} usuários atualizados.`);
-        await fetchBackendUsers();
-    } catch (e) {
-        setProgressMsg("Erro crítico ao rodar script.");
-    }
-    
-    setTimeout(() => {
-        setProcessing(false);
-        setProgressMsg('');
-    }, 3000);
+                setProgressMsg(`Sucesso! ${count} usuários atualizados.`);
+                await fetchBackendUsers();
+            } catch (e) {
+                setProgressMsg("Erro crítico ao rodar script.");
+            }
+            
+            setTimeout(() => {
+                setProcessing(false);
+                setProgressMsg('');
+            }, 3000);
+        },
+        false // Not destructive in the "delete" sense, but massive update
+    );
   };
 
   const toggleAssignment = (exerciseId: string) => {
@@ -312,12 +352,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
             // Update list state
             setUsers(prev => prev.map(u => u.id === selectedUser.id ? { ...u, assignedExercises: editingAssignments } : u));
             
-            alert("Permissões salvas no servidor com sucesso!");
+            showToast("Permissões salvas no servidor com sucesso!", 'success');
         } else {
             throw new Error("Servidor rejeitou a atualização.");
         }
     } catch (e: any) {
-        alert("Erro ao salvar no servidor: " + e.message);
+        showToast("Erro ao salvar no servidor: " + e.message, 'error');
     }
 
     // Sync Local Mock just in case
@@ -334,20 +374,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
 
   const handleDeleteRecord = async (recordId: string) => {
     if (!selectedUser) return;
-    if (confirm("Tem certeza que deseja apagar este registro permanentemente?")) {
-        const success = await MockDataService.deleteRecord(selectedUser.id, recordId);
-        if (success) {
-            // Update lists immediately
-            setUserHistoryList(prev => prev.filter(r => r.id !== recordId));
-            setDetailedHistory(prev => prev.filter(r => r.id !== recordId));
-            
-            if (viewingRecord?.id === recordId) {
-                setViewingRecord(null);
+    
+    triggerConfirm(
+        "Excluir Registro",
+        "Tem certeza que deseja apagar este registro permanentemente?",
+        async () => {
+            const success = await MockDataService.deleteRecord(selectedUser.id, recordId);
+            if (success) {
+                // Update lists immediately
+                setUserHistoryList(prev => prev.filter(r => r.id !== recordId));
+                setDetailedHistory(prev => prev.filter(r => r.id !== recordId));
+                
+                if (viewingRecord?.id === recordId) {
+                    setViewingRecord(null);
+                }
+                showToast("Registro removido.", 'success');
+            } else {
+                showToast("Erro ao apagar registro.", 'error');
             }
-        } else {
-            alert("Erro ao apagar registro.");
-        }
-    }
+        },
+        true // Destructive
+    );
   };
 
   // --- FETCH FULL HISTORY FOR MODAL ---
@@ -429,7 +476,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 animate-fade-in">
-      
+      <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} onClose={closeToast} />
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen} 
+        title={confirmModal.title} 
+        message={confirmModal.message} 
+        onConfirm={confirmModal.onConfirm} 
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        isDestructive={confirmModal.isDestructive}
+      />
+
       {/* DETAILED VIEW MODAL */}
       {viewingRecord && selectedUser && (
         <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
@@ -458,6 +514,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                     onReset={() => setViewingRecord(null)}
                     onDeleteRecord={handleDeleteRecord}
                     isHistoricalView={true}
+                    // Pass admin specific toast handler if needed inside result view (optional)
+                    showToast={showToast}
+                    triggerConfirm={triggerConfirm}
                  />
               </div>
            </div>
@@ -568,9 +627,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                   <label className="block text-sm font-medium text-slate-300 mb-2">E-mail</label>
                   <input type="email" required value={newEmail} onChange={e => setNewEmail(e.target.value)} className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
-                {createMsg && (
-                  <div className={`p-4 rounded-xl text-sm ${createMsg.includes('sucesso') ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`}>{createMsg}</div>
-                )}
                 <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all">Cadastrar Usuário</button>
               </form>
             </div>

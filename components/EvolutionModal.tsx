@@ -10,6 +10,7 @@ interface EvolutionModalProps {
   exerciseType: ExerciseType;
   highlightLatestAsCurrent?: boolean; // Se true, marca o primeiro item como "AGORA"
   onDelete?: (recordId: string) => void;
+  triggerConfirm?: (title: string, message: string, onConfirm: () => void, isDestructive?: boolean) => void;
 }
 
 export const EvolutionModal: React.FC<EvolutionModalProps> = ({ 
@@ -18,7 +19,8 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
   history, 
   exerciseType,
   highlightLatestAsCurrent = false,
-  onDelete
+  onDelete,
+  triggerConfirm
 }) => {
   const [comparisonInsight, setComparisonInsight] = useState<string | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
@@ -54,9 +56,21 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
     return "text-red-400";
   };
   
-  const confirmAndDelete = (recordId: string) => {
-      if (confirm("Tem certeza que deseja remover esta análise do histórico?")) {
-          if (onDelete) onDelete(recordId);
+  const handleDeleteClick = (recordId: string) => {
+      if (!onDelete) return;
+
+      if (triggerConfirm) {
+          triggerConfirm(
+              "Remover Registro",
+              "Tem certeza que deseja remover esta análise do histórico permanentemente?",
+              () => onDelete(recordId),
+              true // isDestructive
+          );
+      } else {
+          // Fallback if triggerConfirm is not provided (should not happen in updated App)
+          if (confirm("Tem certeza que deseja remover esta análise do histórico?")) {
+              onDelete(recordId);
+          }
       }
   };
 
@@ -136,7 +150,7 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
                       {/* Delete Button - Positioned absolute top-right */}
                       {onDelete && (
                           <button 
-                            onClick={(e) => { e.stopPropagation(); confirmAndDelete(rec.id); }}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteClick(rec.id); }}
                             className="absolute top-3 right-3 p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-100 md:opacity-0 group-hover:opacity-100 z-20"
                             title="Remover do histórico"
                           >
