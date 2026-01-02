@@ -40,8 +40,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             senha: password
         };
 
-        console.log("Enviando cadastro para:", url, payload);
-
         const response = await fetch(url, {
             method: "POST",
             headers: {
@@ -61,7 +59,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         }
 
         const usuarioCriado = await response.json();
-        console.log("Sucesso:", usuarioCriado);
         alert("Cadastro realizado com sucesso! Faça login para continuar.");
         
         // Limpar formulário e mudar para login após sucesso
@@ -82,8 +79,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             senha: password
         };
 
-        console.log("Tentando login em:", loginUrl);
-
         const response = await fetch(loginUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -99,7 +94,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         }
 
         const usuarioLogado = await response.json();
-        console.log("Login realizado com sucesso:", usuarioLogado);
 
         // Mapeamento de segurança para garantir que o formato User seja respeitado
         // Caso o backend retorne 'nome' ao invés de 'name', ajustamos aqui
@@ -118,7 +112,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         onLogin(appUser);
       }
     } catch (err: any) {
-      console.error('Erro na operação:', err);
       const mensagemErro = err.message || 'Ocorreu um erro. Tente novamente.';
       setError(mensagemErro);
     } finally {

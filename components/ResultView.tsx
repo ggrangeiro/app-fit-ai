@@ -105,8 +105,6 @@ export const ResultView: React.FC<ResultViewProps> = ({
             goal: dietFormData.goal
         };
 
-        console.log("Salvando dieta no backend...", payload);
-
         const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/dietas", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -114,16 +112,12 @@ export const ResultView: React.FC<ResultViewProps> = ({
         });
 
         if (response.ok) {
-            console.log("Dieta salva com sucesso.");
             // Notifica o App.tsx para atualizar a lista de dietas
             if (onDietSaved) {
                 onDietSaved();
             }
-        } else {
-            console.warn("Falha ao salvar dieta no backend.");
         }
       } catch (backendError) {
-        console.error("Erro de conexão ao salvar dieta:", backendError);
       }
       
       setDietPlanHtml(planHtml);
@@ -157,17 +151,13 @@ export const ResultView: React.FC<ResultViewProps> = ({
         });
 
         if (response.ok) {
-            console.log("Treino salvo no backend com sucesso.");
             // Notifica o componente pai (App) para atualizar a lista de treinos na home
             if (onWorkoutSaved) {
                 onWorkoutSaved();
             }
-        } else {
-            console.warn("Falha ao salvar treino no backend.");
         }
 
       } catch (backendError) {
-          console.error("Erro de conexão ao salvar treino:", backendError);
       }
 
       // Atualiza UI apenas depois de tentar salvar
@@ -224,7 +214,6 @@ ${strengthsText}${improvementsText}
           text: shareText,
         });
       } catch (err) {
-        console.log('User closed share dialog');
       }
     } else {
       try {

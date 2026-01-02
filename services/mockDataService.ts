@@ -1,4 +1,3 @@
-
 import { ExerciseDTO, ExerciseRecord, User, UserRole, AnalysisResult } from "../types";
 
 // Keys for LocalStorage
@@ -101,7 +100,6 @@ export const MockDataService = {
           }
           return FALLBACK_EXERCISES;
       } catch (e) {
-          console.error("Erro ao buscar exercícios globais:", e);
           return FALLBACK_EXERCISES;
       }
   },
@@ -119,7 +117,6 @@ export const MockDataService = {
         const data = await response.json();
         
         if (Array.isArray(data)) {
-            console.log("Exercícios RAW do backend:", data);
             
             // MAP TRANSFORM: Backend Format -> Frontend ExerciseDTO
             const mappedExercises: ExerciseDTO[] = data.map((item: any) => {
@@ -143,10 +140,8 @@ export const MockDataService = {
             return mappedExercises;
         }
       }
-      console.warn(`API de exercícios do usuário retornou status ${response.status} ou formato inválido.`);
       return [];
     } catch (error) {
-      console.error("Erro de conexão ao buscar exercícios do usuário:", error);
       return [];
     }
   },
@@ -257,7 +252,6 @@ export const MockDataService = {
     const URL = `https://testeai-732767853162.us-west1.run.app/api/historico/${userId}/${recordId}`;
     
     try {
-        console.log("Removendo registro:", URL);
         const response = await fetch(URL, { method: 'DELETE' });
         
         // Verifica se a requisição HTTP foi bem sucedida
@@ -276,7 +270,6 @@ export const MockDataService = {
             } catch (jsonError) {
                 // Fallback: se não retornar JSON mas foi 200 OK (algumas APIs retornam 204 No Content)
                 // Assumimos sucesso e limpamos localmente
-                console.warn("Resposta sem JSON, assumindo sucesso pelo status 200/204");
                 const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
                 const updatedRecords = records.filter(r => r.id !== recordId);
                 localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
@@ -285,7 +278,6 @@ export const MockDataService = {
         }
         return false;
     } catch (e) {
-        console.error("Erro ao deletar registro:", e);
         return false;
     }
   },
@@ -324,7 +316,6 @@ export const MockDataService = {
     try {
       localStorage.setItem(IMAGES_KEY, JSON.stringify(images));
     } catch (e) {
-      console.warn("Storage quota exceeded, images might not persist fully.");
     }
   }
 };

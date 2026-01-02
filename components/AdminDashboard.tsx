@@ -118,7 +118,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
         setUsers(mappedUsers);
         
     } catch (err: any) {
-        console.error("Erro ao buscar usuários do backend:", err.message);
         // Fallback para mock se falhar, apenas para não deixar vazio
         if (users.length === 0) setUsers(MockDataService.getUsers());
     }
@@ -156,11 +155,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
             setUserHistoryList(sorted);
         } else {
              // Fallback to local storage if API fails
-             console.warn("Backend history fetch failed, falling back to local.");
              setUserHistoryList(MockDataService.getUserHistory(userId));
         }
     } catch (e) {
-        console.error("Error fetching user history list:", e);
         setUserHistoryList(MockDataService.getUserHistory(userId));
     } finally {
         setLoadingHistory(false);
@@ -197,7 +194,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
       }, 1500);
 
     } catch (err: any) {
-      console.error(err);
       setCreateMsg("Erro: " + err.message);
     }
   };
@@ -218,7 +214,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
           newImages[ex.id] = base64Image;
           MockDataService.saveExerciseImages(newImages);
         } catch (e) {
-          console.error(`Failed to generate for ${ex.name}`, e);
         }
       }
       
@@ -267,17 +262,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                 if (response.ok) {
                     count++;
                 } else {
-                    console.warn(`Falha ao atualizar user ${user.id}`);
                 }
              } catch (err) {
-                 console.error(`Erro user ${user.id}`, err);
              }
         }
         setProgressMsg(`Sucesso! ${count} usuários atualizados.`);
         await fetchBackendUsers();
     } catch (e) {
         setProgressMsg("Erro crítico ao rodar script.");
-        console.error(e);
     }
     
     setTimeout(() => {
@@ -360,23 +352,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
 
   // --- FETCH FULL HISTORY FOR MODAL ---
   const handleViewRecordDetails = async (record: ExerciseRecord) => {
-    // Normalize exercise ID if needed
-    let normalizedRecord = { ...record };
-    const lowerEx = record.exercise.toLowerCase();
+    // Determine the ID to send to the backend.
+    // record.exercise might be the ID (e.g., BENCH_PRESS) or Name (e.g., Supino) depending on when it was saved.
+    let exerciseIdToSend = record.exercise;
     
-    if (lowerEx.includes('postura') || lowerEx.includes('posture')) {
+    // Attempt to resolve Name to Alias/ID if possible using the loaded exercise list
+    const knownExercise = allExercises.find(e => e.name === record.exercise || e.alias === record.exercise);
+    if (knownExercise) {
+        exerciseIdToSend = knownExercise.alias;
+    }
+
+    // Normalize special exercises logic
+    let normalizedRecord = { ...record };
+    const lowerEx = exerciseIdToSend.toLowerCase();
+    
+    if (lowerEx.includes('postura') || lowerEx.includes('posture') || lowerEx === 'posture_analysis') {
+        exerciseIdToSend = 'POSTURE_ANALYSIS';
         normalizedRecord.exercise = 'POSTURE_ANALYSIS';
-    } else if (lowerEx.includes('gordura') || lowerEx.includes('body') || lowerEx.includes('corporal')) {
+    } else if (lowerEx.includes('gordura') || lowerEx.includes('body') || lowerEx.includes('corporal') || lowerEx === 'body_composition') {
+        exerciseIdToSend = 'BODY_COMPOSITION';
         normalizedRecord.exercise = 'BODY_COMPOSITION';
     }
     
     setViewingRecord(normalizedRecord);
-    
-    // Initial state with simple array to prevent blink
     setDetailedHistory([normalizedRecord]);
     
     try {
-        const encodedExercise = encodeURIComponent(record.exercise);
+        const encodedExercise = encodeURIComponent(exerciseIdToSend);
         const url = `https://testeai-732767853162.us-west1.run.app/api/historico/${record.userId}?exercise=${encodedExercise}`;
         
         const response = await fetch(url, {
@@ -393,7 +395,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
             }
         }
     } catch (e) {
-        console.error("Error fetching detailed history:", e);
     }
   };
 
@@ -669,16 +670,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                   )}
 
                   {/* GROUPED RECORDS RENDER */}
-                  {Object.entries(groupedRecords).map(([exerciseName, recordsVal]) => {
+                  {Object.entries(groupedRecords).map(([exerciseKey, recordsVal]) => {
                      const records = recordsVal as ExerciseRecord[];
-                     // Tenta encontrar um nome amigável para o cabeçalho
-                     const friendlyName = allExercises.find(e => e.id === exerciseName)?.name || exerciseName;
+                     // Tenta encontrar um nome amigável para o cabeçalho usando ID/Alias/Nome
+                     // exerciseKey deve ser o ID (ex: BENCH_PRESS)
+                     const friendlyName = allExercises.find(e => e.alias === exerciseKey || e.id === exerciseKey || e.name === exerciseKey)?.name || exerciseKey;
                      
                      return (
-                         <div key={exerciseName} className="mb-6 animate-in slide-in-from-bottom-2">
+                         <div key={exerciseKey} className="mb-6 animate-in slide-in-from-bottom-2">
                             <h5 className="text-white font-bold text-md mb-3 border-b border-slate-700/50 pb-2 flex items-center gap-2 sticky top-0 bg-slate-900/90 p-2 rounded-lg backdrop-blur-sm z-10">
                                 <div className="p-1.5 bg-slate-800 rounded-lg">
-                                  {getExerciseIcon(exerciseName)}
+                                  {getExerciseIcon(exerciseKey)}
                                 </div>
                                 <span className="truncate">{friendlyName}</span>
                                 <span className="text-xs text-slate-500 font-normal ml-auto bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">{records.length} registros</span>

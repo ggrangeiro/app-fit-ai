@@ -43,7 +43,6 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
       const insight = await generateProgressInsight(latest.result, previous.result, exerciseType);
       setComparisonInsight(insight);
     } catch (e) {
-      console.error("Erro ao gerar insight:", e);
     } finally {
       setLoadingInsight(false);
     }

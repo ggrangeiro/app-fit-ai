@@ -127,16 +127,13 @@ const App: React.FC = () => {
     setLoadingExercises(true);
     try {
       if (user.role === 'admin') {
-         console.log("Admin logado, buscando catálogo global...");
          const exercises = await MockDataService.fetchExercises();
          setExercisesList(exercises);
       } else {
-         console.log(`Buscando exercícios atribuídos para usuário ${user.id}...`);
          const myExercises = await MockDataService.fetchUserExercises(user.id);
          setExercisesList(myExercises);
       }
     } catch (e) {
-      console.error("Error loading exercises list", e);
     } finally {
       setLoadingExercises(false);
     }
@@ -154,7 +151,6 @@ const App: React.FC = () => {
         setSavedWorkouts(Array.isArray(data) ? data : []);
       }
     } catch (e) {
-      console.error("Error fetching workouts:", e);
     } finally {
       setLoadingWorkouts(false);
     }
@@ -172,7 +168,6 @@ const App: React.FC = () => {
         setSavedDiets(Array.isArray(data) ? data : []);
       }
     } catch (e) {
-      console.error("Error fetching diets:", e);
     } finally {
       setLoadingDiets(false);
     }
@@ -284,9 +279,11 @@ const App: React.FC = () => {
     try {
         // Encontra o exercício para pegar o nome
         const exerciseObj = exercisesList.find(e => e.id === selectedExercise);
-        const nameToSend = exerciseObj ? exerciseObj.name : selectedExercise;
+        
+        // BACKEND ID (Alias) - Para buscar o histórico correto
+        const idToSend = exerciseObj ? exerciseObj.alias : selectedExercise;
 
-        const encodedExercise = encodeURIComponent(nameToSend);
+        const encodedExercise = encodeURIComponent(idToSend);
         const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
         
         const response = await fetch(historyUrl, {
@@ -306,7 +303,6 @@ const App: React.FC = () => {
             alert("Não foi possível carregar o histórico.");
         }
     } catch (e) {
-        console.error("Erro ao buscar histórico:", e);
         alert("Erro de conexão.");
     } finally {
         setLoadingHistory(false);
@@ -329,16 +325,18 @@ const App: React.FC = () => {
     // Encontra o objeto do exercício selecionado
     const exerciseObj = exercisesList.find(e => e.id === selectedExercise);
     
-    // Determina o nome para análise:
-    // - Para SPECIAL (Postura/Biotipo), precisamos mandar o ID canônico (ex: 'POSTURE_ANALYSIS') para ativar a lógica correta na GeminiService.
-    // - Para STANDARD, mandamos o NOME real (ex: 'Supino Reto') para dar contexto melhor ao prompt.
-    // - Se for FREE_MODE, é o próprio ID.
-    let typeForAnalysis = selectedExercise;
+    // Separamos o que vai pra IA (Nome é melhor contexto) do que vai pro Backend (ID é obrigatório)
+    let aiContextName = selectedExercise;
+    let backendId = selectedExercise;
     
     if (selectedExercise === SPECIAL_EXERCISES.FREE_MODE) {
-        typeForAnalysis = SPECIAL_EXERCISES.FREE_MODE;
+        aiContextName = "Análise Livre";
+        backendId = SPECIAL_EXERCISES.FREE_MODE;
     } else if (exerciseObj) {
-        typeForAnalysis = exerciseObj.category === 'SPECIAL' ? exerciseObj.alias : exerciseObj.name;
+        // Envia o Nome Legível para o Gemini entender melhor
+        aiContextName = exerciseObj.name;
+        // Envia o ID TÉCNICO (Alias) para o Backend salvar no banco
+        backendId = exerciseObj.alias;
     }
 
     try {
@@ -360,7 +358,7 @@ const App: React.FC = () => {
       
       if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
           try {
-            const encodedExercise = encodeURIComponent(typeForAnalysis);
+            const encodedExercise = encodeURIComponent(backendId);
             const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
             const historyResponse = await fetch(historyUrl, { method: "GET" });
             if (historyResponse.ok) {
@@ -370,11 +368,11 @@ const App: React.FC = () => {
                 }
             }
           } catch (histErr) {
-            console.warn("Sem histórico para contexto.", histErr);
           }
       }
 
-      const result = await analyzeVideo(finalFile, typeForAnalysis, previousRecord?.result);
+      // Chama a IA usando o NOME do exercício (melhor contexto semântico)
+      const result = await analyzeVideo(finalFile, aiContextName, previousRecord?.result);
       
       if (!result.isValidContent) {
         setError(result.validationError || "Conteúdo inválido para este exercício.");
@@ -387,11 +385,11 @@ const App: React.FC = () => {
       if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
           try {
             const saveUrl = "https://testeai-732767853162.us-west1.run.app/api/historico";
-            // Salvamos com o nome que foi usado na análise (typeForAnalysis) para consistência no histórico
+            // Salvamos com o ID TÉCNICO (backendId) para consistência no banco
             const payload = {
               userId: currentUser.id,
               userName: currentUser.name,
-              exercise: typeForAnalysis,
+              exercise: backendId, // Alterado para enviar o ID/Alias
               timestamp: Date.now(),
               result: { ...result, date: new Date().toISOString() }
             };
@@ -402,7 +400,7 @@ const App: React.FC = () => {
             });
             
             try {
-                const encodedExercise = encodeURIComponent(typeForAnalysis);
+                const encodedExercise = encodeURIComponent(backendId);
                 const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
                 const historyResponse = await fetch(historyUrl, { method: "GET" });
                 if (historyResponse.ok) {
@@ -410,11 +408,9 @@ const App: React.FC = () => {
                     setHistoryRecords(fullHistoryData);
                 }
             } catch (e) {
-                console.error("Erro atualização histórico:", e);
             }
 
           } catch (saveError) {
-            console.error("Falha ao salvar:", saveError);
           }
       }
 
@@ -872,112 +868,6 @@ const App: React.FC = () => {
                 >
                     Continuar <ArrowRight className="w-5 h-5" />
                 </button>
-            </div>
-          </div>
-        )}
-
-        {/* Modal de Evolução Separado (Acionado pelo dashboard) */}
-        {selectedExercise && (
-             <EvolutionModal 
-                isOpen={showEvolutionModal}
-                onClose={() => setShowEvolutionModal(false)}
-                history={historyRecords}
-                // Se for modo livre, passa a string. Se for obj, passa o nome.
-                exerciseType={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.name || 'Exercício')}
-                highlightLatestAsCurrent={false}
-                onDelete={handleDeleteRecord} 
-            />
-        )}
-
-        {step === AppStep.UPLOAD_VIDEO && selectedExercise && (
-          <div className="w-full max-w-3xl animate-fade-in">
-            <div className="glass-panel rounded-3xl p-6 md:p-12 shadow-2xl">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Envio de Mídia</h2>
-                <p className="text-slate-400">Analise seu <span className="text-blue-400 font-semibold">{selectedExerciseName}</span></p>
-                <div className="mt-4 flex items-center justify-center gap-2 px-4 py-2 bg-blue-500/10 rounded-full border border-blue-500/20 w-fit mx-auto">
-                   <ShieldCheck className="w-4 h-4 text-blue-400" />
-                   <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">IA de Validação Ativa</span>
-                </div>
-              </div>
-              
-              <div className="flex flex-col gap-4 mb-8">
-                <div className="relative w-full">
-                  <label htmlFor="video-upload" className={`group relative flex flex-col items-center justify-center w-full rounded-2xl cursor-pointer transition-all duration-300 overflow-hidden ${mediaFile ? 'bg-black border-slate-700 h-auto aspect-video' : 'h-64 border-2 border-dashed border-slate-600 bg-slate-800/30 hover:border-blue-500'}`}>
-                    {mediaPreview ? (
-                      <>
-                        {mediaFile?.type.startsWith('image/') ? <img src={mediaPreview} className="h-full w-full object-contain" /> : <video src={mediaPreview} className="h-full w-full object-contain" controls={false} autoPlay muted loop playsInline />}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                           <div className="flex flex-col items-center gap-2 text-white">
-                             <RefreshCcw className="w-10 h-10" />
-                             <span className="font-bold">Clique para Trocar</span>
-                           </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center p-4">
-                        <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mb-4 text-slate-300 group-hover:text-blue-400 transition-colors shadow-lg">
-                          {isSpecialMode ? <ImageIcon className="w-8 h-8" /> : <UploadCloud className="w-8 h-8" />}
-                        </div>
-                        <p className="text-slate-200 font-bold text-lg">Selecionar da Galeria</p>
-                        <p className="text-slate-500 text-xs mt-2">Certifique-se de que um humano está visível</p>
-                      </div>
-                    )}
-                    <input ref={fileInputRef} id="video-upload" type="file" accept={isSpecialMode ? "video/*,image/*" : "video/*"} className="hidden" onChange={handleFileChange} />
-                  </label>
-                  
-                  {mediaFile && (
-                    <button 
-                      onClick={clearSelectedMedia}
-                      className="absolute -top-3 -right-3 p-2 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-500 transition-colors z-10"
-                      title="Remover arquivo"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {error && (
-                <div className="mb-6 p-5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-200 text-center text-sm flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 shadow-xl shadow-red-950/20">
-                   <div className="flex items-center gap-4 text-left">
-                     <div className="p-2 bg-red-500/20 rounded-full"><AlertTriangle className="w-6 h-6 text-red-400 shrink-0" /></div>
-                     <div>
-                       <p className="font-bold text-red-400">Conteúdo Rejeitado</p>
-                       <p className="opacity-80 leading-relaxed">{error}</p>
-                     </div>
-                   </div>
-                   <button 
-                    onClick={triggerFilePicker}
-                    className="flex items-center gap-2 whitespace-nowrap px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg text-xs font-bold transition-all border border-red-500/30"
-                   >
-                     <RefreshCcw className="w-3 h-3" /> Trocar Arquivo
-                   </button>
-                </div>
-              )}
-
-              {mediaFile && !error && (
-                <div className="mb-6 flex justify-center">
-                   <button 
-                    onClick={triggerFilePicker}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-semibold transition-all border border-slate-700"
-                   >
-                     <RefreshCcw className="w-4 h-4" /> Escolher outro arquivo
-                   </button>
-                </div>
-              )}
-
-              <div className="flex gap-4">
-                <button 
-                  onClick={handleGoBackToSelect} 
-                  className="px-6 py-4 rounded-xl bg-transparent border border-slate-600 text-slate-300 hover:bg-slate-800 transition-all"
-                >
-                  Voltar
-                </button>
-                <button disabled={!mediaFile} onClick={handleAnalysis} className={`flex-1 px-8 py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-3 text-lg ${mediaFile ? 'bg-white text-blue-900 hover:bg-slate-100 shadow-lg' : 'bg-slate-800 text-slate-500'}`}>
-                  {mediaFile && <Sparkles className="w-5 h-5 text-blue-600" />} Analisar Agora
-                </button>
-              </div>
             </div>
           </div>
         )}

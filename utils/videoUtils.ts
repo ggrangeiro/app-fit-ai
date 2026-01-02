@@ -65,7 +65,6 @@ export const compressVideo = async (file: File): Promise<File> => {
         video.remove();
         canvas.remove();
         
-        console.log(`Video compressed: ${Math.round(file.size/1024/1024)}MB -> ${Math.round(compressedFile.size/1024/1024)}MB`);
         resolve(compressedFile);
       };
 

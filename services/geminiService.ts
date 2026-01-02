@@ -23,7 +23,6 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
 
 // Agora aceita um terceiro argumento opcional: previousAnalysis
 export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previousAnalysis?: AnalysisResult | null): Promise<AnalysisResult> => {
-  console.log(`Iniciando análise detalhada para: ${exerciseType}`);
   
   const mediaPart = await fileToGenerativePart(file);
 
@@ -186,7 +185,6 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
     }
     throw new Error("Falha na interpretação da IA.");
   } catch (error: any) {
-    console.error("Gemini Error:", error);
     throw error;
   }
 };
@@ -239,7 +237,6 @@ export const generateDietPlan = async (
 
     return response.text || "<p>Erro ao gerar dieta.</p>";
   } catch (e) {
-    console.error("Erro ao gerar dieta", e);
     throw new Error("Não foi possível gerar o plano alimentar no momento.");
   }
 };
@@ -299,7 +296,6 @@ export const generateWorkoutPlan = async (
 
     return response.text || "<p>Erro ao gerar treino.</p>";
   } catch (e) {
-    console.error("Erro ao gerar treino", e);
     throw new Error("Não foi possível gerar o plano de treino no momento.");
   }
 };
@@ -350,7 +346,6 @@ export const generateExerciseThumbnail = async (exerciseName: string): Promise<s
     }
     throw new Error("No image data.");
   } catch (e) {
-    console.error("Image generation failed", e);
     throw e;
   }
 };
