@@ -669,7 +669,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                   )}
 
                   {/* GROUPED RECORDS RENDER */}
-                  {Object.entries(groupedRecords).map(([exerciseName, records]) => {
+                  {Object.entries(groupedRecords).map(([exerciseName, recordsVal]) => {
+                     const records = recordsVal as ExerciseRecord[];
                      // Tenta encontrar um nome amigável para o cabeçalho
                      const friendlyName = allExercises.find(e => e.id === exerciseName)?.name || exerciseName;
                      

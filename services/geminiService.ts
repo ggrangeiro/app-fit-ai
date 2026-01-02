@@ -38,13 +38,13 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
     `;
   } else {
     validationRules = `
-      REGRA DE OURO: VOCÊ É UM FILTRO DE CONTEXTO FITNESS ULTRA-RIGOROSO.
+      REGRA DE OURO: VOCÊ É UM FILTRO DE CONTEXTO FITNESS.
       1. Valide se o vídeo contém um humano realizando "${exerciseType}".
       2. Se for inválido (esporte errado, sem pessoa, meme), retorne isValidContent: false.
     `;
   }
 
-  // Construção do contexto histórico (Apenas para conhecimento da IA, não para o texto final da Dica de Mestre)
+  // Construção do contexto histórico
   let historyContext = "";
   if (previousAnalysis) {
     historyContext = `
@@ -54,25 +54,29 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
     `;
   }
 
-  // Novas regras de estilo para feedback DETALHADO
+  // NOVA PERSONA: Amigável e para Iniciantes
   const detailedStyle = `
-    VOCÊ É UM TREINADOR DE BIOMECÂNICA DE ELITE (PhD em Cinesiologia).
+    VOCÊ É UM PERSONAL TRAINER PARCEIRO, EXTREMAMENTE AMIGÁVEL E DIDÁTICO.
     
-    Seu objetivo não é apenas corrigir, mas EDUCAR. A análise deve ser rica, detalhada e técnica, mas acessível.
+    Seu aluno é um INICIANTE completo. 
+    Seu objetivo é fazer ele se sentir bem por ter tentado, enquanto corrige a postura com carinho e simplicidade.
     
-    IMPORTANTE SOBRE A RESPOSTA 'formCorrection':
-    - Analise APENAS a execução ATUAL (deste vídeo).
-    - NÃO compare com o histórico anterior neste campo. NÃO diga "você melhorou em relação à vez passada".
-    - O feedback deve ser absoluto sobre o vídeo atual.
+    DIRETRIZES DE TOM (IMPORTANTE):
+    - NÃO use termos técnicos complexos (como "rotação externa", "valgo dinâmico") sem explicar de jeito simples (ex: "joelho para dentro").
+    - Use linguagem coloquial e acolhedora.
+    - Use EMOJIS para deixar a mensagem leve e divertida. 😃💪✨
+    
+    IMPORTANTE SOBRE A RESPOSTA 'formCorrection' (Dica de Mestre):
+    - Deve parecer um conselho de um amigo experiente.
+    - Exemplo de tom desejado: "Olha, você mandou super bem na vontade! Só cuidado para não deixar as costas dobrarem, tá? Isso protege sua coluna. Tente estufar o peito na próxima!"
+    - Analise APENAS a execução ATUAL.
     
     ESTRUTURA DA RESPOSTA:
-    1. "strengths": Identifique 2 a 3 pontos que o usuário executou PERFEITAMENTE. Elogie a técnica (ex: estabilidade, amplitude, ritmo).
-    2. "improvements": Liste 3 a 5 correções CRÍTICAS. Para cada correção, forneça:
-       - "instruction": A ordem direta do que mudar.
-       - "detail": A explicação biomecânica ou o risco de lesão associado (O PORQUÊ).
-    3. "feedback": Use este array para dar notas (0-100) para partes específicas do corpo (ex: Cabeça, Tronco, Quadril, Joelhos, Pés).
-    
-    O tom deve ser encorajador porém rigoroso tecnicamente.
+    1. "strengths": Identifique 2 a 3 coisas boas (mesmo que seja a energia ou a tentativa).
+    2. "improvements": Correções focadas em SEGURANÇA.
+       - "instruction": O que fazer (muito simples).
+       - "detail": Por que fazer (ex: "para não doer as costas").
+    3. "feedback": Notas 0-100 para partes do corpo.
   `;
 
   let prompt = '';
@@ -82,9 +86,9 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
       ${validationRules}
       ${detailedStyle}
       ${historyContext}
-      Contexto: Análise Postural Estática ou Dinâmica.
-      Instrução: Realize uma varredura completa. Identifique desvios como Hiperlordose, Hipercifose, Escoliose, Valgo Dinâmico, Cabeça protusa.
-      Dê detalhes sobre como esses desvios afetam o dia a dia.
+      Contexto: Análise Postural.
+      Instrução: Olhe para a postura da pessoa. Diga se ela está curvada, torta ou alinhada.
+      Explique como melhorar a postura no dia a dia de trabalho ou estudo.
       Responda EXCLUSIVAMENTE em JSON.
     `;
   } else if (exerciseType === SPECIAL_EXERCISES.BODY_COMPOSITION) {
@@ -92,11 +96,11 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
       ${validationRules}
       ${detailedStyle}
       ${historyContext}
-      Contexto: Avaliação Antropométrica Visual.
+      Contexto: Avaliação Visual do Corpo.
       Instrução: Estime o biotipo e a gordura corporal.
-      IMPORTANTE: Identifique visualmente o sexo biológico (masculino ou feminino) para ajustar a estimativa de gordura e sugestões.
+      IMPORTANTE: Identifique visualmente o sexo biológico (masculino ou feminino) para ajustar a estimativa.
       
-      No campo "improvements", sugira focos estéticos ou de saúde baseados no biotipo identificado (ex: "Focar em deltoide lateral para equilibrar a silhueta").
+      No campo "improvements", dê dicas de saúde e estética leves baseadas no corpo da pessoa.
       
       IMPORTANTE: Preencha "repetitions" com a % de gordura estimada (apenas número).
       Preencha "gender" com 'masculino' ou 'feminino'.
@@ -108,9 +112,8 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
       ${detailedStyle}
       Contexto: O usuário enviou um vídeo de um exercício DESCONHECIDO.
       Instrução:
-      1. Identifique o nome do exercício e preencha OBRIGATORIAMENTE o campo "identifiedExercise" (ex: "Agachamento Livre", "Supino Reto").
-      2. Realize a análise biomecânica completa do movimento identificado.
-      3. Analise a fase concêntrica e excêntrica. Verifique a estabilidade articular.
+      1. Identifique o nome do exercício e preencha OBRIGATORIAMENTE o campo "identifiedExercise".
+      2. Analise se ele está fazendo de um jeito seguro.
       Responda EXCLUSIVAMENTE em JSON.
     `;
   } else {
@@ -118,16 +121,15 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
       ${validationRules}
       ${detailedStyle}
       ${historyContext}
-      Contexto: Treinamento Resistido / Cardio (${exerciseType}).
-      Instrução: Analise a fase concêntrica e excêntrica. Verifique a estabilidade articular.
-      Identifique compensações musculares.
+      Contexto: Exercício "${exerciseType}".
+      Instrução: Analise a execução focando na segurança do iniciante.
       Responda EXCLUSIVAMENTE em JSON.
     `;
   }
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Upgrade para modelo Pro para melhor raciocínio biomecânico
+      model: 'gemini-3-pro-preview', // Mantido modelo Pro para qualidade da análise visual
       contents: {
         parts: [mediaPart, { text: prompt }],
       },
@@ -143,37 +145,35 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
             gender: { type: Type.STRING, description: "Sexo estimado: 'masculino' ou 'feminino'" },
             identifiedExercise: { type: Type.STRING, description: "Nome do exercício identificado (apenas para modo livre)" },
             
-            // Novos campos detalhados
             strengths: { 
               type: Type.ARRAY, 
               items: { type: Type.STRING },
-              description: "Lista de pontos positivos da execução"
+              description: "Lista de pontos positivos amigáveis"
             },
             improvements: {
               type: Type.ARRAY,
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  instruction: { type: Type.STRING, description: "Ação corretiva direta" },
-                  detail: { type: Type.STRING, description: "Explicação técnica/biomecânica do erro" }
+                  instruction: { type: Type.STRING, description: "O que ajustar (simples)" },
+                  detail: { type: Type.STRING, description: "Por que ajustar (segurança)" }
                 },
                 required: ["instruction", "detail"]
               }
             },
             
-            // Feedback segmentado por parte do corpo
             feedback: { 
               type: Type.ARRAY, 
               items: { 
                 type: Type.OBJECT,
                 properties: {
-                  message: { type: Type.STRING, description: "Nome da parte do corpo avaliada (ex: Joelhos)" },
-                  score: { type: Type.NUMBER, description: "Nota de 0 a 100 para essa parte" }
+                  message: { type: Type.STRING, description: "Parte do corpo" },
+                  score: { type: Type.NUMBER, description: "Nota 0-100" }
                 },
                 required: ["message", "score"]
               }
             },
-            formCorrection: { type: Type.STRING, description: "Resumo geral técnico da execução atual. Dica de Mestre." },
+            formCorrection: { type: Type.STRING, description: "Dica de Mestre: Resumo amigável, motivador e simples." },
             muscleGroups: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
           required: ["isValidContent", "score", "repetitions", "feedback", "formCorrection", "muscleGroups"]
@@ -250,9 +250,9 @@ export const generateWorkoutPlan = async (
   }
 
   const prompt = `
-    Atue como um Personal Trainer de elite e Especialista em Biomecânica e Reabilitação.
+    Atue como um Personal Trainer Parceiro e Motivador.
     
-    Crie um plano de treino semanal visualmente incrível e moderno.
+    Crie um plano de treino semanal visualmente incrível, moderno e FÁCIL DE ENTENDER.
     
     DADOS DO ALUNO:
     - Peso: ${userData.weight}kg | Altura: ${userData.height}cm | Sexo: ${userData.gender}
@@ -263,22 +263,23 @@ export const generateWorkoutPlan = async (
     OBSERVAÇÕES: "${userData.observations || 'Nenhuma.'}"
     ${analysisContext ? `ANÁLISE BIOMECÂNICA (IA): "${technicalAdjustments}"` : ''}
     
-    INSTRUÇÕES DE INTEGRAÇÃO E GÊNERO:
-    1. Considere diferenças fisiológicas para o sexo ${userData.gender} (ex: volume de treino, recuperação, ênfases estéticas comuns se não especificado o contrário).
-    2. Se houver dor relatada, adapte.
-    3. Use aquecimento para corrigir biomecânica detectada (se houver análise).
-    
     DIRETRIZES DE DESIGN E HTML (LEGIBILIDADE TOTAL):
     1. Estrutura Visual: Padrão "Card/Grid" moderno.
-    2. CORES E FONTES (MUITO IMPORTANTE):
+    2. CORES E FONTES:
        - Fundo dos Cards: Branco (bg-white).
        - Texto dos Exercícios: OBRIGATORIAMENTE ESCURO ('text-slate-900').
-       - Títulos e Cabeçalhos: Use AZUL ESCURO ou INDIGO ESCURO ('text-blue-800', 'text-indigo-900').
-       - PROIBIDO usar texto cinza claro, prata ou cores lavadas dentro dos cards brancos. O contraste deve ser alto.
-    3. ESTILO DO CARD DE FREQUÊNCIA:
+       - Títulos: Use AZUL ESCURO ou INDIGO ESCURO.
+       - Contraste alto é obrigatório.
+    3. LINKS DE VÍDEO (OBRIGATÓRIO - BOTÃO YOUTUBE):
+       - Para TODO exercício listado na ficha, adicione um botão link ao lado do nome.
+       - Texto do link: "🎥 Ver vídeo"
+       - URL: "https://www.youtube.com/results?search_query=NOME_DO_EXERCICIO_AQUI"
+       - OBRIGATÓRIO: target="_blank" para abrir em nova aba.
+       - Estilo (Tailwind): "text-[10px] sm:text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded-full ml-2 no-underline inline-flex items-center gap-1 transition-colors".
+    4. ESTILO DO CARD DE FREQUÊNCIA:
        - Escreva APENAS o número seguido de 'x' (ex: <span class="text-blue-900 font-bold">4x</span>).
-    4. Dia de Descanso (Domingo):
-       - Fundo escuro (bg-slate-800). Texto BRANCO (text-white).
+    5. Dia de Descanso:
+       - Fundo escuro (bg-slate-800). Texto BRANCO.
     
     O output deve ser APENAS o código HTML do conteúdo interno.
   `;
@@ -304,26 +305,18 @@ export const generateProgressInsight = async (
   const isBodyComp = exerciseType === SPECIAL_EXERCISES.BODY_COMPOSITION;
   
   const prompt = `
-    Atue como um Coach Esportivo Parceiro e Analítico.
+    Atue como um Amigo de Treino Motivador.
     
-    OBJETIVO: Comparar exclusivamente a execução ATUAL (HOJE) com a execução IMEDIATAMENTE ANTERIOR (HISTÓRICO).
+    OBJETIVO: Comparar a execução de HOJE com a ANTERIOR.
     Exercício: ${exerciseType}
     
-    DADOS DA SESSÃO ATUAL (HOJE):
-    - Score Técnico: ${currentResult.score}/100
-    - ${isBodyComp ? '% Gordura' : 'Repetições'}: ${currentResult.repetitions}
-    - Feedback da IA: "${currentResult.formCorrection}"
-
-    DADOS DA SESSÃO ANTERIOR (PASSADO):
-    - Score Técnico: ${previousResult.score}/100
-    - ${isBodyComp ? '% Gordura' : 'Repetições'}: ${previousResult.repetitions}
-    - Feedback Passado: "${previousResult.formCorrection}"
+    HOJE: Score ${currentResult.score}/100.
+    ANTERIOR: Score ${previousResult.score}/100.
 
     INSTRUÇÕES:
-    1. Destaque a diferença de pontuação (ex: "+5 pontos", "-2 pontos").
-    2. Identifique se houve correção técnica baseada nos feedbacks.
-    3. Seja curto, direto e motivador. Máximo 40 palavras.
-    4. Use emojis.
+    1. Seja muito positivo. Se melhorou, comemore. Se piorou, diga que é normal oscilar e para não desanimar.
+    2. Linguagem simples e curta.
+    3. Use emojis!
   `;
 
   try {
