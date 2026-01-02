@@ -36,7 +36,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
         const url = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
         
         const payload = {
-            nome: name,    // Alterado para 'nome' conforme atualização do backend
+            nome: name,
             email: email,
             senha: password
         };
@@ -50,7 +50,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
         });
 
         if (!response.ok) {
-            // Tenta ler o erro do backend se houver
+            // Tratamento específico para e-mail duplicado (409 Conflict)
+            if (response.status === 409) {
+                throw new Error("Este e-mail já está em uso. Se você já tem conta, faça login.");
+            }
+
+            // Tenta ler o erro do backend se houver outro tipo de erro
             let errorMsg = "Erro ao cadastrar usuário.";
             try {
                 const errData = await response.json();
@@ -97,7 +102,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
         const usuarioLogado = await response.json();
 
         // Mapeamento de segurança para garantir que o formato User seja respeitado
-        // Caso o backend retorne 'nome' ao invés de 'name', ajustamos aqui
         const appUser: User = {
             id: usuarioLogado.id ? String(usuarioLogado.id) : Date.now().toString(),
             name: usuarioLogado.name || usuarioLogado.nome || "Usuário",

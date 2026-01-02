@@ -207,7 +207,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     try {
       const url = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
       
-      // Corrigido: Backend espera 'nome' conforme solicitação
       const payload = { nome: newName, email: newEmail, senha: "mudar123" };
 
       const response = await fetch(url, {
@@ -216,7 +215,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
           body: JSON.stringify(payload),
       });
 
-      if (!response.ok) throw new Error("Erro ao cadastrar usuário no servidor.");
+      if (!response.ok) {
+          let errorMsg = "Erro ao cadastrar usuário no servidor.";
+          
+          try {
+             const errData = await response.json();
+             if (errData.message) errorMsg = errData.message;
+          } catch(e) {}
+
+          // Tratamento específico para conflito de e-mail (409)
+          if (response.status === 409) {
+             errorMsg = "Este e-mail já está cadastrado no sistema.";
+          }
+          
+          throw new Error(errorMsg);
+      }
+      
       await response.json();
 
       await MockDataService.createUser(newName, newEmail); // Mantém sync local
@@ -231,7 +245,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
       }, 1500);
 
     } catch (err: any) {
-      showToast("Erro: " + err.message, 'error');
+      showToast(err.message, 'error');
     }
   };
 
