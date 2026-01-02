@@ -206,7 +206,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     
     try {
       const url = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
-      const payload = { name: newName, email: newEmail, senha: "mudar123" };
+      
+      // Corrigido: Backend espera 'nome' conforme solicitação
+      const payload = { nome: newName, email: newEmail, senha: "mudar123" };
 
       const response = await fetch(url, {
           method: "POST",
@@ -286,7 +288,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                      
                      try {
                         const payload = {
-                            nome: user.name,
+                            nome: user.name, // Corrigido para 'nome'
                             email: user.email,
                             assignedExercises: allExerciseIds
                         };
@@ -334,7 +336,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     try {
         // Update Backend
         const payload = {
-            nome: selectedUser.name,
+            nome: selectedUser.name, // Corrigido para 'nome'
             email: selectedUser.email,
             assignedExercises: editingAssignments
         };

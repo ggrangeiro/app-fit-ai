@@ -36,7 +36,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
         const url = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
         
         const payload = {
-            name: name,    // Backend mapeia para 'nome'
+            nome: name,    // Alterado para 'nome' conforme atualização do backend
             email: email,
             senha: password
         };
