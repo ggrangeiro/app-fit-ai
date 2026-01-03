@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { User, ExerciseType } from '../types';
-import { MockDataService } from '../services/mockDataService';
-import { Dumbbell, ArrowRight, Lock, Mail, UserPlus, User as UserIcon } from 'lucide-react';
+import { User } from '../types';
+import { apiService } from '../services/apiService';
+import { Dumbbell, ArrowRight, Lock, Mail, User as UserIcon } from 'lucide-react';
 import { ToastType } from './Toast';
 
 interface LoginProps {
@@ -12,8 +12,8 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
-  const [name, setName] = useState(''); // New field for registration
-  const [password, setPassword] = useState(''); // Added state for password
+  const [name, setName] = useState(''); 
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,92 +24,29 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
 
     try {
       if (isRegistering) {
-        
-        if (!name.trim()) {
-           throw new Error("Por favor, digite seu nome.");
-        }
-        if (!password.trim()) {
-           throw new Error("Por favor, digite uma senha.");
-        }
+        // --- CADASTRO (V2) ---
+        if (!name.trim()) throw new Error("Por favor, digite seu nome.");
+        if (!password.trim()) throw new Error("Por favor, digite uma senha.");
 
-        // --- INTEGRAÇÃO COM BACKEND (CADASTRO) ---
-        const url = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
-        
-        const payload = {
-            nome: name,
-            email: email,
-            senha: password
-        };
+        // Usa o novo serviço de cadastro V2
+        await apiService.signup(name, email, password);
 
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-            // Tratamento específico para e-mail duplicado (409 Conflict)
-            if (response.status === 409) {
-                throw new Error("Este e-mail já está em uso. Se você já tem conta, faça login.");
-            }
-
-            // Tenta ler o erro do backend se houver outro tipo de erro
-            let errorMsg = "Erro ao cadastrar usuário.";
-            try {
-                const errData = await response.json();
-                if (errData.message) errorMsg = errData.message;
-            } catch (e) {}
-            throw new Error(errorMsg);
-        }
-
-        await response.json();
         showToast("Cadastro realizado com sucesso! Faça login.", 'success');
         
-        // Limpar formulário e mudar para login após sucesso
         setIsRegistering(false);
         setPassword('');
         
       } else {
-        // --- INTEGRAÇÃO COM BACKEND (LOGIN) ---
-        
+        // --- LOGIN (V2) ---
         if (!email.trim() || !password.trim()) {
             throw new Error("Preencha e-mail e senha.");
         }
 
-        const loginUrl = "https://testeai-732767853162.us-west1.run.app/api/usuarios/login";
+        // Usa o novo serviço de login V2 que lida com Token JWT
+        const appUser = await apiService.login(email, password);
         
-        const loginPayload = {
-            email: email,
-            senha: password
-        };
-
-        const response = await fetch(loginUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(loginPayload),
-        });
-
-        if (response.status === 401 || response.status === 403) {
-             throw new Error("E-mail ou senha incorretos.");
-        }
-
-        if (!response.ok) {
-             throw new Error("Erro de conexão ao tentar realizar login.");
-        }
-
-        const usuarioLogado = await response.json();
-
-        // Mapeamento de segurança para garantir que o formato User seja respeitado
-        const appUser: User = {
-            id: usuarioLogado.id ? String(usuarioLogado.id) : Date.now().toString(),
-            name: usuarioLogado.name || usuarioLogado.nome || "Usuário",
-            email: usuarioLogado.email,
-            role: usuarioLogado.role || 'user',
-            avatar: usuarioLogado.avatar,
-            assignedExercises: usuarioLogado.assignedExercises || []
-        };
+        // Armazena sessão (geralmente feito no App ou Context, mas aqui mantendo padrão do projeto)
+        localStorage.setItem('fitai_current_session', JSON.stringify(appUser));
         
         onLogin(appUser);
       }
@@ -132,7 +69,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="glass-panel w-full max-w-md p-8 rounded-3xl animate-fade-in relative overflow-hidden transition-all duration-500">
-        {/* Decorative Background Elements */}
         <div className="absolute top-0 right-0 p-10 opacity-10 pointer-events-none">
              <Dumbbell className="w-40 h-40 text-blue-500 rotate-45" />
         </div>
@@ -152,7 +88,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 
-                {/* Name Field - Only visible when registering */}
                 {isRegistering && (
                   <div className="space-y-1 animate-in slide-in-from-top-4 duration-300">
                       <label className="text-sm font-medium text-slate-300 ml-1">Seu Nome</label>
@@ -236,13 +171,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
                 >
                   {isRegistering ? 'Já tenho uma conta? Fazer Login' : 'Não tem conta? Criar nova conta'}
                 </button>
-
-                {!isRegistering && (
-                  <div className="text-xs text-slate-500 mt-2 bg-slate-800/50 px-4 py-2 rounded-lg border border-slate-700/50">
-                      <span className="block font-semibold text-slate-400 mb-1">Acesso Admin (Demo):</span>
-                      <span className="font-mono">admin@fitai.com</span>
-                  </div>
-                )}
             </div>
         </div>
       </div>

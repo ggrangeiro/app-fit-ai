@@ -6,6 +6,7 @@ import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { EvolutionModal } from './EvolutionModal';
 import { ToastType } from './Toast';
+import { apiService } from '../services/apiService'; // NEW IMPORT
 
 interface ResultViewProps {
   result: AnalysisResult;
@@ -16,7 +17,7 @@ interface ResultViewProps {
   onSave?: () => void;
   onDeleteRecord?: (recordId: string) => void;
   onWorkoutSaved?: () => void;
-  onDietSaved?: () => void; // Nova prop para atualizar a dieta na home
+  onDietSaved?: () => void; 
   isHistoricalView?: boolean;
   showToast?: (message: string, type: ToastType) => void;
   triggerConfirm?: (title: string, message: string, onConfirm: () => void, isDestructive?: boolean) => void;
@@ -33,8 +34,8 @@ export const ResultView: React.FC<ResultViewProps> = ({
   onWorkoutSaved,
   onDietSaved,
   isHistoricalView = false,
-  showToast = () => {}, // Default empty function if not passed
-  triggerConfirm = () => {} // Default empty
+  showToast = () => {}, 
+  triggerConfirm = () => {} 
 }) => {
   const [saved, setSaved] = useState(false);
   
@@ -64,7 +65,6 @@ export const ResultView: React.FC<ResultViewProps> = ({
     gender: 'masculino'
   });
 
-  // History / Evolution State
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const isHighPerformance = result.score > 80;
@@ -72,7 +72,6 @@ export const ResultView: React.FC<ResultViewProps> = ({
   const isBodyCompAnalysis = exercise === SPECIAL_EXERCISES.BODY_COMPOSITION;
   const isFreeMode = exercise === SPECIAL_EXERCISES.FREE_MODE;
   
-  // Nome amigável do exercício
   const exerciseDisplayName = isBodyCompAnalysis 
     ? 'Avaliação Corporal' 
     : (isFreeMode 
@@ -86,7 +85,6 @@ export const ResultView: React.FC<ResultViewProps> = ({
     }
   }, [onSave, saved]);
 
-  // Pre-fill gender if detected by AI
   useEffect(() => {
     if (result.gender) {
       const detectedGender = result.gender.toLowerCase().includes('fem') ? 'feminino' : 'masculino';
@@ -99,30 +97,22 @@ export const ResultView: React.FC<ResultViewProps> = ({
     e.preventDefault();
     setDietLoading(true);
     try {
-      // 1. Gera o HTML da dieta com a IA
       const planHtml = await generateDietPlan(dietFormData, result);
       
-      // 2. Salva no Backend automaticamente
       try {
-        const payload = {
-            userId: userId,
-            content: planHtml,
-            goal: dietFormData.goal
-        };
-
-        const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/dietas", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-            // Notifica o App.tsx para atualizar a lista de dietas
-            if (onDietSaved) {
-                onDietSaved();
-            }
-        }
+        // Tenta API V2
+        await apiService.createDiet(userId, planHtml, dietFormData.goal);
+        if (onDietSaved) onDietSaved();
       } catch (backendError) {
+        // Fallback API V1
+         try {
+            await fetch("https://testeai-732767853162.us-west1.run.app/api/dietas", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId, content: planHtml, goal: dietFormData.goal })
+            });
+            if (onDietSaved) onDietSaved();
+         } catch(e) {}
       }
       
       setDietPlanHtml(planHtml);
@@ -139,34 +129,24 @@ export const ResultView: React.FC<ResultViewProps> = ({
     e.preventDefault();
     setWorkoutLoading(true);
     try {
-      // 1. Gera o treino com IA
       const planHtml = await generateWorkoutPlan(workoutFormData, result);
       
-      // 2. Envia para o Backend
       try {
-        const payload = {
-            userId: userId,
-            content: planHtml,
-            goal: workoutFormData.goal
-        };
-
-        const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/treinos", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-            // Notifica o componente pai (App) para atualizar a lista de treinos na home
-            if (onWorkoutSaved) {
-                onWorkoutSaved();
-            }
-        }
-
+        // Tenta API V2
+        await apiService.createTraining(userId, planHtml, workoutFormData.goal);
+        if (onWorkoutSaved) onWorkoutSaved();
       } catch (backendError) {
+        // Fallback API V1
+         try {
+            await fetch("https://testeai-732767853162.us-west1.run.app/api/treinos", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId, content: planHtml, goal: workoutFormData.goal })
+            });
+            if (onWorkoutSaved) onWorkoutSaved();
+         } catch(e) {}
       }
 
-      // Atualiza UI apenas depois de tentar salvar
       setWorkoutPlanHtml(planHtml);
       setShowWorkoutForm(false);
       showToast("Treino gerado com sucesso!", 'success');
@@ -183,14 +163,11 @@ export const ResultView: React.FC<ResultViewProps> = ({
   };
 
   const handleShare = async () => {
-    // Construção do Texto Rico
     const dateStr = new Date().toLocaleDateString();
     
-    // Métrica principal (Reps ou Gordura)
     const metricLabel = isBodyCompAnalysis ? '⚖️ Gordura Estimada' : '🔄 Repetições';
     const metricValue = `${result.repetitions}${isBodyCompAnalysis ? '%' : ''}`;
 
-    // Listas formatadas
     let strengthsText = "";
     if (result.strengths && result.strengths.length > 0) {
       strengthsText = `\n✅ *Mandou bem:*\n${result.strengths.slice(0, 3).map(s => `• ${s}`).join('\n')}\n`;
@@ -557,59 +534,41 @@ ${strengthsText}${improvementsText}
           </div>
         </div>
       )}
-
+      
+      {/* ... (Result Panel - Unchanged parts) ... */}
       <div className="glass-panel rounded-[2rem] p-6 md:p-10 shadow-2xl relative overflow-hidden">
-        
-        {/* Confetti / Celebration Background Effect */}
+        {/* ... (Existing result UI structure) ... */}
         {isHighPerformance && (
           <div className="absolute inset-0 pointer-events-none z-0 opacity-30 no-print">
              <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(251,191,36,0.15),transparent_70%)] animate-pulse" />
           </div>
         )}
         
-        {/* Share / Print Buttons (Top Right) - Only visible on screen */}
         <div className="absolute top-6 right-6 flex items-center gap-3 no-print z-30">
-            <button 
-                onClick={handlePrint}
-                className="p-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-full transition-all shadow-lg border border-slate-600/50"
-                title="Imprimir ou Salvar PDF"
-            >
+            <button onClick={handlePrint} className="p-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-full transition-all shadow-lg border border-slate-600/50" title="Imprimir ou Salvar PDF">
                 <Printer className="w-5 h-5" />
             </button>
-            <button 
-                onClick={handleShare}
-                className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-all shadow-lg shadow-blue-900/20 border border-blue-500/50"
-                title="Compartilhar Resultado"
-            >
+            <button onClick={handleShare} className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-all shadow-lg shadow-blue-900/20 border border-blue-500/50" title="Compartilhar Resultado">
                 <Share2 className="w-5 h-5" />
             </button>
         </div>
 
-        {/* Header */}
         <div className="text-center mb-10 relative z-10">
-          <span className="px-4 py-1.5 rounded-full bg-slate-700/50 text-slate-300 text-sm font-medium border border-slate-600/50 print:border-slate-300 print:text-slate-600">
-            Relatório Biomecânico
-          </span>
+          <span className="px-4 py-1.5 rounded-full bg-slate-700/50 text-slate-300 text-sm font-medium border border-slate-600/50 print:border-slate-300 print:text-slate-600">Relatório Biomecânico</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-4 text-white print:text-black">
-            {isBodyCompAnalysis 
-                ? 'Avaliação Corporal Detalhada' 
-                : (isFreeMode 
-                    ? `${result.identifiedExercise || 'Exercício'} - Análise Livre (Sem histórico)` 
-                    : `Análise de ${exercise}`)}
+            {isBodyCompAnalysis ? 'Avaliação Corporal Detalhada' : (isFreeMode ? `${result.identifiedExercise || 'Exercício'} - Análise Livre (Sem histórico)` : `Análise de ${exercise}`)}
           </h2>
           <p className="text-slate-400 mt-2 text-sm print:text-slate-600">{new Date().toLocaleDateString()} • FitAI Analyzer</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8 relative z-10">
           
-          {/* Main Score Column (Left) */}
           <div className="lg:col-span-4 flex flex-col gap-6">
             <div className={`
               bg-slate-900/40 rounded-3xl p-8 border border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-1000
               ${isHighPerformance ? 'shadow-[0_0_40px_rgba(251,191,36,0.15)] border-yellow-500/30' : ''}
               print:shadow-none print:border-slate-300 print:bg-white
             `}>
-              {/* Decorative Trophy or Sparkles */}
               <div className="absolute top-0 right-0 p-4 opacity-10 no-print">
                 <Trophy className={`w-32 h-32 ${isHighPerformance ? 'text-yellow-400' : 'text-white'}`} />
               </div>
@@ -620,20 +579,9 @@ ${strengthsText}${improvementsText}
               
               <div className="h-56 w-full relative z-10">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RadialBarChart 
-                    innerRadius="75%" 
-                    outerRadius="100%" 
-                    barSize={20} 
-                    data={scoreData} 
-                    startAngle={90} 
-                    endAngle={-270}
-                  >
+                  <RadialBarChart innerRadius="75%" outerRadius="100%" barSize={20} data={scoreData} startAngle={90} endAngle={-270}>
                     <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                    <RadialBar
-                      background={{ fill: '#1e293b' }}
-                      dataKey="value"
-                      cornerRadius={100}
-                    />
+                    <RadialBar background={{ fill: '#1e293b' }} dataKey="value" cornerRadius={100} />
                   </RadialBarChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -651,7 +599,6 @@ ${strengthsText}${improvementsText}
                 </div>
               </div>
 
-               {/* Segmentation Score List */}
                <div className="w-full mt-4 space-y-2">
                  {result.feedback.map((item, idx) => (
                     <div key={idx} className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-1 print:text-black print:border-slate-200">
@@ -667,132 +614,72 @@ ${strengthsText}${improvementsText}
             </div>
           </div>
 
-          {/* Details Column (Right) */}
           <div className="lg:col-span-8 flex flex-col gap-6">
-            
-            {/* Muscle Map & Key Metrics */}
             <div className="bg-slate-800/40 rounded-3xl p-6 border border-slate-700/50 print:bg-white print:border-slate-300 min-h-[300px] flex flex-col relative overflow-hidden">
-               <div className="absolute top-4 right-4 z-10 opacity-30">
-                  <Activity className="w-6 h-6 text-white" />
-               </div>
-               <h3 className="text-lg font-bold text-white mb-4 print:text-black flex items-center gap-2">
-                 <Dumbbell className="w-4 h-4 text-blue-400" />
-                 Grupos Musculares Ativados
-               </h3>
-               
-               <div className="flex-grow">
-                 <MuscleMap muscles={result.muscleGroups} />
-               </div>
-               
+               <div className="absolute top-4 right-4 z-10 opacity-30"><Activity className="w-6 h-6 text-white" /></div>
+               <h3 className="text-lg font-bold text-white mb-4 print:text-black flex items-center gap-2"><Dumbbell className="w-4 h-4 text-blue-400" /> Grupos Musculares Ativados</h3>
+               <div className="flex-grow"><MuscleMap muscles={result.muscleGroups} /></div>
                <div className="flex justify-center gap-2 mt-4 flex-wrap">
                  {result.muscleGroups.map((m, i) => (
-                    <span key={i} className="text-[10px] uppercase font-bold px-2 py-1 bg-slate-700 rounded text-slate-300 border border-slate-600 print:bg-slate-100 print:text-black print:border-slate-300">
-                      {m}
-                    </span>
+                    <span key={i} className="text-[10px] uppercase font-bold px-2 py-1 bg-slate-700 rounded text-slate-300 border border-slate-600 print:bg-slate-100 print:text-black print:border-slate-300">{m}</span>
                  ))}
                </div>
             </div>
 
-            {/* Strengths & Improvements Grid */}
             <div className="grid md:grid-cols-2 gap-6">
-               {/* Strengths */}
                <div className="bg-emerald-900/10 rounded-2xl p-6 border border-emerald-500/20 print:bg-white print:border-emerald-500">
-                  <div className="flex items-center gap-3 mb-4 text-emerald-400 font-bold">
-                    <CheckCircle className="w-5 h-5" /> Pontos Fortes
-                  </div>
+                  <div className="flex items-center gap-3 mb-4 text-emerald-400 font-bold"><CheckCircle className="w-5 h-5" /> Pontos Fortes</div>
                   <ul className="space-y-3">
                     {result.strengths && result.strengths.length > 0 ? (
-                        result.strengths.map((str, idx) => (
-                          <li key={idx} className="flex gap-2 text-sm text-slate-300 print:text-black">
-                             <span className="text-emerald-500 mt-0.5">•</span>
-                             {str}
-                          </li>
-                        ))
-                    ) : (
-                      <li className="text-sm text-slate-500 italic">Continue praticando para destacar seus pontos fortes!</li>
-                    )}
+                        result.strengths.map((str, idx) => <li key={idx} className="flex gap-2 text-sm text-slate-300 print:text-black"><span className="text-emerald-500 mt-0.5">•</span>{str}</li>)
+                    ) : (<li className="text-sm text-slate-500 italic">Continue praticando para destacar seus pontos fortes!</li>)}
                   </ul>
                </div>
 
-               {/* Improvements */}
                <div className="bg-yellow-900/10 rounded-2xl p-6 border border-yellow-500/20 print:bg-white print:border-yellow-500">
-                  <div className="flex items-center gap-3 mb-4 text-yellow-400 font-bold">
-                    <AlertTriangle className="w-5 h-5" /> Correções Necessárias
-                  </div>
+                  <div className="flex items-center gap-3 mb-4 text-yellow-400 font-bold"><AlertTriangle className="w-5 h-5" /> Correções Necessárias</div>
                   <ul className="space-y-3">
                      {result.improvements && result.improvements.length > 0 ? (
                         result.improvements.map((imp, idx) => (
                           <li key={idx} className="text-sm text-slate-300 print:text-black">
-                             <p className="font-semibold text-yellow-100 print:text-black flex items-start gap-2">
-                                <span className="text-yellow-500 mt-0.5">→</span> {imp.instruction}
-                             </p>
+                             <p className="font-semibold text-yellow-100 print:text-black flex items-start gap-2"><span className="text-yellow-500 mt-0.5">→</span> {imp.instruction}</p>
                              <p className="text-xs text-slate-500 ml-5 mt-1">{imp.detail}</p>
                           </li>
                         ))
-                     ) : (
-                       <li className="text-sm text-slate-500 italic">Nenhuma correção crítica detectada. Parabéns!</li>
-                     )}
+                     ) : (<li className="text-sm text-slate-500 italic">Nenhuma correção crítica detectada. Parabéns!</li>)}
                   </ul>
                </div>
             </div>
 
-            {/* Coach Tip (Footer Full Width) */}
             <div className="bg-gradient-to-r from-blue-900/20 to-indigo-900/20 rounded-2xl p-6 border border-blue-500/20 relative overflow-hidden print:bg-white print:border-blue-500">
-               <div className="absolute top-0 right-0 p-4 opacity-10">
-                  <Lightbulb className="w-24 h-24 text-blue-400" />
-               </div>
-               <h4 className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-2 flex items-center gap-2">
-                 <Sparkles className="w-3 h-3" /> Dica de Mestre (IA)
-               </h4>
-               <p className="text-slate-200 text-lg font-medium leading-relaxed relative z-10 print:text-black">
-                 "{result.formCorrection}"
-               </p>
+               <div className="absolute top-0 right-0 p-4 opacity-10"><Lightbulb className="w-24 h-24 text-blue-400" /></div>
+               <h4 className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-2 flex items-center gap-2"><Sparkles className="w-3 h-3" /> Dica de Mestre (IA)</h4>
+               <p className="text-slate-200 text-lg font-medium leading-relaxed relative z-10 print:text-black">"{result.formCorrection}"</p>
             </div>
 
-            {/* ACTIONS - (Visible Only on Screen) */}
             <div className="no-print grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
-              <button 
-                onClick={() => setShowWorkoutForm(true)}
-                className="flex items-center justify-center gap-2 py-4 px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 border border-blue-400/20 group"
-              >
-                <Dumbbell className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                Gerar Treino
+              <button onClick={() => setShowWorkoutForm(true)} className="flex items-center justify-center gap-2 py-4 px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 border border-blue-400/20 group">
+                <Dumbbell className="w-5 h-5 group-hover:rotate-12 transition-transform" /> Gerar Treino
               </button>
               
-              <button 
-                onClick={() => setShowDietForm(true)}
-                className="flex items-center justify-center gap-2 py-4 px-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/20 border border-emerald-400/20 group"
-              >
-                <Utensils className="w-5 h-5 group-hover:-rotate-12 transition-transform" />
-                Gerar Dieta
+              <button onClick={() => setShowDietForm(true)} className="flex items-center justify-center gap-2 py-4 px-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/20 border border-emerald-400/20 group">
+                <Utensils className="w-5 h-5 group-hover:-rotate-12 transition-transform" /> Gerar Dieta
               </button>
 
-              {/* Botão de Evolução MOVIDO PARA CÁ e com visibilidade condicional */}
               {history.length > 0 && !isFreeMode ? (
-                  <button 
-                    onClick={() => setShowHistoryModal(true)}
-                    className="flex items-center justify-center gap-2 py-4 px-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-900/20 border border-indigo-400/20 group"
-                  >
-                    <History className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    Ver Evolução ({history.length})
+                  <button onClick={() => setShowHistoryModal(true)} className="flex items-center justify-center gap-2 py-4 px-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-900/20 border border-indigo-400/20 group">
+                    <History className="w-5 h-5 group-hover:scale-110 transition-transform" /> Ver Evolução ({history.length})
                   </button>
-              ) : (
-                 <div className="hidden lg:block"></div> /* Spacer para manter o grid bonito se não tiver histórico */
-              )}
+              ) : (<div className="hidden lg:block"></div>)}
             </div>
 
           </div>
         </div>
 
         <div className="flex justify-between items-center pt-8 border-t border-slate-700/50 no-print">
-          <button
-            onClick={onReset}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
-          >
+          <button onClick={onReset} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
             <ArrowLeft className="w-4 h-4" /> Nova Análise
           </button>
-          
-          {/* Botão antigo de histórico removido daqui para limpar o rodapé */}
         </div>
       </div>
     </div>

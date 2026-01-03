@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, ExerciseRecord, ExerciseDTO } from '../types';
 import { MockDataService } from '../services/mockDataService';
+import { apiService } from '../services/apiService'; // NEW API SERVICE
 import { generateExerciseThumbnail } from '../services/geminiService';
 import { ResultView } from './ResultView';
 import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle } from 'lucide-react';
@@ -9,38 +10,30 @@ import Toast, { ToastType } from './Toast';
 
 interface AdminDashboardProps {
   currentUser: User;
-  onRefreshData?: () => void; // Notify parent to reload data (like images)
+  onRefreshData?: () => void; 
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshData }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets'>('users');
   const [users, setUsers] = useState<User[]>([]);
-  // const [records, setRecords] = useState<ExerciseRecord[]>([]); // Removed local records dependency for user detail
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   
-  // State for User History List (Backend)
   const [userHistoryList, setUserHistoryList] = useState<ExerciseRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // State for Detailed View Modal
   const [viewingRecord, setViewingRecord] = useState<ExerciseRecord | null>(null);
   const [detailedHistory, setDetailedHistory] = useState<ExerciseRecord[]>([]);
   
-  // Exercise List State
   const [allExercises, setAllExercises] = useState<ExerciseDTO[]>([]);
 
-  // Asset Generation & Script State
   const [processing, setProcessing] = useState(false);
   const [progressMsg, setProgressMsg] = useState('');
   
-  // Create User State
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   
-  // Local state for assignments editing
   const [editingAssignments, setEditingAssignments] = useState<string[]>([]);
 
-  // --- NEW LOCAL UI STATES FOR ADMIN ---
   const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
     message: '', type: 'info', isVisible: false
   });
@@ -77,26 +70,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
   };
 
   useEffect(() => {
-    // refreshData(); // Not strictly needed for list view anymore as we fetch live
     fetchBackendUsers();
     fetchExercises();
   }, []);
 
   useEffect(() => {
     if (selectedUser) {
-        setEditingAssignments(selectedUser.assignedExercises || []);
+        // Tenta pegar os exercicios do novo backend para preencher o state
+        // Se falhar usa o que veio do objeto user
+        apiService.getUserExercises(selectedUser.id).then(exs => {
+            if (exs.length > 0) {
+                 // Convert V2 exercises to IDs that match allExercises
+                 const ids = exs.map((e: any) => String(e.id)); 
+                 // Note: allExercises must be loaded with numeric IDs for this to match perfectly
+                 // But our allExercises loader maps them.
+                 setEditingAssignments(ids);
+            } else {
+                 setEditingAssignments(selectedUser.assignedExercises || []);
+            }
+        }).catch(() => {
+            setEditingAssignments(selectedUser.assignedExercises || []);
+        });
+
         fetchUserHistory(selectedUser.id);
     } else {
         setUserHistoryList([]);
     }
   }, [selectedUser]);
 
-  // --- GROUPING LOGIC ---
-  // Agrupa a lista plana de históricos por tipo de exercício para exibição visual organizada
   const groupedRecords = useMemo(() => {
     const groups: Record<string, ExerciseRecord[]> = {};
     userHistoryList.forEach(record => {
-        // Usa o nome do exercício como chave
         const key = record.exercise;
         if (!groups[key]) {
             groups[key] = [];
@@ -107,16 +111,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
   }, [userHistoryList]);
 
   const fetchExercises = async () => {
-    const data = await MockDataService.fetchExercises();
+    // Tenta V2 primeiro para ter IDs numéricos reais
+    try {
+        const v2Exercises = await apiService.getAllExercises();
+        if(v2Exercises.length > 0) {
+            const mapped = v2Exercises.map((e: any) => ({
+                id: String(e.id),
+                alias: e.name.toUpperCase().replace(/\s+/g, '_'),
+                name: e.name,
+                category: 'STANDARD'
+            }));
+            setAllExercises(mapped as ExerciseDTO[]);
+            return;
+        }
+    } catch(e) {}
     
-    // Garante que os exercícios especiais estejam na lista para mapeamento correto de nomes
+    // Fallback Legacy
+    const data = await MockDataService.fetchExercises();
     const specialExercises: ExerciseDTO[] = [
         { id: 'POSTURE_ANALYSIS', alias: 'POSTURE_ANALYSIS', name: 'Análise de Postura', category: 'SPECIAL' },
         { id: 'BODY_COMPOSITION', alias: 'BODY_COMPOSITION', name: 'Composição Corporal', category: 'SPECIAL' },
         { id: 'FREE_ANALYSIS_MODE', alias: 'FREE_ANALYSIS_MODE', name: 'Análise Livre', category: 'SPECIAL' }
     ];
 
-    // Merge garantindo que não haja duplicatas de ID
     const combined = [...data];
     specialExercises.forEach(sp => {
         if (!combined.find(c => c.id === sp.id)) {
@@ -127,8 +144,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     setAllExercises(combined);
   };
 
-  // Função para buscar usuários no Backend real
   const fetchBackendUsers = async () => {
+    // Tenta V2: Lista de estudantes do personal logado (admin)
+    try {
+        // Assumindo que o ID do admin é '1' ou está no currentUser.id
+        // Se currentUser.id for string não numérico, pode falhar no backend V2
+        const personalId = (!isNaN(Number(currentUser.id))) ? currentUser.id : "1";
+        
+        // Passamos 0 ou 1 como userId para listar todos (depende da impl do back)
+        const students = await apiService.getStudents(personalId, 1);
+        
+        if (students.length > 0) {
+            const mappedUsers: User[] = students.map((u: any) => ({
+                id: String(u.id),
+                name: u.name || 'Aluno',
+                email: u.email,
+                role: 'user',
+                assignedExercises: []
+            }));
+            setUsers(mappedUsers);
+            return;
+        }
+    } catch(e) {}
+
+    // Fallback Legacy
     const API_URL = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
     
     try {
@@ -142,7 +181,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
         
         const data = await response.json();
         
-        // Mapeia os dados do backend para o formato User do frontend
         const mappedUsers: User[] = data.map((u: any) => ({
             id: String(u.id),
             name: u.nome || u.name || 'Sem Nome',
@@ -155,12 +193,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
         setUsers(mappedUsers);
         
     } catch (err: any) {
-        // Fallback para mock se falhar, apenas para não deixar vazio
         if (users.length === 0) setUsers(MockDataService.getUsers());
     }
   };
 
-  // --- FETCH FULL LIST OF RECORDS FOR SELECTED USER ---
   const fetchUserHistory = async (userId: string) => {
     setLoadingHistory(true);
     const API_URL = `https://testeai-732767853162.us-west1.run.app/api/historico/${userId}`;
@@ -173,25 +209,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
 
         if (response.ok) {
             const data = await response.json();
-            
             let allRecords: ExerciseRecord[] = [];
 
-            // Cenário 1: Backend retorna Array direto (formato antigo)
             if (Array.isArray(data)) {
                 allRecords = data;
             } 
-            // Cenário 2: Backend retorna Objeto Agrupado (formato novo)
             else if (typeof data === 'object' && data !== null) {
-                // Pega todos os arrays dentro das chaves e junta em um só para o estado interno
-                // O useMemo se encarregará de reagrupar para exibição
                 allRecords = Object.values(data).flat() as ExerciseRecord[];
             }
 
-            // Ordena por data (mais recente primeiro)
             const sorted = allRecords.sort((a: any, b: any) => b.timestamp - a.timestamp);
             setUserHistoryList(sorted);
         } else {
-             // Fallback to local storage if API fails
              setUserHistoryList(MockDataService.getUserHistory(userId));
         }
     } catch (e) {
@@ -205,47 +234,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     e.preventDefault();
     
     try {
-      const url = "https://testeai-732767853162.us-west1.run.app/api/usuarios";
-      
-      const payload = { nome: newName, email: newEmail, senha: "mudar123" };
+      // Usa V2 Signup
+      await apiService.signup(newName, newEmail, "mudar123");
 
-      const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-          let errorMsg = "Erro ao cadastrar usuário no servidor.";
-          
-          try {
-             const errData = await response.json();
-             if (errData.message) errorMsg = errData.message;
-          } catch(e) {}
-
-          // Tratamento específico para conflito de e-mail (409)
-          if (response.status === 409) {
-             errorMsg = "Este e-mail já está cadastrado no sistema.";
-          }
-          
-          throw new Error(errorMsg);
-      }
-      
-      await response.json();
-
-      await MockDataService.createUser(newName, newEmail); // Mantém sync local
+      await MockDataService.createUser(newName, newEmail); 
       
       showToast('Usuário criado com sucesso!', 'success');
       setNewName('');
       setNewEmail('');
-      fetchBackendUsers(); // Recarrega lista real
+      fetchBackendUsers();
       
       setTimeout(() => {
         setActiveTab('users');
       }, 1500);
 
     } catch (err: any) {
-      showToast(err.message, 'error');
+      showToast("Erro: " + err.message, 'error');
     }
   };
 
@@ -282,16 +286,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     }
   };
 
-  // --- SCRIPT DE ATRIBUIÇÃO EM MASSA ---
   const runAssignmentScript = () => {
     if (processing) return;
     
     triggerConfirm(
         "Executar Script em Massa?",
-        "Isso atribuirá TODOS os exercícios a TODOS os usuários listados. Essa ação não pode ser desfeita facilmente.",
+        "Isso atribuirá TODOS os exercícios a TODOS os usuários listados.",
         async () => {
             setProcessing(true);
-            setProgressMsg("Iniciando script de atribuição...");
+            setProgressMsg("Iniciando script...");
 
             const allExerciseIds = allExercises.map(e => e.id);
 
@@ -299,30 +302,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                 let count = 0;
                 for (const user of users) {
                      setProgressMsg(`Atualizando: ${user.name}...`);
-                     
                      try {
-                        const payload = {
-                            nome: user.name, // Corrigido para 'nome'
-                            email: user.email,
-                            assignedExercises: allExerciseIds
-                        };
-
-                        const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/usuarios/${user.id}`, {
-                            method: 'PUT',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify(payload)
-                        });
-
-                        if (response.ok) {
-                            count++;
+                        // Tenta V2 Loop (Assign one by one)
+                        for(const exId of allExerciseIds) {
+                            if (!isNaN(Number(exId))) {
+                                await apiService.assignExercise(user.id, Number(exId));
+                            }
                         }
+                        count++;
                      } catch (err) {
                      }
                 }
-                setProgressMsg(`Sucesso! ${count} usuários atualizados.`);
-                await fetchBackendUsers();
+                setProgressMsg(`Sucesso! ${count} usuários processados.`);
             } catch (e) {
-                setProgressMsg("Erro crítico ao rodar script.");
+                setProgressMsg("Erro ao rodar script.");
             }
             
             setTimeout(() => {
@@ -330,7 +323,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                 setProgressMsg('');
             }, 3000);
         },
-        false // Not destructive in the "delete" sense, but massive update
+        false 
     );
   };
 
@@ -347,36 +340,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
   const saveAssignments = async () => {
     if (!selectedUser) return;
     
+    setProcessing(true);
+    setProgressMsg("Salvando permissões...");
+
     try {
-        // Update Backend
-        const payload = {
-            nome: selectedUser.name, // Corrigido para 'nome'
-            email: selectedUser.email,
-            assignedExercises: editingAssignments
-        };
-
-        const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/usuarios/${selectedUser.id}`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-            // Update UI State
-            setSelectedUser({ ...selectedUser, assignedExercises: editingAssignments });
-            
-            // Update list state
-            setUsers(prev => prev.map(u => u.id === selectedUser.id ? { ...u, assignedExercises: editingAssignments } : u));
-            
-            showToast("Permissões salvas no servidor com sucesso!", 'success');
-        } else {
-            throw new Error("Servidor rejeitou a atualização.");
+        // V2 Approach: Call assign for each selected exercise
+        // Note: Backend V2 doesn't have "unassign", so we only assign.
+        let successCount = 0;
+        
+        for (const exId of editingAssignments) {
+            // Check if ID is numeric (V2 requires number)
+            if (!isNaN(Number(exId))) {
+                try {
+                    await apiService.assignExercise(selectedUser.id, Number(exId));
+                    successCount++;
+                } catch(e) {}
+            }
         }
+
+        // Fallback V1 Save (Array update)
+        try {
+             const payload = {
+                nome: selectedUser.name,
+                email: selectedUser.email,
+                assignedExercises: editingAssignments
+            };
+            await fetch(`https://testeai-732767853162.us-west1.run.app/api/usuarios/${selectedUser.id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+        } catch(e) {}
+
+        setSelectedUser({ ...selectedUser, assignedExercises: editingAssignments });
+        setUsers(prev => prev.map(u => u.id === selectedUser.id ? { ...u, assignedExercises: editingAssignments } : u));
+        
+        showToast("Permissões atualizadas!", 'success');
     } catch (e: any) {
-        showToast("Erro ao salvar no servidor: " + e.message, 'error');
+        showToast("Erro parcial ao salvar: " + e.message, 'error');
+    } finally {
+        setProcessing(false);
+        setProgressMsg('');
     }
 
-    // Sync Local Mock just in case
     MockDataService.updateUserExercises(selectedUser.id, editingAssignments);
   };
 
@@ -397,35 +403,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
         async () => {
             const success = await MockDataService.deleteRecord(selectedUser.id, recordId);
             if (success) {
-                // Update lists immediately
                 setUserHistoryList(prev => prev.filter(r => r.id !== recordId));
                 setDetailedHistory(prev => prev.filter(r => r.id !== recordId));
-                
-                if (viewingRecord?.id === recordId) {
-                    setViewingRecord(null);
-                }
+                if (viewingRecord?.id === recordId) setViewingRecord(null);
                 showToast("Registro removido.", 'success');
             } else {
                 showToast("Erro ao apagar registro.", 'error');
             }
         },
-        true // Destructive
+        true 
     );
   };
 
-  // --- FETCH FULL HISTORY FOR MODAL ---
   const handleViewRecordDetails = async (record: ExerciseRecord) => {
-    // Determine the ID to send to the backend.
-    // record.exercise might be the ID (e.g., BENCH_PRESS) or Name (e.g., Supino) depending on when it was saved.
     let exerciseIdToSend = record.exercise;
-    
-    // Attempt to resolve Name to Alias/ID if possible using the loaded exercise list
     const knownExercise = allExercises.find(e => e.name === record.exercise || e.alias === record.exercise);
     if (knownExercise) {
         exerciseIdToSend = knownExercise.alias;
     }
 
-    // Normalize special exercises logic
     let normalizedRecord = { ...record };
     const lowerEx = exerciseIdToSend.toLowerCase();
     
@@ -452,7 +448,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
         if (response.ok) {
             const data: ExerciseRecord[] = await response.json();
             if (data && data.length > 0) {
-                // Sort by timestamp desc (newest first)
                 const sortedHistory = data.sort((a, b) => b.timestamp - a.timestamp);
                 setDetailedHistory(sortedHistory);
             }
@@ -467,7 +462,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     return "text-red-400 border-red-500/30 bg-red-500/10";
   };
 
-  // Helper to determine display text for metrics
   const getMetricDisplay = (record: ExerciseRecord) => {
     const lowerEx = record.exercise.toLowerCase();
     
@@ -482,7 +476,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
     return { value: `${record.result.repetitions}`, label: 'reps' };
   };
   
-  // Helper for icon
   const getExerciseIcon = (exercise: string) => {
     const lowerEx = exercise.toLowerCase();
     if (lowerEx.includes('postura') || lowerEx.includes('posture')) return <ScanLine className="w-5 h-5 text-blue-400" />;
@@ -526,11 +519,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                     result={viewingRecord.result}
                     exercise={viewingRecord.exercise}
                     history={detailedHistory}
-                    userId={selectedUser.id} // Added userId prop
+                    userId={selectedUser.id} 
                     onReset={() => setViewingRecord(null)}
                     onDeleteRecord={handleDeleteRecord}
                     isHistoricalView={true}
-                    // Pass admin specific toast handler if needed inside result view (optional)
                     showToast={showToast}
                     triggerConfirm={triggerConfirm}
                  />
@@ -540,7 +532,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
       )}
 
       <div className="flex flex-col md:flex-row gap-6 h-full min-h-[600px]">
-        
         {/* Sidebar */}
         <div className="md:w-64 flex flex-col gap-2">
           <div className="p-4 bg-slate-800/50 rounded-2xl border border-slate-700/50 mb-4">
@@ -590,7 +581,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
         {/* Content Area */}
         <div className="flex-1 glass-panel rounded-3xl p-6 md:p-8 relative overflow-hidden min-h-[600px]">
           
-          {/* PROCESSING OVERLAY */}
           {processing && activeTab !== 'assets' && (
              <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in">
                 <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
@@ -599,7 +589,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
              </div>
           )}
 
-          {/* TAB: ASSETS */}
           {activeTab === 'assets' && (
              <div className="max-w-2xl mx-auto text-center py-10">
                 <div className="p-4 bg-indigo-500/10 rounded-full inline-block mb-6 border border-indigo-500/20">
@@ -628,7 +617,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
              </div>
           )}
 
-          {/* TAB: CREATE USER */}
           {activeTab === 'create' && (
             <div className="max-w-xl mx-auto">
               <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
@@ -648,7 +636,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
             </div>
           )}
 
-          {/* TAB: USER LIST */}
           {activeTab === 'users' && !selectedUser && (
             <div className="h-full flex flex-col">
               <div className="flex items-center justify-between mb-6">
@@ -684,7 +671,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
             </div>
           )}
 
-          {/* USER DETAIL VIEW & ASSIGNMENTS */}
           {activeTab === 'users' && selectedUser && (
             <div className="h-full flex flex-col animate-fade-in">
               <button onClick={() => setSelectedUser(null)} className="self-start text-sm text-slate-400 hover:text-white mb-4 flex items-center gap-1 transition-colors">← Voltar para lista</button>
@@ -714,7 +700,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                             );
                         })}
                       </div>
-                      <button onClick={saveAssignments} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition-all"><Save className="w-4 h-4" /> Salvar Permissões</button>
+                      <button onClick={saveAssignments} disabled={processing} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition-all">
+                          {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          Salvar Permissões
+                      </button>
                    </div>
                 </div>
 
@@ -724,7 +713,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                      {loadingHistory && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
                   </div>
                   
-                  {/* EMPTY STATE */}
                   {userHistoryList.length === 0 && (
                     <div className="text-center py-10 text-slate-500 bg-slate-800/20 rounded-2xl border border-dashed border-slate-700 flex flex-col items-center gap-2">
                         {loadingHistory ? (
@@ -741,11 +729,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onRefreshData }) => {
                     </div>
                   )}
 
-                  {/* GROUPED RECORDS RENDER */}
                   {Object.entries(groupedRecords).map(([exerciseKey, recordsVal]) => {
                      const records = recordsVal as ExerciseRecord[];
-                     // Tenta encontrar um nome amigável para o cabeçalho usando ID/Alias/Nome
-                     // exerciseKey deve ser o ID (ex: BENCH_PRESS)
                      const friendlyName = allExercises.find(e => e.alias === exerciseKey || e.id === exerciseKey || e.name === exerciseKey)?.name || exerciseKey;
                      
                      return (

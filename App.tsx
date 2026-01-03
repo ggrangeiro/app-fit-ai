@@ -3,6 +3,7 @@ import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDT
 import { analyzeVideo, generateWorkoutPlan, generateDietPlan } from './services/geminiService';
 import { compressVideo } from './utils/videoUtils';
 import { MockDataService } from './services/mockDataService';
+import { apiService } from './services/apiService'; // NEW API SERVICE
 import ExerciseCard from './components/ExerciseCard';
 import { ResultView } from './components/ResultView';
 import Login from './components/Login';
@@ -108,7 +109,6 @@ const App: React.FC = () => {
     weight: '', height: '', goal: 'emagrecer', gender: 'masculino', observations: ''
   });
   
-  // --- NEW UI STATES FOR TOAST & CONFIRM ---
   const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
     message: '', type: 'info', isVisible: false
   });
@@ -151,9 +151,37 @@ const App: React.FC = () => {
     setLoadingExercises(true);
     try {
       if (user.role === 'admin') {
+         try {
+           const allEx = await apiService.getAllExercises();
+           if(allEx.length > 0) {
+             const mapped = allEx.map((e: any) => ({
+                 id: String(e.id),
+                 alias: e.name.toUpperCase().replace(/\s+/g, '_'), 
+                 name: e.name,
+                 category: 'STANDARD'
+             }));
+             setExercisesList(mapped);
+             return;
+           }
+         } catch(e) {}
+         
          const exercises = await MockDataService.fetchExercises();
          setExercisesList(exercises);
       } else {
+         try {
+            const myExercisesV2 = await apiService.getUserExercises(user.id);
+            if(myExercisesV2.length > 0) {
+                const mapped = myExercisesV2.map((e: any) => ({
+                    id: String(e.id),
+                    alias: e.name.toUpperCase().replace(/\s+/g, '_'),
+                    name: e.name,
+                    category: 'STANDARD'
+                }));
+                setExercisesList(mapped);
+                return;
+            }
+         } catch(e) {}
+
          const myExercises = await MockDataService.fetchUserExercises(user.id);
          setExercisesList(myExercises);
       }
@@ -166,15 +194,16 @@ const App: React.FC = () => {
   const fetchUserWorkouts = async (userId: string) => {
     setLoadingWorkouts(true);
     try {
-      const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/treinos/${userId}`, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSavedWorkouts(Array.isArray(data) ? data : []);
-      }
+      const workouts = await apiService.getTrainings(userId);
+      setSavedWorkouts(workouts);
     } catch (e) {
+      try {
+        const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/treinos/${userId}`);
+        if (response.ok) {
+            const data = await response.json();
+            setSavedWorkouts(Array.isArray(data) ? data : []);
+        }
+      } catch(err) {}
     } finally {
       setLoadingWorkouts(false);
     }
@@ -183,15 +212,16 @@ const App: React.FC = () => {
   const fetchUserDiets = async (userId: string) => {
     setLoadingDiets(true);
     try {
-      const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/dietas/${userId}`, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSavedDiets(Array.isArray(data) ? data : []);
-      }
+      const diets = await apiService.getDiets(userId);
+      setSavedDiets(diets);
     } catch (e) {
+      try {
+        const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/dietas/${userId}`);
+        if (response.ok) {
+            const data = await response.json();
+            setSavedDiets(Array.isArray(data) ? data : []);
+        }
+      } catch(err) {}
     } finally {
       setLoadingDiets(false);
     }
@@ -228,10 +258,11 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [step, selectedExercise, exercisesList]);
 
+
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     setStep(user.role === 'admin' ? AppStep.ADMIN_DASHBOARD : AppStep.SELECT_EXERCISE);
-    showToast(`Bem-vindo, ${user.name}!`, 'success');
+    showToast(`Bem-vindo, ${user.name || 'Aluno'}!`, 'success');
   };
 
   const handleLogout = () => {
@@ -314,6 +345,8 @@ const App: React.FC = () => {
         const exerciseObj = exercisesList.find(e => e.id === selectedExercise);
         const idToSend = exerciseObj ? exerciseObj.alias : selectedExercise;
         const encodedExercise = encodeURIComponent(idToSend);
+        
+        // V1 fetch as requested
         const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
         
         const response = await fetch(historyUrl, {
@@ -324,7 +357,8 @@ const App: React.FC = () => {
         if (response.ok) {
             const data: ExerciseRecord[] = await response.json();
             if (data && data.length > 0) {
-                setHistoryRecords(data);
+                const sorted = data.sort((a, b) => b.timestamp - a.timestamp);
+                setHistoryRecords(sorted);
                 setShowEvolutionModal(true);
             } else {
                 showToast("Você ainda não realizou este exercício.", 'info');
@@ -341,16 +375,12 @@ const App: React.FC = () => {
 
   const handleDeleteRecord = async (recordId: string) => {
     if (!currentUser) return;
-    
-    // Instead of confirm(), we use the modal state via triggerConfirm, but
-    // handleDeleteRecord is usually called from inside Modal/ResultView.
-    // So we'll pass the logic directly. The child components (ResultView) handle the UI for this now.
-    // BUT since we are passing this function down, let's keep the logic pure here.
-    
     const success = await MockDataService.deleteRecord(currentUser.id, recordId);
     if (success) {
         setHistoryRecords(prev => prev.filter(r => r.id !== recordId));
         showToast("Registro removido com sucesso.", 'success');
+        // Close modal if no records left
+        if (historyRecords.length <= 1) setShowEvolutionModal(false);
     } else {
         showToast("Erro ao remover registro.", 'error');
     }
@@ -459,26 +489,29 @@ const App: React.FC = () => {
     setGeneratingWorkout(true);
     try {
         const planHtml = await generateWorkoutPlan(workoutFormData);
-        const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/treinos", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                userId: currentUser.id,
-                goal: workoutFormData.goal,
-                content: planHtml
-            })
-        });
-
-        if (response.ok) {
+        
+        try {
+            await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal);
             await fetchUserWorkouts(currentUser.id);
-            setShowGenerateWorkoutForm(false);
-            const data = await response.json();
-            setViewingWorkoutHtml(data.content || planHtml);
-            setShowWorkoutModal(true);
             showToast("Treino gerado com sucesso!", 'success');
-        } else {
-            throw new Error("Erro ao salvar treino");
+        } catch (v2Err) {
+            const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/treinos", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userId: currentUser.id,
+                    goal: workoutFormData.goal,
+                    content: planHtml
+                })
+            });
+            if (!response.ok) throw new Error("Erro ao salvar treino");
+            await fetchUserWorkouts(currentUser.id);
         }
+
+        setShowGenerateWorkoutForm(false);
+        setViewingWorkoutHtml(planHtml);
+        setShowWorkoutModal(true);
+        
     } catch (err: any) {
         showToast("Erro ao gerar treino: " + err.message, 'error');
     } finally {
@@ -493,26 +526,29 @@ const App: React.FC = () => {
     setGeneratingDiet(true);
     try {
         const planHtml = await generateDietPlan(dietFormData);
-        const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/dietas", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                userId: currentUser.id,
-                goal: dietFormData.goal,
-                content: planHtml
-            })
-        });
-
-        if (response.ok) {
+        
+        try {
+            await apiService.createDiet(currentUser.id, planHtml, dietFormData.goal);
             await fetchUserDiets(currentUser.id);
-            setShowGenerateDietForm(false);
-            const data = await response.json();
-            setViewingDietHtml(data.content || planHtml);
-            setShowDietModal(true);
             showToast("Dieta gerada com sucesso!", 'success');
-        } else {
-            throw new Error("Erro ao salvar dieta");
+        } catch (v2Err) {
+            const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/dietas", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userId: currentUser.id,
+                    goal: dietFormData.goal,
+                    content: planHtml
+                })
+            });
+            if (!response.ok) throw new Error("Erro ao salvar dieta");
+            await fetchUserDiets(currentUser.id);
         }
+
+        setShowGenerateDietForm(false);
+        setViewingDietHtml(planHtml);
+        setShowDietModal(true);
+        
     } catch (err: any) {
         showToast("Erro ao gerar dieta: " + err.message, 'error');
     } finally {
@@ -520,30 +556,37 @@ const App: React.FC = () => {
     }
   };
 
-  // Replaced simple handler with logic using ConfirmModal
   const confirmDeleteWorkout = () => {
     triggerConfirm(
         "Excluir Treino Atual?",
         "Você perderá sua ficha de treino atual permanentemente. Deseja continuar?",
         async () => {
             if (!currentUser || savedWorkouts.length === 0) return;
-            try {
-                const workoutId = savedWorkouts[0].id;
-                const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/treinos/${workoutId}`, {
-                    method: "DELETE"
-                });
+            const workoutId = savedWorkouts[0].id;
 
-                if (response.ok) {
-                    setSavedWorkouts([]);
-                    setShowWorkoutModal(false);
-                    setViewingWorkoutHtml(null);
-                    showToast("Treino removido com sucesso.", 'success');
-                }
+            try {
+                await apiService.deleteTraining(currentUser.id, workoutId);
+                setSavedWorkouts([]);
+                setShowWorkoutModal(false);
+                setViewingWorkoutHtml(null);
+                showToast("Treino removido com sucesso.", 'success');
             } catch (e) {
-                showToast("Erro ao remover treino.", 'error');
+                try {
+                    const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/treinos/${workoutId}`, {
+                        method: "DELETE"
+                    });
+                    if (response.ok) {
+                        setSavedWorkouts([]);
+                        setShowWorkoutModal(false);
+                        setViewingWorkoutHtml(null);
+                        showToast("Treino removido com sucesso.", 'success');
+                    }
+                } catch(err) {
+                    showToast("Erro ao remover treino.", 'error');
+                }
             }
         },
-        true // isDestructive
+        true 
     );
   };
 
@@ -553,23 +596,31 @@ const App: React.FC = () => {
         "Você perderá seu plano nutricional atual permanentemente. Deseja continuar?",
         async () => {
             if (!currentUser || savedDiets.length === 0) return;
+            const dietId = savedDiets[0].id;
+            
             try {
-                const dietId = savedDiets[0].id;
-                const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/dietas/${dietId}`, {
-                    method: "DELETE"
-                });
-
-                if (response.ok) {
-                    setSavedDiets([]);
-                    setShowDietModal(false);
-                    setViewingDietHtml(null);
-                    showToast("Dieta removida com sucesso.", 'success');
-                }
+                await apiService.deleteDiet(currentUser.id, dietId);
+                setSavedDiets([]);
+                setShowDietModal(false);
+                setViewingDietHtml(null);
+                showToast("Dieta removida com sucesso.", 'success');
             } catch (e) {
-                showToast("Erro ao remover dieta.", 'error');
+                try {
+                    const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/dietas/${dietId}`, {
+                        method: "DELETE"
+                    });
+                    if (response.ok) {
+                        setSavedDiets([]);
+                        setShowDietModal(false);
+                        setViewingDietHtml(null);
+                        showToast("Dieta removida com sucesso.", 'success');
+                    }
+                } catch(err) {
+                    showToast("Erro ao remover dieta.", 'error');
+                }
             }
         },
-        true // isDestructive
+        true 
     );
   };
 
@@ -585,21 +636,17 @@ const App: React.FC = () => {
     </>
   );
 
-  // Categorize exercises from the fetched list
   const standardExercises = exercisesList.filter(ex => ex.category !== 'SPECIAL');
-  const postureExercise = exercisesList.find(ex => ex.alias === SPECIAL_EXERCISES.POSTURE);
-  const bodyCompExercise = exercisesList.find(ex => ex.alias === SPECIAL_EXERCISES.BODY_COMPOSITION);
+  const postureExercise = exercisesList.find(ex => ex.alias === SPECIAL_EXERCISES.POSTURE) || {id: SPECIAL_EXERCISES.POSTURE, alias: SPECIAL_EXERCISES.POSTURE, name: "Análise Postural"};
+  const bodyCompExercise = exercisesList.find(ex => ex.alias === SPECIAL_EXERCISES.BODY_COMPOSITION) || {id: SPECIAL_EXERCISES.BODY_COMPOSITION, alias: SPECIAL_EXERCISES.BODY_COMPOSITION, name: "Composição Corporal"};
 
-  // Access flags
-  const hasPostureAccess = !!postureExercise;
-  const hasBodyCompAccess = !!bodyCompExercise;
+  const hasPostureAccess = true;
+  const hasBodyCompAccess = true;
 
-  // Check if selected exercise is 'special' mode
   const selectedExerciseObj = exercisesList.find(e => e.id === selectedExercise);
   const isSpecialMode = selectedExerciseObj && 
     (selectedExerciseObj.alias === SPECIAL_EXERCISES.POSTURE || selectedExerciseObj.alias === SPECIAL_EXERCISES.BODY_COMPOSITION);
 
-  // Get selected exercise display name
   const selectedExerciseName = selectedExercise === SPECIAL_EXERCISES.FREE_MODE
     ? "Análise Livre"
     : (selectedExerciseObj ? selectedExerciseObj.name : '');
@@ -614,7 +661,6 @@ const App: React.FC = () => {
     return tips[currentTipIndex % tips.length];
   }
 
-  // --- RENDER HELPERS ---
   const renderWorkoutModal = () => (
     <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
       <div className="min-h-screen p-4 md:p-8 relative">
@@ -720,7 +766,20 @@ const App: React.FC = () => {
 
       {showWorkoutModal && renderWorkoutModal()}
       {showDietModal && renderDietModal()}
-      {/* ... Forms rendering code (unchanged) ... */}
+      
+      {/* Evolution Modal Rendering */}
+      {showEvolutionModal && selectedExercise && (
+        <EvolutionModal 
+          isOpen={showEvolutionModal}
+          onClose={() => setShowEvolutionModal(false)}
+          history={historyRecords}
+          exerciseType={exercisesList.find(e => e.id === selectedExercise)?.name || selectedExercise}
+          highlightLatestAsCurrent={false}
+          onDelete={handleDeleteRecord}
+          triggerConfirm={triggerConfirm}
+        />
+      )}
+
       {showGenerateWorkoutForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -920,6 +979,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* ... (Step UPLOAD_VIDEO mantido) ... */}
         {step === AppStep.UPLOAD_VIDEO && selectedExercise && (
           <div className="w-full max-w-3xl animate-fade-in">
             <div className="glass-panel rounded-3xl p-6 md:p-12 shadow-2xl">
@@ -1013,12 +1073,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* LOADING STATE UI - NEW COMPONENT */}
         {(step === AppStep.ANALYZING || step === AppStep.COMPRESSING) && selectedExercise && (
            <LoadingScreen 
                 step={step} 
                 tip={getExerciseTip()} 
-                // Passa o ID canônico para que o LoadingScreen saiba qual ícone mostrar
                 exerciseType={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.alias || 'STANDARD')} 
            />
         )}
@@ -1026,14 +1084,13 @@ const App: React.FC = () => {
         {step === AppStep.RESULTS && analysisResult && selectedExercise && (
           <ResultView 
             result={analysisResult} 
-            // Passa o nome para exibição na tela de resultados
             exercise={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? "Análise Livre" : (selectedExerciseObj?.name || 'Exercício')} 
-            history={historyRecords} // Passa o histórico atualizado
-            userId={currentUser?.id || ''} // Added userId prop
+            history={historyRecords} 
+            userId={currentUser?.id || ''} 
             onReset={resetAnalysis}
-            onDeleteRecord={handleDeleteRecord} // Passando a função também para o ResultView
-            onWorkoutSaved={() => currentUser && fetchUserWorkouts(currentUser.id)} // Passa a função de recarregar treinos
-            onDietSaved={() => currentUser && fetchUserDiets(currentUser.id)} // Passa a função de recarregar dietas
+            onDeleteRecord={handleDeleteRecord} 
+            onWorkoutSaved={() => currentUser && fetchUserWorkouts(currentUser.id)} 
+            onDietSaved={() => currentUser && fetchUserDiets(currentUser.id)} 
             showToast={showToast}
             triggerConfirm={triggerConfirm}
           />

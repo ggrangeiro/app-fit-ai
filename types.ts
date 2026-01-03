@@ -13,18 +13,33 @@ export interface ExerciseDTO {
   description?: string;
 }
 
+// --- NOVOS ENUMS DO BACKEND V2 ---
+export enum DietGoalEntity {
+  WEIGHT_LOSS = 'WEIGHT_LOSS',
+  HYPERTROPHY = 'HYPERTROPHY',
+  MAINTENANCE = 'MAINTENANCE',
+  DEFINITION = 'DEFINITION'
+}
+
+export enum TrainingGoalEntity {
+  WEIGHT_LOSS = 'WEIGHT_LOSS',
+  HYPERTROPHY = 'HYPERTROPHY',
+  PURE_STRENGTH = 'PURE_STRENGTH',
+  DEFINITION = 'DEFINITION'
+}
+
 export interface WorkoutPlan {
   id: number;
-  userId: string;
-  goal: string;
+  userId: string | number;
+  goal: string; // Frontend usa string, mapeamos para Enum no envio
   content: string; // HTML content
   createdAt?: string;
 }
 
 export interface DietPlan {
   id: number;
-  userId: string;
-  goal: string;
+  userId: string | number;
+  goal: string; // Frontend usa string, mapeamos para Enum no envio
   content: string; // HTML content
   createdAt?: string;
 }
@@ -77,12 +92,14 @@ export enum AppStep {
 export type UserRole = 'admin' | 'user';
 
 export interface User {
-  id: string;
+  id: string; // Frontend usa string, backend pode mandar number. Converteremos.
   name: string;
   email: string;
   role: UserRole;
   avatar?: string;
   assignedExercises: string[]; // Agora é string[] pois vem do banco dinâmico
+  token?: string; // JWT Token para o novo backend
+  refreshToken?: string;
 }
 
 export interface ExerciseRecord {
