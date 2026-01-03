@@ -4,44 +4,55 @@ import { CheckCircle2 } from 'lucide-react';
 
 interface ExerciseCardProps {
   type: ExerciseType;
-  imageUrl: string;
+  icon: React.ReactNode; // Alterado de imageUrl para icon
   selected: boolean;
   onClick: () => void;
 }
 
-const ExerciseCard: React.FC<ExerciseCardProps> = ({ type, imageUrl, selected, onClick }) => {
+const ExerciseCard: React.FC<ExerciseCardProps> = ({ type, icon, selected, onClick }) => {
   return (
     <button
       onClick={onClick}
       className={`
-        group relative flex flex-col items-center justify-end p-4 rounded-3xl transition-all duration-300 h-64 w-full overflow-hidden
+        group relative flex flex-col items-center justify-center p-6 rounded-3xl transition-all duration-300 h-48 w-full overflow-hidden border
         ${selected 
-          ? 'animate-selected-glow ring-2 ring-blue-400' 
-          : 'hover:scale-[1.02] hover:shadow-xl'}
+          ? 'bg-blue-900/20 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] scale-[1.02]' 
+          : 'bg-slate-800/40 border-slate-700 hover:bg-slate-800 hover:border-slate-500 hover:shadow-xl hover:-translate-y-1'}
       `}
     >
-      {/* Background Image */}
-      <div className="absolute inset-0 w-full h-full">
-        <img 
-          src={imageUrl} 
-          alt={type} 
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-        />
-        {/* Overlay gradient - darker when not selected for better text contrast */}
-        <div className={`absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent transition-opacity duration-300 ${selected ? 'opacity-90' : 'opacity-80 group-hover:opacity-70'}`} />
+      {/* Background Decor: Grid Pattern & Gradient Glow */}
+      <div className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none" />
+      
+      <div className={`absolute inset-0 bg-gradient-to-br transition-opacity duration-500 ${selected ? 'from-blue-600/20 via-transparent to-transparent opacity-100' : 'from-slate-700/20 via-transparent to-transparent opacity-0 group-hover:opacity-100'}`} />
+
+      {/* Selection Checkmark Badge */}
+      <div className={`absolute top-4 right-4 transition-all duration-300 ${selected ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`}>
+        <div className="bg-blue-500 text-white rounded-full p-1 shadow-lg">
+           <CheckCircle2 className="w-4 h-4" />
+        </div>
       </div>
 
-      {/* Content */}
-      <div className="relative z-10 w-full flex flex-col items-center text-center">
-        {selected && (
-          <div className="mb-2 text-blue-400 animate-in zoom-in duration-300">
-            <CheckCircle2 className="w-8 h-8 fill-blue-500/20" />
-          </div>
-        )}
-        <span className={`font-bold text-xl tracking-wide transition-colors duration-300 ${selected ? 'text-white' : 'text-slate-100 group-hover:text-white'}`}>
-          {type}
-        </span>
+      {/* Main Icon Container */}
+      <div className={`
+        relative z-10 p-4 rounded-2xl mb-4 transition-all duration-300 shadow-lg
+        ${selected 
+          ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-blue-500/30 scale-110' 
+          : 'bg-slate-700/50 text-slate-300 group-hover:bg-slate-700 group-hover:text-blue-400 group-hover:scale-110'}
+      `}>
+        {/* Clone element to force specific size styling if needed, otherwise render as is */}
+        {React.isValidElement(icon) 
+          ? React.cloneElement(icon as React.ReactElement<any>, { className: "w-8 h-8 md:w-10 md:h-10" })
+          : icon
+        }
       </div>
+
+      {/* Text Label */}
+      <span className={`
+        relative z-10 font-bold text-base md:text-lg tracking-tight text-center leading-tight transition-colors duration-300
+        ${selected ? 'text-white' : 'text-slate-400 group-hover:text-white'}
+      `}>
+        {type}
+      </span>
     </button>
   );
 };

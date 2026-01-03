@@ -89,7 +89,7 @@ export enum AppStep {
   RESULTS = 'RESULTS'
 }
 
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'user' | 'personal';
 
 export interface User {
   id: string; // Frontend usa string, backend pode mandar number. Converteremos.
@@ -100,6 +100,7 @@ export interface User {
   assignedExercises: string[]; // Agora é string[] pois vem do banco dinâmico
   token?: string; // JWT Token para o novo backend
   refreshToken?: string;
+  personalId?: string; // ID do personal trainer responsável (se houver)
 }
 
 export interface ExerciseRecord {

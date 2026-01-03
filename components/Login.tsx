@@ -29,6 +29,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
         if (!password.trim()) throw new Error("Por favor, digite uma senha.");
 
         // Usa o novo serviço de cadastro V2
+        // Nota: Cadastro público cria como 'user' por padrão.
         await apiService.signup(name, email, password);
 
         showToast("Cadastro realizado com sucesso! Faça login.", 'success');
@@ -42,7 +43,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
             throw new Error("Preencha e-mail e senha.");
         }
 
-        // Usa o novo serviço de login V2 que lida com Token JWT
+        // Usa o novo serviço de login V2 que lida com Token JWT e Roles
         const appUser = await apiService.login(email, password);
         
         // Armazena sessão (geralmente feito no App ou Context, mas aqui mantendo padrão do projeto)

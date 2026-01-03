@@ -8,31 +8,45 @@ import ExerciseCard from './components/ExerciseCard';
 import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Footprints, BicepsFlexed, ArrowDownToLine, Flame, Shield, Activity, Timer, MoveDown, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import LoadingScreen from './components/LoadingScreen';
 import Toast, { ToastType } from './components/Toast';
 import ConfirmModal from './components/ConfirmModal';
 
-const DEFAULT_EXERCISE_IMAGES: Record<string, string> = {
-  'SQUAT': "https://images.unsplash.com/photo-1434682881908-b43d0467b798?q=80&w=800&auto=format&fit=crop",
-  'PUSHUP': "https://images.unsplash.com/photo-1599058945522-28d584b6f0ff?q=80&w=600&auto=format&fit=crop",
-  'LUNGE': "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=600&auto=format&fit=crop",
-  'BURPEE': "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=600&auto=format&fit=crop", 
-  'PLANK': "https://images.unsplash.com/photo-1434682881908-b43d0467b798?q=80&w=800&auto=format&fit=crop",
-  'JUMPING_JACK': "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
-  'MOUNTAIN_CLIMBER': "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
-  'CRUNCH': "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=800&auto=format&fit=crop",
-  'PULLUP': "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
-  'BRIDGE': "https://images.unsplash.com/photo-1574680178050-55c6a6a96e0a?q=80&w=800&auto=format&fit=crop",
-  'BULGARIAN_SQUAT': "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop",
-  'DEADLIFT': "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
-  'TRICEP_DIP': "https://images.unsplash.com/photo-1522898467493-49726bf28798?q=80&w=800&auto=format&fit=crop",
-  'BICEP_CURL': "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop",
-  'CABLE_CROSSOVER': "https://images.unsplash.com/photo-1534367507873-d2d7e24c797f?q=80&w=800&auto=format&fit=crop",
-  'BENCH_PRESS': "https://images.unsplash.com/photo-1534367610401-9f5ed68180aa?q=80&w=800&auto=format&fit=crop",
-  'POSTURE_ANALYSIS': "https://images.unsplash.com/photo-1544367563-12123d8959eb?q=80&w=800&auto=format&fit=crop",
-  'BODY_COMPOSITION': "https://images.unsplash.com/photo-1518310383802-640c2de311b2?q=80&w=800&auto=format&fit=crop"
+// --- ICON MAPPING SYSTEM ---
+const EXERCISE_ICONS: Record<string, React.ReactNode> = {
+  // Legs / Agachamentos
+  'SQUAT': <MoveDown />,
+  'LUNGE': <Footprints />,
+  'BULGARIAN_SQUAT': <Footprints />,
+  'BRIDGE': <Activity />, // Pelvic bridge
+  'DEADLIFT': <ArrowDownToLine />, // Pulling from ground
+
+  // Arms / Upper Body
+  'PUSHUP': <ArrowDownToLine className="rotate-180" />, // Pushing up
+  'PULLUP': <ArrowDownToLine />,
+  'TRICEP_DIP': <ArrowDownToLine />,
+  'BICEP_CURL': <BicepsFlexed />,
+  'BENCH_PRESS': <Dumbbell />,
+  'CABLE_CROSSOVER': <Activity />,
+
+  // Core
+  'PLANK': <Shield />,
+  'CRUNCH': <ShieldCheck />,
+
+  // Cardio / HIIT
+  'BURPEE': <Flame />,
+  'JUMPING_JACK': <Activity />,
+  'MOUNTAIN_CLIMBER': <Timer />,
+
+  // Special
+  'POSTURE_ANALYSIS': <ScanLine />,
+  'BODY_COMPOSITION': <Scale />,
+  'FREE_ANALYSIS_MODE': <Sparkles />,
+  
+  // Default Fallback
+  'DEFAULT': <Dumbbell />
 };
 
 const EXERCISE_TIPS: Record<string, string[]> = {
@@ -58,17 +72,33 @@ const EXERCISE_TIPS: Record<string, string[]> = {
 };
 
 const App: React.FC = () => {
-  // --- INICIALIZAÇÃO LAZY DO ESTADO ---
+  // --- INICIALIZAÇÃO ROBUSTA DE ESTADO (CORREÇÃO F5) ---
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    return MockDataService.getCurrentUser();
+    // Lê DIRETAMENTE do localStorage na inicialização para evitar delay/logout
+    try {
+      const stored = localStorage.getItem('fitai_current_session');
+      return stored ? JSON.parse(stored) : null;
+    } catch (e) {
+      return null;
+    }
   });
 
   const [step, setStep] = useState<AppStep>(() => {
-    const user = MockDataService.getCurrentUser();
-    if (user) {
-      return user.role === 'admin' ? AppStep.ADMIN_DASHBOARD : AppStep.SELECT_EXERCISE;
+    try {
+      // Determina o passo inicial baseado no localStorage também
+      const stored = localStorage.getItem('fitai_current_session');
+      if (stored) {
+        const user = JSON.parse(stored);
+        // Se for admin OU personal, vai para dashboard
+        if (user.role === 'admin' || user.role === 'personal') {
+            return AppStep.ADMIN_DASHBOARD;
+        }
+        return AppStep.SELECT_EXERCISE;
+      }
+      return AppStep.LOGIN;
+    } catch (e) {
+      return AppStep.LOGIN;
     }
-    return AppStep.LOGIN;
   });
 
   // UI States
@@ -79,10 +109,12 @@ const App: React.FC = () => {
   const [historyRecords, setHistoryRecords] = useState<ExerciseRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
-  const [exerciseImages, setExerciseImages] = useState<Record<string, string>>(DEFAULT_EXERCISE_IMAGES);
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   
+  // Accordion State - INICIA FECHADO (false) PARA MINIMIZAR POLUIÇÃO
+  const [showExerciseList, setShowExerciseList] = useState(false);
+
   // Data States
   const [exercisesList, setExercisesList] = useState<ExerciseDTO[]>([]);
   const [loadingExercises, setLoadingExercises] = useState(false);
@@ -125,6 +157,54 @@ const App: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // --- DERIVED STATE ---
+  const standardExercises = exercisesList.filter(e => e.category === 'STANDARD');
+  
+  const postureExercise = exercisesList.find(e => e.alias === SPECIAL_EXERCISES.POSTURE || e.id === SPECIAL_EXERCISES.POSTURE);
+  const bodyCompExercise = exercisesList.find(e => e.alias === SPECIAL_EXERCISES.BODY_COMPOSITION || e.id === SPECIAL_EXERCISES.BODY_COMPOSITION);
+  
+  const hasPostureAccess = !!postureExercise;
+  const hasBodyCompAccess = !!bodyCompExercise;
+
+  const selectedExerciseObj = exercisesList.find(e => e.id === selectedExercise);
+  
+  const isSpecialMode = (selectedExercise === SPECIAL_EXERCISES.FREE_MODE) || (selectedExerciseObj?.category === 'SPECIAL');
+  
+  const isSelectedInStandard = !!selectedExerciseObj && selectedExerciseObj.category === 'STANDARD';
+
+  const selectedExerciseName = selectedExercise === SPECIAL_EXERCISES.FREE_MODE 
+     ? 'Análise Livre' 
+     : (selectedExerciseObj?.name || 'Exercício Selecionado');
+
+  const getExerciseTip = () => {
+      if (!selectedExercise) return "Prepare-se...";
+      const alias = selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.alias || 'DEFAULT');
+      const tips = EXERCISE_TIPS[alias] || EXERCISE_TIPS['DEFAULT'];
+      return tips[currentTipIndex % tips.length];
+  };
+
+  // --- SAFETY CHECK FOR SESSION PERSISTENCE ---
+  // Mantém este effect como backup caso o estado inicial falhe por algum motivo raro
+  useEffect(() => {
+    if (!currentUser) {
+       const stored = localStorage.getItem('fitai_current_session');
+       if (stored) {
+           try {
+             const storedUser = JSON.parse(stored);
+             setCurrentUser(storedUser);
+             // Redirecionamento baseado em role
+             if (storedUser.role === 'admin' || storedUser.role === 'personal') {
+                 setStep(AppStep.ADMIN_DASHBOARD);
+             } else {
+                 setStep(AppStep.SELECT_EXERCISE);
+             }
+           } catch(e) {
+             // Se falhar o parse, deixa como está (login)
+           }
+       }
+    }
+  }, []);
+
   // --- HELPER FUNCTIONS FOR UI ---
   const showToast = (message: string, type: ToastType = 'info') => {
     setToast({ message, type, isVisible: true });
@@ -150,7 +230,8 @@ const App: React.FC = () => {
   const loadExercisesList = async (user: User) => {
     setLoadingExercises(true);
     try {
-      if (user.role === 'admin') {
+      if (user.role === 'admin' || user.role === 'personal') {
+         // Admins e Personais carregam lista completa
          try {
            const allEx = await apiService.getAllExercises();
            if(allEx.length > 0) {
@@ -234,10 +315,6 @@ const App: React.FC = () => {
         await fetchUserWorkouts(currentUser.id);
         await fetchUserDiets(currentUser.id);
       }
-      const customImages = MockDataService.getExerciseImages();
-      if (Object.keys(customImages).length > 0) {
-        setExerciseImages({ ...DEFAULT_EXERCISE_IMAGES, ...customImages });
-      }
     };
     initData();
   }, [currentUser]);
@@ -261,8 +338,12 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    setStep(user.role === 'admin' ? AppStep.ADMIN_DASHBOARD : AppStep.SELECT_EXERCISE);
-    showToast(`Bem-vindo, ${user.name || 'Aluno'}!`, 'success');
+    if (user.role === 'admin' || user.role === 'personal') {
+        setStep(AppStep.ADMIN_DASHBOARD);
+    } else {
+        setStep(AppStep.SELECT_EXERCISE);
+    }
+    showToast(`Bem-vindo, ${user.name || 'Usuário'}!`, 'success');
   };
 
   const handleLogout = () => {
@@ -445,7 +526,6 @@ const App: React.FC = () => {
       
       if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
           try {
-            const saveUrl = "https://testeai-732767853162.us-west1.run.app/api/historico";
             const payload = {
               userId: currentUser.id,
               userName: currentUser.name,
@@ -453,11 +533,9 @@ const App: React.FC = () => {
               timestamp: Date.now(),
               result: { ...result, date: new Date().toISOString() }
             };
-            await fetch(saveUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
+            
+            // USE APISERVICE TO SAVE HISTORY (Auto-handles requester logic if needed, though for self-save it's optional)
+            await apiService.saveHistory(payload);
             
             try {
                 const encodedExercise = encodeURIComponent(backendId);
@@ -636,31 +714,6 @@ const App: React.FC = () => {
     </>
   );
 
-  const standardExercises = exercisesList.filter(ex => ex.category !== 'SPECIAL');
-  const postureExercise = exercisesList.find(ex => ex.alias === SPECIAL_EXERCISES.POSTURE) || {id: SPECIAL_EXERCISES.POSTURE, alias: SPECIAL_EXERCISES.POSTURE, name: "Análise Postural"};
-  const bodyCompExercise = exercisesList.find(ex => ex.alias === SPECIAL_EXERCISES.BODY_COMPOSITION) || {id: SPECIAL_EXERCISES.BODY_COMPOSITION, alias: SPECIAL_EXERCISES.BODY_COMPOSITION, name: "Composição Corporal"};
-
-  const hasPostureAccess = true;
-  const hasBodyCompAccess = true;
-
-  const selectedExerciseObj = exercisesList.find(e => e.id === selectedExercise);
-  const isSpecialMode = selectedExerciseObj && 
-    (selectedExerciseObj.alias === SPECIAL_EXERCISES.POSTURE || selectedExerciseObj.alias === SPECIAL_EXERCISES.BODY_COMPOSITION);
-
-  const selectedExerciseName = selectedExercise === SPECIAL_EXERCISES.FREE_MODE
-    ? "Análise Livre"
-    : (selectedExerciseObj ? selectedExerciseObj.name : '');
-
-  const getExerciseTip = () => {
-    if (!selectedExercise) return "";
-    const typeKey = selectedExercise === SPECIAL_EXERCISES.FREE_MODE 
-        ? 'FREE_ANALYSIS_MODE' 
-        : (selectedExerciseObj ? selectedExerciseObj.alias : 'SQUAT');
-        
-    const tips = EXERCISE_TIPS[typeKey] || EXERCISE_TIPS['FREE_ANALYSIS_MODE'] || ["Mantenha a postura correta."];
-    return tips[currentTipIndex % tips.length];
-  }
-
   const renderWorkoutModal = () => (
     <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
       <div className="min-h-screen p-4 md:p-8 relative">
@@ -753,7 +806,9 @@ const App: React.FC = () => {
              <div className="flex items-center gap-2">
                 <div className="hidden md:block text-right">
                   <p className="text-sm font-bold text-white">{currentUser?.name}</p>
-                  <p className="text-xs text-slate-400 capitalize">{currentUser?.role === 'admin' ? 'Administrador' : 'Aluno'}</p>
+                  <p className="text-xs text-slate-400 capitalize">
+                      {currentUser?.role === 'admin' ? 'Administrador' : (currentUser?.role === 'personal' ? 'Personal Trainer' : 'Aluno')}
+                  </p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600">
                   <UserIcon className="w-5 h-5 text-slate-300" />
@@ -780,53 +835,15 @@ const App: React.FC = () => {
         />
       )}
 
-      {showGenerateWorkoutForm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-             <button onClick={() => setShowGenerateWorkoutForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
-               <X className="w-6 h-6" />
-             </button>
-             <div className="flex flex-col items-center mb-6">
-               <div className="p-3 bg-blue-600/20 text-blue-400 rounded-full mb-3"><Dumbbell className="w-8 h-8" /></div>
-               <h3 className="text-2xl font-bold text-white">Criar Ficha de Treino</h3>
-               <p className="text-slate-400 text-center text-sm">A IA criará um plano personalizado para você.</p>
-             </div>
-             <form onSubmit={handleGenerateWorkout} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-sm font-medium text-slate-300 mb-1">Peso (kg)</label><input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none" value={workoutFormData.weight} onChange={e => setWorkoutFormData({...workoutFormData, weight: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label><input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none" value={workoutFormData.height} onChange={e => setWorkoutFormData({...workoutFormData, height: e.target.value})} /></div>
-                </div>
-                <div><label className="block text-sm font-medium text-slate-300 mb-1">Sexo Biológico</label><select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none" value={workoutFormData.gender} onChange={e => setWorkoutFormData({...workoutFormData, gender: e.target.value})}><option value="masculino">Masculino</option><option value="feminino">Feminino</option></select></div>
-                <div><label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label><select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none" value={workoutFormData.goal} onChange={e => setWorkoutFormData({...workoutFormData, goal: e.target.value})}><option value="hipertrofia">Hipertrofia (Crescer)</option><option value="definicao">Definição (Secar)</option><option value="emagrecimento">Emagrecimento (Perder Peso)</option><option value="forca">Força Pura</option></select></div>
-                <div><label className="block text-sm font-medium text-slate-300 mb-1">Nível de Experiência</label><select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none" value={workoutFormData.level} onChange={e => setWorkoutFormData({...workoutFormData, level: e.target.value})}><option value="iniciante">Iniciante</option><option value="intermediario">Intermediário</option><option value="avancado">Avançado</option></select></div>
-                <div><label className="block text-sm font-medium text-slate-300 mb-1">Dias por Semana</label><select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none" value={workoutFormData.frequency} onChange={e => setWorkoutFormData({...workoutFormData, frequency: e.target.value})}><option value="2">2 dias</option><option value="3">3 dias</option><option value="4">4 dias</option><option value="5">5 dias</option><option value="6">6 dias</option></select></div>
-                <div><label className="block text-sm font-medium text-slate-300 mb-1">Observações</label><textarea rows={3} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder-slate-500 text-sm" value={workoutFormData.observations} onChange={e => setWorkoutFormData({...workoutFormData, observations: e.target.value})} /><p className="text-[10px] text-slate-500 mt-1">A IA usará isso para adaptar ou remover exercícios.</p></div>
-                <button type="submit" disabled={generatingWorkout} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">{generatingWorkout ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}{generatingWorkout ? "Gerando..." : "Gerar Treino"}</button>
-             </form>
-          </div>
-        </div>
-      )}
-      {showGenerateDietForm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-             <button onClick={() => setShowGenerateDietForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X className="w-6 h-6" /></button>
-             <div className="flex flex-col items-center mb-6"><div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-full mb-3"><Utensils className="w-8 h-8" /></div><h3 className="text-2xl font-bold text-white">Montar Dieta</h3><p className="text-slate-400 text-center text-sm">Cardápio personalizado com inteligência artificial.</p></div>
-             <form onSubmit={handleGenerateDiet} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Peso (kg)</label><input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none" value={dietFormData.weight} onChange={e => setDietFormData({...dietFormData, weight: e.target.value})} /></div><div><label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label><input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none" value={dietFormData.height} onChange={e => setDietFormData({...dietFormData, height: e.target.value})} /></div></div>
-                <div><label className="block text-sm font-medium text-slate-300 mb-1">Sexo Biológico</label><select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none" value={dietFormData.gender} onChange={e => setDietFormData({...dietFormData, gender: e.target.value})}><option value="masculino">Masculino</option><option value="feminino">Feminino</option></select></div>
-                <div><label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label><select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none" value={dietFormData.goal} onChange={e => setDietFormData({...dietFormData, goal: e.target.value})}><option value="emagrecer">Emagrecer</option><option value="ganhar_massa">Hipertrofia</option><option value="manutencao">Manutenção</option><option value="definicao">Definição</option></select></div>
-                <div><label className="block text-sm font-medium text-slate-300 mb-1">Observações</label><textarea rows={3} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none resize-none placeholder-slate-500 text-sm" value={dietFormData.observations} onChange={e => setDietFormData({...dietFormData, observations: e.target.value})} /><p className="text-[10px] text-slate-500 mt-1">A IA usará isso para personalizar os alimentos.</p></div>
-                <button type="submit" disabled={generatingDiet} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">{generatingDiet ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}{generatingDiet ? "Gerando..." : "Gerar Dieta"}</button>
-             </form>
-          </div>
-        </div>
-      )}
-
+      {/* Renderização Condicional baseada no Role */}
       <main className="flex-grow flex items-center justify-center p-4 md:p-8">
-        {step === AppStep.ADMIN_DASHBOARD && currentUser?.role === 'admin' && (
+        
+        {/* DASHBOARD PARA ADMIN E PERSONAL */}
+        {step === AppStep.ADMIN_DASHBOARD && (currentUser?.role === 'admin' || currentUser?.role === 'personal') && (
           <AdminDashboard currentUser={currentUser} onRefreshData={() => {}} />
         )}
 
+        {/* FLUXO DE ALUNO (SELEÇÃO DE EXERCÍCIO) */}
         {step === AppStep.SELECT_EXERCISE && (
           <div className="w-full max-w-6xl animate-fade-in flex flex-col items-center">
             
@@ -837,6 +854,7 @@ const App: React.FC = () => {
               <h2 className="text-3xl md:text-5xl font-bold text-white">Olá! <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">O que vamos fazer hoje?</span></h2>
             </div>
             
+            {/* ... Restante do código de seleção de exercício (igual ao anterior) ... */}
             <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               
               {/* CARD DE TREINO DINÂMICO */}
@@ -930,30 +948,59 @@ const App: React.FC = () => {
                 )}
             </div>
 
-            <div id="exercise-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6 w-full mb-12 min-h-[300px]">
-              {loadingExercises ? (
-                <div className="col-span-full flex flex-col items-center justify-center py-12 bg-slate-800/30 rounded-3xl border border-slate-700/50 backdrop-blur-sm animate-pulse">
-                   <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-3" />
-                   <p className="text-slate-300 font-medium">Sincronizando catálogo de exercícios...</p>
-                </div>
-              ) : (
-                standardExercises.length > 0 ? (
-                  standardExercises.map((ex) => (
-                    <ExerciseCard 
-                      key={ex.id} // Usa ID único
-                      type={ex.name} 
-                      // Usa ALIAS para imagem
-                      imageUrl={exerciseImages[ex.alias] || DEFAULT_EXERCISE_IMAGES[ex.alias] || DEFAULT_EXERCISE_IMAGES['SQUAT']} 
-                      selected={selectedExercise === ex.id} // Compara ID único
-                      onClick={() => handleExerciseToggle(ex.id)} 
-                    />
-                  ))
-                ) : (
-                  <div className="col-span-full text-center py-10 text-slate-400">
-                    <p>Nenhum exercício de força atribuído para você.</p>
+            {/* --- ACCORDION CONTAINER FOR EXERCISE LIST --- */}
+            <div className="w-full max-w-5xl mb-12">
+               <button
+                  onClick={() => setShowExerciseList(!showExerciseList)}
+                  className={`w-full glass-panel p-4 md:p-6 rounded-2xl flex items-center justify-between group hover:bg-slate-800/60 transition-all border ${isSelectedInStandard ? 'border-blue-500/40 bg-blue-900/10' : 'border-slate-700/50'}`}
+               >
+                  <div className="flex items-center gap-4">
+                     <div className={`p-3 rounded-full transition-colors ${isSelectedInStandard ? 'bg-blue-600 text-white' : 'bg-blue-600/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white'}`}>
+                        {isSelectedInStandard ? <CheckCircle2 className="w-6 h-6" /> : <Dumbbell className="w-6 h-6" />}
+                     </div>
+                     <div className="text-left">
+                        <h3 className={`font-bold text-lg ${isSelectedInStandard ? 'text-blue-400' : 'text-white'}`}>
+                           {isSelectedInStandard ? 'Exercício Selecionado' : 'Exercícios de Força'}
+                        </h3>
+                        <p className="text-slate-400 text-xs">
+                           {isSelectedInStandard ? 'Toque para alterar' : `${standardExercises.length} disponíveis`}
+                        </p>
+                     </div>
                   </div>
-                )
-              )}
+                  <div className={`p-2 rounded-full bg-slate-800 text-slate-400 transition-transform duration-300 ${showExerciseList ? 'rotate-180' : ''}`}>
+                     <ChevronDown className="w-5 h-5" />
+                  </div>
+               </button>
+
+               <div className={`grid transition-all duration-500 ease-in-out overflow-hidden ${showExerciseList ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0 mt-0'}`}>
+                   <div className="overflow-hidden">
+                       <div id="exercise-grid" className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 w-full min-h-[10px] pb-2">
+                          {loadingExercises ? (
+                            <div className="col-span-full flex flex-col items-center justify-center py-12 bg-slate-800/30 rounded-3xl border border-slate-700/50 backdrop-blur-sm animate-pulse">
+                               <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-3" />
+                               <p className="text-slate-300 font-medium">Sincronizando catálogo de exercícios...</p>
+                            </div>
+                          ) : (
+                            standardExercises.length > 0 ? (
+                              standardExercises.map((ex) => (
+                                <ExerciseCard 
+                                  key={ex.id} // Usa ID único
+                                  type={ex.name} 
+                                  // USA O ÍCONE MAPEADO OU UM FALLBACK
+                                  icon={EXERCISE_ICONS[ex.alias] || <Dumbbell />}
+                                  selected={selectedExercise === ex.id} 
+                                  onClick={() => handleExerciseToggle(ex.id)} 
+                                />
+                              ))
+                            ) : (
+                              <div className="col-span-full text-center py-10 text-slate-400">
+                                <p>Nenhum exercício de força atribuído para você.</p>
+                              </div>
+                            )
+                          )}
+                       </div>
+                   </div>
+               </div>
             </div>
             
             <div className={`sticky bottom-8 z-40 flex items-center gap-4 transition-all duration-300 justify-center ${selectedExercise ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>

@@ -24,13 +24,32 @@ const DEFAULT_ADMIN: User = {
   assignedExercises: []
 };
 
-// Default Test User
+// Default Personal Trainer
+const DEFAULT_PERSONAL: User = {
+  id: 'personal-1',
+  name: 'Personal Trainer',
+  email: 'personal@fitai.com',
+  role: 'personal',
+  assignedExercises: []
+};
+
+// Default Test User (Linked to Personal)
 const DEFAULT_TEST_USER: User = {
   id: 'test-user-1',
-  name: 'Teste',
-  email: 'teste@teste.com',
+  name: 'Aluno do Personal',
+  email: 'aluno@teste.com',
   role: 'user',
-  assignedExercises: ['SQUAT', 'PUSHUP', 'POSTURE_ANALYSIS', 'BODY_COMPOSITION'] 
+  assignedExercises: ['SQUAT', 'PUSHUP', 'POSTURE_ANALYSIS', 'BODY_COMPOSITION'],
+  personalId: 'personal-1'
+};
+
+// Independent User (Linked to no one/Admin)
+const INDEPENDENT_USER: User = {
+  id: 'indep-user-1',
+  name: 'Aluno Independente',
+  email: 'indep@teste.com',
+  role: 'user',
+  assignedExercises: ['SQUAT'],
 };
 
 // Helper to simulate delay
@@ -158,10 +177,17 @@ export const MockDataService = {
       users.push(DEFAULT_ADMIN);
       hasChanges = true;
     }
+    
+    // Ensure Personal exists
+    if (!users.find(u => u.email === DEFAULT_PERSONAL.email)) {
+      users.push(DEFAULT_PERSONAL);
+      hasChanges = true;
+    }
 
     // Ensure Test User exists
     if (!users.find(u => u.email === DEFAULT_TEST_USER.email)) {
       users.push(DEFAULT_TEST_USER);
+      users.push(INDEPENDENT_USER);
       hasChanges = true;
     }
 
@@ -191,13 +217,27 @@ export const MockDataService = {
     return stored ? JSON.parse(stored) : null;
   },
 
-  // --- USER MANAGEMENT (Admin Only) ---
+  // --- USER MANAGEMENT ---
 
-  getUsers: (): User[] => {
-    return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+  // Obtém usuários filtrados pela Role de quem está pedindo
+  getUsers: (requester?: User): User[] => {
+    const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+    
+    // Se não for passado, retorna tudo (comportamento legado/admin)
+    if (!requester || requester.role === 'admin') {
+      return users;
+    }
+
+    // Se for Personal, retorna apenas seus alunos
+    if (requester.role === 'personal') {
+      return users.filter(u => u.personalId === requester.id);
+    }
+
+    // Se for Aluno, não deveria chamar isso, mas retorna vazio por segurança
+    return [];
   },
 
-  createUser: async (name: string, email: string, initialExercises?: string[]): Promise<User> => {
+  createUser: async (name: string, email: string, initialExercises?: string[], creatorId?: string, creatorRole?: string): Promise<User> => {
     await delay(800);
     const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
     
@@ -213,7 +253,9 @@ export const MockDataService = {
       name,
       email,
       role: 'user',
-      assignedExercises: defaultExercises
+      assignedExercises: defaultExercises,
+      // Se quem criou for um Personal, vincula automaticamente
+      personalId: (creatorRole === 'personal') ? creatorId : undefined
     };
 
     users.push(newUser);

@@ -1,7 +1,7 @@
-import { DietGoalEntity, TrainingGoalEntity, User, UserRole, ExerciseDTO } from "../types";
+import { DietGoalEntity, TrainingGoalEntity, User, UserRole, ExerciseDTO, AnalysisResult } from "../types";
 
 // --- CONFIGURATION SWITCH ---
-const USE_V2_BACKEND = false; // Set to true to use the new backend, false for the old one.
+const USE_V2_BACKEND = true; // Set to true to use the new backend, false for the old one.
 
 const API_V1_URL = "https://testeai-732767853162.us-west1.run.app/api";
 const API_V2_URL = "https://us-west1-gen-lang-client-0004040174.cloudfunctions.net/fit-ai-back";
@@ -36,11 +36,15 @@ export const apiService = {
 
         const userData = await response.json();
         
+        // Mocking Personal Role logic based on specific email if backend doesn't support yet
+        let role: UserRole = userData.role || 'user';
+        if (userData.email.includes('personal')) role = 'personal';
+
         return {
             id: userData.id ? String(userData.id) : "0",
             name: userData.nome || userData.name || "Usuário",
             email: userData.email,
-            role: userData.role || 'user',
+            role: role,
             avatar: userData.avatar,
             assignedExercises: userData.assignedExercises || []
         };
@@ -83,7 +87,12 @@ export const apiService = {
         
         if (userId === "0" || isNaN(Number(userId))) userId = "1"; 
 
-        const role: UserRole = data.roles && data.roles.includes("ADMIN") ? 'admin' : 'user';
+        // Role mapping logic
+        let role: UserRole = 'user';
+        if (data.roles) {
+            if (data.roles.includes("ADMIN")) role = 'admin';
+            else if (data.roles.includes("PERSONAL")) role = 'personal';
+        }
 
         return {
           id: userId,
@@ -97,25 +106,36 @@ export const apiService = {
     }
   },
 
-  signup: async (name: string, email: string, password: string) => {
+  // Atualizado para usar Query Params no V2 conforme documentação
+  signup: async (name: string, email: string, password: string, creatorId?: string) => {
     if (!USE_V2_BACKEND) {
         // --- V1 SIGNUP ---
+        const payload: any = { nome: name, email, senha: password };
+        if (creatorId) payload.personalId = creatorId;
+
         const response = await fetch(`${API_V1_URL}/usuarios`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nome: name, email, senha: password })
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
             if (response.status === 409) throw new Error("Este e-mail já está em uso.");
-            // Tenta ler msg de erro
             try { const err = await response.json(); if(err.message) throw new Error(err.message); } catch(e){}
             throw new Error("Erro ao criar conta (V1).");
         }
         return await response.json();
     } else {
         // --- V2 SIGNUP ---
-        const response = await fetch(`${API_V2_URL}/auth/signup`, {
+        // Documentação: POST /api/usuarios?requesterId=10&requesterRole=PERSONAL
+        // Body: { name, email, password } (Sem personalId no body)
+        
+        let url = `${API_V2_URL}/api/usuarios`;
+        if (creatorId) {
+            url += `?requesterId=${creatorId}&requesterRole=PERSONAL`;
+        }
+
+        const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, email, password })
@@ -123,10 +143,54 @@ export const apiService = {
 
         if (!response.ok) {
             if (response.status === 409) throw new Error("Este e-mail já está em uso.");
+            // Tenta pegar mensagem de erro do backend
+            try {
+                const errData = await response.json();
+                if (errData.message) throw new Error(errData.message);
+            } catch(e) {}
             throw new Error("Erro ao criar conta.");
         }
         return await response.json();
     }
+  },
+
+  // --- HISTÓRICO / AVALIAÇÕES ---
+  saveHistory: async (
+    payload: { userId: string | number; userName: string; exercise: string; timestamp: number; result: AnalysisResult },
+    requesterId?: string | number,
+    requesterRole?: string
+  ) => {
+      if (!USE_V2_BACKEND) {
+          // --- V1 SAVE HISTORY ---
+          const response = await fetch(`${API_V1_URL}/historico`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+          });
+          if (!response.ok) throw new Error("Erro ao salvar histórico (V1).");
+          return await response.json();
+      } else {
+          // --- V2 SAVE HISTORY ---
+          // Documentação: POST /api/historico?requesterId=12&requesterRole=PERSONAL
+          // Necessário para validar permissão de salvar para terceiros
+          let url = `${API_V2_URL}/api/historico`;
+          
+          if (requesterId && requesterRole === 'personal') {
+              url += `?requesterId=${requesterId}&requesterRole=PERSONAL`;
+          }
+
+          const response = await fetch(url, {
+              method: "POST",
+              headers: getHeaders(),
+              body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+              if (response.status === 403) throw new Error("Você não tem permissão para salvar avaliação para este aluno.");
+              throw new Error("Erro ao salvar avaliação.");
+          }
+          return await response.json();
+      }
   },
 
   // --- DIETAS ---
@@ -169,7 +233,6 @@ export const apiService = {
           // --- V1 GET DIETS ---
           const response = await fetch(`${API_V1_URL}/dietas/${userId}`);
           if (!response.ok) return [];
-          // V1 retorna array direto
           return await response.json();
       } else {
           // --- V2 GET DIETS ---
@@ -275,7 +338,6 @@ export const apiService = {
           const response = await fetch(`${API_V1_URL}/usuarios/exercises`);
           if (!response.ok) return [];
           const data = await response.json();
-          // V1 return array of { id, exercicio } or { id, name }
           return data.map((e:any) => ({ id: e.id, name: e.exercicio || e.name }));
       } else {
           // --- V2 GET ALL EXERCISES ---
@@ -295,7 +357,6 @@ export const apiService = {
           const response = await fetch(`${API_V1_URL}/usuarios/${userId}/exercicios`);
           if (!response.ok) return [];
           const data = await response.json();
-          // V1 returns array directly
           return data.map((e:any) => ({ id: e.id, name: e.exercicio || e.name }));
       } else {
           // --- V2 GET USER EXERCISES ---
@@ -312,8 +373,6 @@ export const apiService = {
   assignExercise: async (userId: string | number, exerciseId: number) => {
       if (!USE_V2_BACKEND) {
           // --- V1 ASSIGN ---
-          // V1 não tem rota single assign. 
-          // Retornamos erro para forçar o componente a usar o fallback de Update User (PUT)
           throw new Error("V1 Backend requer update completo do usuário.");
       } else {
           // --- V2 ASSIGN ---
@@ -330,26 +389,36 @@ export const apiService = {
       }
   },
   
-  // --- ALUNOS ---
-  getStudents: async (personalId: string | number, userIdToCheck: string | number) => {
+  // --- USUÁRIOS (Unified with Query Params) ---
+  // Substitui o antigo getStudents para ser genérico e atender Admin e Personal
+  getUsers: async (requesterId?: string | number, requesterRole?: string) => {
       if (!USE_V2_BACKEND) {
-          // --- V1 GET STUDENTS ---
-          // V1 usa rota GET /usuarios (Admin vê tudo)
-          // Simulamos retornando lista vazia para forçar fallback no AdminDashboard para fetch /usuarios
-          throw new Error("Use fallback V1");
-      } else {
-          // --- V2 GET STUDENTS ---
-          const response = await fetch(`${API_V2_URL}/personal/students`, {
-              method: "POST",
-              headers: getHeaders(),
-              body: JSON.stringify({
-                  personalId: Number(personalId),
-                  userId: Number(userIdToCheck)
-              })
-          });
+          // --- V1 GET USERS ---
+          const response = await fetch(`${API_V1_URL}/usuarios`);
           if (!response.ok) return [];
+          return await response.json();
+      } else {
+          // --- V2 GET USERS ---
+          // Documentação: GET /api/usuarios?requesterId=10&requesterRole=PERSONAL
+          let url = `${API_V2_URL}/api/usuarios`;
+          
+          if (requesterId && requesterRole === 'personal') {
+              url += `?requesterId=${requesterId}&requesterRole=PERSONAL`;
+          }
+
+          const response = await fetch(url, {
+              method: "GET",
+              headers: getHeaders()
+          });
+          
+          if (!response.ok) {
+              if (response.status === 403) throw new Error("Acesso negado.");
+              return [];
+          }
+          
+          // O retorno deve ser uma lista direta de usuários
           const data = await response.json();
-          return data.students || [];
+          return Array.isArray(data) ? data : (data.students || []);
       }
   }
 };
