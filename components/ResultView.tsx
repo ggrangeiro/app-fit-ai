@@ -6,7 +6,7 @@ import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { EvolutionModal } from './EvolutionModal';
 import { ToastType } from './Toast';
-import { apiService } from '../services/apiService'; // NEW IMPORT
+import { apiService } from '../services/apiService';
 
 interface ResultViewProps {
   result: AnalysisResult;
@@ -70,8 +70,11 @@ export const ResultView: React.FC<ResultViewProps> = ({
   const isHighPerformance = result.score > 80;
   const isPostureAnalysis = exercise === SPECIAL_EXERCISES.POSTURE;
   const isBodyCompAnalysis = exercise === SPECIAL_EXERCISES.BODY_COMPOSITION;
-  const isFreeMode = exercise === SPECIAL_EXERCISES.FREE_MODE;
   
+  // Verifica modo livre: Pelo ID constante OU se o exercício for a string "Análise Livre" OU se existe identifiedExercise
+  const isFreeMode = exercise === SPECIAL_EXERCISES.FREE_MODE || exercise === 'Análise Livre' || !!result.identifiedExercise;
+  
+  // Título Dinâmico: Se for modo livre, usa o identificado pela IA
   const exerciseDisplayName = isBodyCompAnalysis 
     ? 'Avaliação Corporal' 
     : (isFreeMode 
@@ -461,45 +464,45 @@ ${strengthsText}${improvementsText}
                   <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
                   <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
                     value={workoutFormData.goal} onChange={e => setWorkoutFormData({...workoutFormData, goal: e.target.value})}>
-                    <option value="hipertrofia">Hipertrofia (Crescer)</option>
-                    <option value="definicao">Definição (Secar)</option>
-                    <option value="emagrecimento">Emagrecimento (Perder Peso)</option>
-                    <option value="forca">Força Pura</option>
+                    <option value="hipertrofia">Hipertrofia</option>
+                    <option value="emagrecimento">Emagrecimento</option>
+                    <option value="definicao">Definição</option>
                   </select>
+                </div>
+                
+                {/* NOVA GRID: NÍVEL E FREQUÊNCIA */}
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                        <label className="text-xs text-slate-400 ml-1">Nível</label>
+                        <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={workoutFormData.level} onChange={e => setWorkoutFormData({...workoutFormData, level: e.target.value})}>
+                            <option value="iniciante">Iniciante</option>
+                            <option value="intermediario">Intermediário</option>
+                            <option value="avancado">Avançado</option>
+                        </select>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-slate-400 ml-1">Frequência</label>
+                        <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={workoutFormData.frequency} onChange={e => setWorkoutFormData({...workoutFormData, frequency: e.target.value})}>
+                            <option value="1">1x na Semana</option>
+                            <option value="2">2x na Semana</option>
+                            <option value="3">3x na Semana</option>
+                            <option value="4">4x na Semana</option>
+                            <option value="5">5x na Semana</option>
+                            <option value="6">6x na Semana</option>
+                            <option value="7">Todos os dias</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Nível de Experiência</label>
-                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={workoutFormData.level} onChange={e => setWorkoutFormData({...workoutFormData, level: e.target.value})}>
-                    <option value="iniciante">Iniciante (Começando agora)</option>
-                    <option value="intermediario">Intermediário (Já treina)</option>
-                    <option value="avancado">Avançado (Atleta/Experiente)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Dias por Semana</label>
-                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={workoutFormData.frequency} onChange={e => setWorkoutFormData({...workoutFormData, frequency: e.target.value})}>
-                    <option value="2">2 dias</option>
-                    <option value="3">3 dias</option>
-                    <option value="4">4 dias</option>
-                    <option value="5">5 dias</option>
-                    <option value="6">6 dias</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Observações / Limitações</label>
-                  <textarea 
-                    rows={3}
-                    placeholder="Ex: Tenho condromalácia no joelho esquerdo, prefiro treinos curtos, sinto dor no ombro..."
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder-slate-500 text-sm"
-                    value={workoutFormData.observations}
-                    onChange={e => setWorkoutFormData({...workoutFormData, observations: e.target.value})}
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">A IA usará isso para adaptar ou remover exercícios.</p>
+                   <label className="block text-sm font-medium text-slate-300 mb-1">Observações / Lesões</label>
+                   <textarea 
+                     rows={3}
+                     placeholder="Ex: Tenho dor no joelho, quero focar em glúteos..."
+                     className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder-slate-500 text-sm"
+                     value={workoutFormData.observations}
+                     onChange={e => setWorkoutFormData({...workoutFormData, observations: e.target.value})}
+                   />
                 </div>
 
                 <button type="submit" disabled={workoutLoading} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
@@ -510,164 +513,203 @@ ${strengthsText}${improvementsText}
           </div>
         </div>
       )}
-      
-      {/* ... (Result Panel - Unchanged parts) ... */}
-      <div className="glass-panel rounded-[2rem] p-6 md:p-10 shadow-2xl relative overflow-hidden">
-        {/* ... (Existing result UI structure) ... */}
-        {isHighPerformance && (
-          <div className="absolute inset-0 pointer-events-none z-0 opacity-30 no-print">
-             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(251,191,36,0.15),transparent_70%)] animate-pulse" />
-          </div>
-        )}
-        
-        <div className="absolute top-6 right-6 flex items-center gap-3 no-print z-30">
-            <button onClick={handlePrint} className="p-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-full transition-all shadow-lg border border-slate-600/50" title="Imprimir ou Salvar PDF">
-                <Printer className="w-5 h-5" />
-            </button>
-            <button onClick={handleShare} className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-all shadow-lg shadow-blue-900/20 border border-blue-500/50" title="Compartilhar Resultado">
-                <Share2 className="w-5 h-5" />
-            </button>
-        </div>
 
-        <div className="text-center mb-10 relative z-10">
-          <span className="px-4 py-1.5 rounded-full bg-slate-700/50 text-slate-300 text-sm font-medium border border-slate-600/50 print:border-slate-300 print:text-slate-600">Relatório Biomecânico</span>
-          <h2 className="text-3xl md:text-4xl font-bold mt-4 text-white print:text-black">
-            {isBodyCompAnalysis 
-              ? 'Avaliação Corporal Detalhada' 
-              : (isFreeMode 
-                  ? (
-                      <span className="flex flex-col gap-2 items-center">
-                        <span className="text-slate-200 text-2xl">Análise de Exercício Livre</span>
-                        <span className="text-blue-400">{result.identifiedExercise || 'Movimento Detectado'}</span>
-                      </span>
-                    ) 
-                  : `Análise de ${exercise}`
-                )
-            }
-          </h2>
-          <p className="text-slate-400 mt-2 text-sm print:text-slate-600">{new Date().toLocaleDateString()} • FitAI Analyzer</p>
-        </div>
+      {/* HEADER SECTION */}
+      <div className="glass-panel p-6 md:p-8 rounded-3xl mb-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
+         {/* Background Decor */}
+         <div className="absolute top-0 right-0 p-20 opacity-10 bg-gradient-to-br from-blue-500 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+         
+         <div className="flex items-center gap-6 relative z-10 w-full md:w-auto">
+             {!isHistoricalView && (
+               <button onClick={onReset} className="p-3 bg-slate-800 rounded-2xl hover:bg-slate-700 transition-colors border border-slate-700 group no-print">
+                 <ArrowLeft className="w-6 h-6 text-slate-400 group-hover:text-white" />
+               </button>
+             )}
+             
+             <div>
+               <div className="flex items-center gap-2 mb-1">
+                 {isFreeMode && <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse" />}
+                 <span className="text-blue-400 font-bold uppercase tracking-wider text-xs">Relatório de Análise</span>
+               </div>
+               {/* TÍTULO PRINCIPAL: Aqui usamos a variável dinâmica que contém o nome detectado */}
+               <h1 className="text-2xl md:text-4xl font-bold text-white leading-tight capitalize">
+                 {exerciseDisplayName}
+               </h1>
+               <div className="flex items-center gap-2 mt-2 text-slate-400 text-sm">
+                  <User className="w-4 h-4" /> 
+                  <span>Aluno: {userId === 'guest' ? 'Visitante' : 'Atleta Registrado'}</span>
+                  <span className="mx-2">•</span>
+                  <span>{new Date().toLocaleDateString()}</span>
+               </div>
+             </div>
+         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8 relative z-10">
-          
-          <div className="lg:col-span-4 flex flex-col gap-6">
-            <div className={`
-              bg-slate-900/40 rounded-3xl p-8 border border-slate-700/50 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-1000
-              ${isHighPerformance ? 'shadow-[0_0_40px_rgba(251,191,36,0.15)] border-yellow-500/30' : ''}
-              print:shadow-none print:border-slate-300 print:bg-white
-            `}>
-              <div className="absolute top-0 right-0 p-4 opacity-10 no-print">
-                <Trophy className={`w-32 h-32 ${isHighPerformance ? 'text-yellow-400' : 'text-white'}`} />
-              </div>
-              
-              <h3 className={`text-lg font-medium mb-2 print:text-black ${isHighPerformance ? 'text-yellow-100' : 'text-slate-300'}`}>
-                {isPostureAnalysis ? 'Alinhamento Global' : (isBodyCompAnalysis ? 'Índice de Composição' : 'Score Técnico')}
-              </h3>
-              
-              <div className="h-56 w-full relative z-10">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadialBarChart innerRadius="75%" outerRadius="100%" barSize={20} data={scoreData} startAngle={90} endAngle={-270}>
+         {/* Score Ring */}
+         <div className="relative shrink-0 flex flex-col items-center">
+            <div className="w-32 h-32 md:w-40 md:h-40 relative">
+               <ResponsiveContainer width="100%" height="100%">
+                  <RadialBarChart 
+                    cx="50%" cy="50%" 
+                    innerRadius="70%" outerRadius="100%" 
+                    barSize={10} 
+                    data={scoreData} 
+                    startAngle={90} endAngle={-270}
+                  >
                     <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                    <RadialBar background={{ fill: '#1e293b' }} dataKey="value" cornerRadius={100} />
+                    <RadialBar
+                      background={{ fill: '#334155' }}
+                      dataKey="value"
+                      cornerRadius={10}
+                    />
                   </RadialBarChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className={`
-                    text-5xl font-bold tracking-tighter print:text-black
-                    ${isHighPerformance 
-                      ? 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-200 animate-text-shimmer drop-shadow-lg' 
-                      : 'text-white'}
-                  `}>
+               </ResponsiveContainer>
+               <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className={`text-3xl md:text-4xl font-bold ${getScoreTextColor(result.score)}`}>
                     {result.score}
                   </span>
-                  <span className={`text-xs font-bold uppercase tracking-wider mt-1 print:text-black ${isHighPerformance ? 'text-yellow-400' : 'text-slate-400'}`}>
-                    {getScoreMessage(result.score)}
-                  </span>
-                </div>
-              </div>
-
-               <div className="w-full mt-4 space-y-2">
-                 {result.feedback.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-1 print:text-black print:border-slate-200">
-                       <span>{item.message}</span>
-                       <span className={getScoreTextColor(item.score)}>{item.score}/100</span>
-                    </div>
-                 ))}
+                  <span className="text-[10px] text-slate-500 uppercase font-bold">Score Total</span>
                </div>
             </div>
+            <div className={`mt-2 px-3 py-1 rounded-full text-xs font-bold border ${result.score >= 70 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : (result.score > 40 ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20')}`}>
+               {getScoreMessage(result.score)}
+            </div>
+         </div>
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+         
+         {/* Left Column: Stats & Actions */}
+         <div className="space-y-6">
             
-            <div className="bg-slate-800/40 rounded-3xl p-6 border border-slate-700/50 flex flex-col items-center justify-center text-center gap-2 print:bg-white print:border-slate-300">
+            {/* Quick Stats Card */}
+            <div className="glass-panel p-6 rounded-3xl flex flex-col items-center justify-center text-center py-8 relative overflow-hidden group">
+               <div className="absolute inset-0 bg-gradient-to-b from-transparent to-blue-900/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                {renderStatsBox()}
             </div>
-          </div>
 
-          <div className="lg:col-span-8 flex flex-col gap-6">
-            <div className="bg-slate-800/40 rounded-3xl p-6 border border-slate-700/50 print:bg-white print:border-slate-300 min-h-[300px] flex flex-col relative overflow-hidden">
-               <div className="absolute top-4 right-4 z-10 opacity-30"><Activity className="w-6 h-6 text-white" /></div>
-               <h3 className="text-lg font-bold text-white mb-4 print:text-black flex items-center gap-2"><Dumbbell className="w-4 h-4 text-blue-400" /> Grupos Musculares Ativados</h3>
-               <div className="flex-grow"><MuscleMap muscles={result.muscleGroups} /></div>
-               <div className="flex justify-center gap-2 mt-4 flex-wrap">
-                 {result.muscleGroups.map((m, i) => (
-                    <span key={i} className="text-[10px] uppercase font-bold px-2 py-1 bg-slate-700 rounded text-slate-300 border border-slate-600 print:bg-slate-100 print:text-black print:border-slate-300">{m}</span>
-                 ))}
+            {/* Muscle Map Card */}
+            <div className="glass-panel p-6 rounded-3xl min-h-[300px] flex flex-col relative overflow-hidden">
+               <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2 relative z-10">
+                 <Activity className="w-5 h-5 text-blue-400" /> Ativação Muscular
+               </h3>
+               <div className="flex-grow flex items-center justify-center relative z-10">
+                  <MuscleMap muscles={result.muscleGroups} />
                </div>
+               
+               {/* Background Grid */}
+               <div className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none"></div>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
-               <div className="bg-emerald-900/10 rounded-2xl p-6 border border-emerald-500/20 print:bg-white print:border-emerald-500">
-                  <div className="flex items-center gap-3 mb-4 text-emerald-400 font-bold"><CheckCircle className="w-5 h-5" /> Pontos Fortes</div>
+            {/* Action Buttons */}
+            {!isHistoricalView && (
+              <div className="grid grid-cols-2 gap-3 no-print">
+                 <button onClick={() => setShowDietForm(true)} className="p-4 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
+                    <Utensils className="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-emerald-100">Gerar Dieta</span>
+                 </button>
+                 <button onClick={() => setShowWorkoutForm(true)} className="p-4 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
+                    <Dumbbell className="w-6 h-6 text-blue-400 group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-blue-100">Gerar Treino</span>
+                 </button>
+                 <button onClick={handleShare} className="col-span-2 p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl flex items-center justify-center gap-2 text-slate-300 hover:text-white transition-all">
+                    <Share2 className="w-4 h-4" /> Compartilhar Resultado
+                 </button>
+                 
+                 {history.length > 0 && (
+                   <button 
+                      onClick={() => setShowHistoryModal(true)} 
+                      className="col-span-2 p-4 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-2 text-indigo-200 transition-all"
+                   >
+                      <History className="w-4 h-4" /> Ver Evolução ({history.length})
+                   </button>
+                 )}
+              </div>
+            )}
+         </div>
+
+         {/* Middle & Right Column: Detailed Feedback */}
+         <div className="lg:col-span-2 space-y-6">
+            
+            {/* Main Correction Card (Dica de Mestre) */}
+            <div className="bg-gradient-to-r from-blue-900/40 to-slate-900/40 border border-blue-500/30 p-6 rounded-3xl relative overflow-hidden">
+               <div className="absolute top-0 right-0 p-16 bg-blue-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
+               
+               <h3 className="text-blue-300 font-bold text-lg mb-3 flex items-center gap-2">
+                 <Lightbulb className="w-5 h-5 text-yellow-400" /> Dica de Mestre
+               </h3>
+               <p className="text-white text-lg leading-relaxed relative z-10 font-medium">
+                 "{result.formCorrection}"
+               </p>
+            </div>
+
+            {/* Strengths & Improvements */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               {/* Strengths */}
+               <div className="glass-panel p-6 rounded-3xl">
+                  <h3 className="text-emerald-400 font-bold text-lg mb-4 flex items-center gap-2">
+                    <ThumbsUp className="w-5 h-5" /> Pontos Fortes
+                  </h3>
                   <ul className="space-y-3">
-                    {result.strengths && result.strengths.length > 0 ? (
-                        result.strengths.map((str, idx) => <li key={idx} className="flex gap-2 text-sm text-slate-300 print:text-black"><span className="text-emerald-500 mt-0.5">•</span>{str}</li>)
-                    ) : (<li className="text-sm text-slate-500 italic">Continue praticando para destacar seus pontos fortes!</li>)}
+                     {result.strengths && result.strengths.length > 0 ? (
+                        result.strengths.map((str, idx) => (
+                          <li key={idx} className="flex items-start gap-3 text-slate-300 text-sm">
+                             <CheckCircle className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                             <span>{str}</span>
+                          </li>
+                        ))
+                     ) : (
+                        <li className="text-slate-500 italic text-sm">Continue praticando para destacar seus pontos fortes!</li>
+                     )}
                   </ul>
                </div>
 
-               <div className="bg-yellow-900/10 rounded-2xl p-6 border border-yellow-500/20 print:bg-white print:border-yellow-500">
-                  <div className="flex items-center gap-3 mb-4 text-yellow-400 font-bold"><AlertTriangle className="w-5 h-5" /> Correções Necessárias</div>
+               {/* Improvements */}
+               <div className="glass-panel p-6 rounded-3xl border-red-500/10">
+                  <h3 className="text-red-400 font-bold text-lg mb-4 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" /> Atenção
+                  </h3>
                   <ul className="space-y-3">
                      {result.improvements && result.improvements.length > 0 ? (
                         result.improvements.map((imp, idx) => (
-                          <li key={idx} className="text-sm text-slate-300 print:text-black">
-                             <p className="font-semibold text-yellow-100 print:text-black flex items-start gap-2"><span className="text-yellow-500 mt-0.5">→</span> {imp.instruction}</p>
-                             <p className="text-xs text-slate-500 ml-5 mt-1">{imp.detail}</p>
+                          <li key={idx} className="flex items-start gap-3 text-slate-300 text-sm">
+                             <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0"></div>
+                             <div>
+                               <span className="font-bold text-white block mb-0.5">{imp.instruction}</span>
+                               <span className="text-xs text-slate-500">{imp.detail}</span>
+                             </div>
                           </li>
                         ))
-                     ) : (<li className="text-sm text-slate-500 italic">Nenhuma correção crítica detectada. Parabéns!</li>)}
+                     ) : (
+                        <li className="text-slate-500 italic text-sm">Nenhum erro crítico detectado. Parabéns!</li>
+                     )}
                   </ul>
                </div>
             </div>
 
-            <div className="bg-gradient-to-r from-blue-900/20 to-indigo-900/20 rounded-2xl p-6 border border-blue-500/20 relative overflow-hidden print:bg-white print:border-blue-500">
-               <div className="absolute top-0 right-0 p-4 opacity-10"><Lightbulb className="w-24 h-24 text-blue-400" /></div>
-               <h4 className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-2 flex items-center gap-2"><Sparkles className="w-3 h-3" /> Dica de Mestre (IA)</h4>
-               <p className="text-slate-200 text-lg font-medium leading-relaxed relative z-10 print:text-black">"{result.formCorrection}"</p>
+            {/* Detailed Body Feedback (Table) */}
+            <div className="glass-panel p-6 rounded-3xl">
+               <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+                 <MessageCircleHeart className="w-5 h-5 text-pink-400" /> Feedback Detalhado
+               </h3>
+               <div className="space-y-1">
+                  {result.feedback.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 hover:bg-slate-800/50 rounded-xl transition-colors border-b border-slate-700/30 last:border-0">
+                       <div className="flex items-center gap-3">
+                          <div className={`w-2 h-8 rounded-full ${getScoreTextColor(item.score).replace('text-', 'bg-')}`}></div>
+                          <span className="text-slate-300 font-medium capitalize">{item.message}</span>
+                       </div>
+                       <div className="flex items-center gap-3">
+                          <div className="w-24 h-1.5 bg-slate-700 rounded-full overflow-hidden hidden sm:block">
+                             <div className={`h-full rounded-full ${getScoreTextColor(item.score).replace('text-', 'bg-')}`} style={{ width: `${item.score}%` }}></div>
+                          </div>
+                          <span className={`font-bold ${getScoreTextColor(item.score)}`}>{item.score}/100</span>
+                       </div>
+                    </div>
+                  ))}
+               </div>
             </div>
-
-            <div className="no-print grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
-              <button onClick={() => setShowWorkoutForm(true)} className="flex items-center justify-center gap-2 py-4 px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 border border-blue-400/20 group">
-                <Dumbbell className="w-5 h-5 group-hover:rotate-12 transition-transform" /> Gerar Treino
-              </button>
-              
-              <button onClick={() => setShowDietForm(true)} className="flex items-center justify-center gap-2 py-4 px-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/20 border border-emerald-400/20 group">
-                <Utensils className="w-5 h-5 group-hover:-rotate-12 transition-transform" /> Gerar Dieta
-              </button>
-
-              {history.length > 0 && !isFreeMode ? (
-                  <button onClick={() => setShowHistoryModal(true)} className="flex items-center justify-center gap-2 py-4 px-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-900/20 border border-indigo-400/20 group">
-                    <History className="w-5 h-5 group-hover:scale-110 transition-transform" /> Ver Evolução ({history.length})
-                  </button>
-              ) : (<div className="hidden lg:block"></div>)}
-            </div>
-
-          </div>
-        </div>
-
-        <div className="flex justify-between items-center pt-8 border-t border-slate-700/50 no-print">
-          <button onClick={onReset} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Nova Análise
-          </button>
-        </div>
+         </div>
       </div>
     </div>
   );

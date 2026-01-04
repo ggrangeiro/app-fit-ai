@@ -1062,7 +1062,7 @@ const App: React.FC = () => {
         {step === AppStep.RESULTS && analysisResult && selectedExercise && (
           <ResultView 
             result={analysisResult} 
-            exercise={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? "Análise Livre" : (selectedExerciseObj?.name || 'Exercício')} 
+            exercise={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.name || 'Exercício')} 
             history={historyRecords} 
             userId={currentUser?.id || ''} 
             onReset={resetAnalysis}
