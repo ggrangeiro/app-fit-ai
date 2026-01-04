@@ -99,21 +99,9 @@ export const ResultView: React.FC<ResultViewProps> = ({
     try {
       const planHtml = await generateDietPlan(dietFormData, result);
       
-      try {
-        // Tenta API V2
-        await apiService.createDiet(userId, planHtml, dietFormData.goal);
-        if (onDietSaved) onDietSaved();
-      } catch (backendError) {
-        // Fallback API V1
-         try {
-            await fetch("https://testeai-732767853162.us-west1.run.app/api/dietas", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId, content: planHtml, goal: dietFormData.goal })
-            });
-            if (onDietSaved) onDietSaved();
-         } catch(e) {}
-      }
+      // Usa apiService para garantir segurança com requesterId
+      await apiService.createDiet(userId, planHtml, dietFormData.goal);
+      if (onDietSaved) onDietSaved();
       
       setDietPlanHtml(planHtml);
       setShowDietForm(false);
@@ -131,21 +119,9 @@ export const ResultView: React.FC<ResultViewProps> = ({
     try {
       const planHtml = await generateWorkoutPlan(workoutFormData, result);
       
-      try {
-        // Tenta API V2
-        await apiService.createTraining(userId, planHtml, workoutFormData.goal);
-        if (onWorkoutSaved) onWorkoutSaved();
-      } catch (backendError) {
-        // Fallback API V1
-         try {
-            await fetch("https://testeai-732767853162.us-west1.run.app/api/treinos", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId, content: planHtml, goal: workoutFormData.goal })
-            });
-            if (onWorkoutSaved) onWorkoutSaved();
-         } catch(e) {}
-      }
+      // Usa apiService para garantir segurança com requesterId
+      await apiService.createTraining(userId, planHtml, workoutFormData.goal);
+      if (onWorkoutSaved) onWorkoutSaved();
 
       setWorkoutPlanHtml(planHtml);
       setShowWorkoutForm(false);
@@ -556,7 +532,18 @@ ${strengthsText}${improvementsText}
         <div className="text-center mb-10 relative z-10">
           <span className="px-4 py-1.5 rounded-full bg-slate-700/50 text-slate-300 text-sm font-medium border border-slate-600/50 print:border-slate-300 print:text-slate-600">Relatório Biomecânico</span>
           <h2 className="text-3xl md:text-4xl font-bold mt-4 text-white print:text-black">
-            {isBodyCompAnalysis ? 'Avaliação Corporal Detalhada' : (isFreeMode ? `${result.identifiedExercise || 'Exercício'} - Análise Livre (Sem histórico)` : `Análise de ${exercise}`)}
+            {isBodyCompAnalysis 
+              ? 'Avaliação Corporal Detalhada' 
+              : (isFreeMode 
+                  ? (
+                      <span className="flex flex-col gap-2 items-center">
+                        <span className="text-slate-200 text-2xl">Análise de Exercício Livre</span>
+                        <span className="text-blue-400">{result.identifiedExercise || 'Movimento Detectado'}</span>
+                      </span>
+                    ) 
+                  : `Análise de ${exercise}`
+                )
+            }
           </h2>
           <p className="text-slate-400 mt-2 text-sm print:text-slate-600">{new Date().toLocaleDateString()} • FitAI Analyzer</p>
         </div>

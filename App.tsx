@@ -278,13 +278,7 @@ const App: React.FC = () => {
       const workouts = await apiService.getTrainings(userId);
       setSavedWorkouts(workouts);
     } catch (e) {
-      try {
-        const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/treinos/${userId}`);
-        if (response.ok) {
-            const data = await response.json();
-            setSavedWorkouts(Array.isArray(data) ? data : []);
-        }
-      } catch(err) {}
+      setSavedWorkouts([]);
     } finally {
       setLoadingWorkouts(false);
     }
@@ -296,13 +290,7 @@ const App: React.FC = () => {
       const diets = await apiService.getDiets(userId);
       setSavedDiets(diets);
     } catch (e) {
-      try {
-        const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/dietas/${userId}`);
-        if (response.ok) {
-            const data = await response.json();
-            setSavedDiets(Array.isArray(data) ? data : []);
-        }
-      } catch(err) {}
+      setSavedDiets([]);
     } finally {
       setLoadingDiets(false);
     }
@@ -425,28 +413,20 @@ const App: React.FC = () => {
     try {
         const exerciseObj = exercisesList.find(e => e.id === selectedExercise);
         const idToSend = exerciseObj ? exerciseObj.alias : selectedExercise;
-        const encodedExercise = encodeURIComponent(idToSend);
         
-        // V1 fetch as requested
-        const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
+        // --- CORREÇÃO: Usar apiService que já inclui os parâmetros de autenticação (requesterId/Role) ---
+        const data = await apiService.getUserHistory(currentUser.id, idToSend);
         
-        const response = await fetch(historyUrl, {
-            method: "GET",
-            headers: { "Content-Type": "application/json" }
-        });
-
-        if (response.ok) {
-            const data: ExerciseRecord[] = await response.json();
-            if (data && data.length > 0) {
-                const sorted = data.sort((a, b) => b.timestamp - a.timestamp);
-                setHistoryRecords(sorted);
-                setShowEvolutionModal(true);
-            } else {
-                showToast("Você ainda não realizou este exercício.", 'info');
-            }
+        if (data && data.length > 0) {
+            // Se vier objeto agrupado, tenta pegar array flat ou apenas os valores
+            const records = Array.isArray(data) ? data : Object.values(data).flat();
+            const sorted = (records as ExerciseRecord[]).sort((a, b) => b.timestamp - a.timestamp);
+            setHistoryRecords(sorted);
+            setShowEvolutionModal(true);
         } else {
-            showToast("Não foi possível carregar o histórico.", 'error');
+            showToast("Você ainda não realizou este exercício.", 'info');
         }
+
     } catch (e) {
         showToast("Erro de conexão ao buscar histórico.", 'error');
     } finally {
@@ -501,14 +481,16 @@ const App: React.FC = () => {
       
       if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
           try {
-            const encodedExercise = encodeURIComponent(backendId);
-            const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
-            const historyResponse = await fetch(historyUrl, { method: "GET" });
-            if (historyResponse.ok) {
-                const historyData: ExerciseRecord[] = await historyResponse.json();
-                if (historyData && historyData.length > 0) {
-                    previousRecord = historyData[0];
-                }
+            // --- CORREÇÃO: Usar apiService para buscar histórico prévio com os parâmetros corretos ---
+            const historyData = await apiService.getUserHistory(currentUser.id, backendId);
+            
+            if (historyData) {
+               const records = Array.isArray(historyData) ? historyData : Object.values(historyData).flat() as ExerciseRecord[];
+               if (records.length > 0) {
+                   // Sort descending to get latest
+                   records.sort((a, b) => b.timestamp - a.timestamp);
+                   previousRecord = records[0];
+               }
             }
           } catch (histErr) {
           }
@@ -534,16 +516,16 @@ const App: React.FC = () => {
               result: { ...result, date: new Date().toISOString() }
             };
             
-            // USE APISERVICE TO SAVE HISTORY (Auto-handles requester logic if needed, though for self-save it's optional)
+            // USE APISERVICE TO SAVE HISTORY (Auto-handles requester logic)
             await apiService.saveHistory(payload);
             
             try {
-                const encodedExercise = encodeURIComponent(backendId);
-                const historyUrl = `https://testeai-732767853162.us-west1.run.app/api/historico/${currentUser.id}?exercise=${encodedExercise}`;
-                const historyResponse = await fetch(historyUrl, { method: "GET" });
-                if (historyResponse.ok) {
-                    const fullHistoryData: ExerciseRecord[] = await historyResponse.json();
-                    setHistoryRecords(fullHistoryData);
+                // --- CORREÇÃO: Re-busca com apiService para garantir lista atualizada ---
+                const fullHistoryData = await apiService.getUserHistory(currentUser.id, backendId);
+                
+                if (fullHistoryData) {
+                    const records = Array.isArray(fullHistoryData) ? fullHistoryData : Object.values(fullHistoryData).flat() as ExerciseRecord[];
+                    setHistoryRecords(records.sort((a, b) => b.timestamp - a.timestamp));
                 }
             } catch (e) {
             }
@@ -567,24 +549,10 @@ const App: React.FC = () => {
     setGeneratingWorkout(true);
     try {
         const planHtml = await generateWorkoutPlan(workoutFormData);
-        
-        try {
-            await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal);
-            await fetchUserWorkouts(currentUser.id);
-            showToast("Treino gerado com sucesso!", 'success');
-        } catch (v2Err) {
-            const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/treinos", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    userId: currentUser.id,
-                    goal: workoutFormData.goal,
-                    content: planHtml
-                })
-            });
-            if (!response.ok) throw new Error("Erro ao salvar treino");
-            await fetchUserWorkouts(currentUser.id);
-        }
+        // Usa apiService para criar e refresh, sem fallbacks quebrados
+        await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal);
+        await fetchUserWorkouts(currentUser.id);
+        showToast("Treino gerado com sucesso!", 'success');
 
         setShowGenerateWorkoutForm(false);
         setViewingWorkoutHtml(planHtml);
@@ -605,23 +573,10 @@ const App: React.FC = () => {
     try {
         const planHtml = await generateDietPlan(dietFormData);
         
-        try {
-            await apiService.createDiet(currentUser.id, planHtml, dietFormData.goal);
-            await fetchUserDiets(currentUser.id);
-            showToast("Dieta gerada com sucesso!", 'success');
-        } catch (v2Err) {
-            const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/dietas", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    userId: currentUser.id,
-                    goal: dietFormData.goal,
-                    content: planHtml
-                })
-            });
-            if (!response.ok) throw new Error("Erro ao salvar dieta");
-            await fetchUserDiets(currentUser.id);
-        }
+        // Usa apiService para criar e refresh
+        await apiService.createDiet(currentUser.id, planHtml, dietFormData.goal);
+        await fetchUserDiets(currentUser.id);
+        showToast("Dieta gerada com sucesso!", 'success');
 
         setShowGenerateDietForm(false);
         setViewingDietHtml(planHtml);
@@ -649,19 +604,7 @@ const App: React.FC = () => {
                 setViewingWorkoutHtml(null);
                 showToast("Treino removido com sucesso.", 'success');
             } catch (e) {
-                try {
-                    const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/treinos/${workoutId}`, {
-                        method: "DELETE"
-                    });
-                    if (response.ok) {
-                        setSavedWorkouts([]);
-                        setShowWorkoutModal(false);
-                        setViewingWorkoutHtml(null);
-                        showToast("Treino removido com sucesso.", 'success');
-                    }
-                } catch(err) {
-                    showToast("Erro ao remover treino.", 'error');
-                }
+                showToast("Erro ao remover treino.", 'error');
             }
         },
         true 
@@ -683,19 +626,7 @@ const App: React.FC = () => {
                 setViewingDietHtml(null);
                 showToast("Dieta removida com sucesso.", 'success');
             } catch (e) {
-                try {
-                    const response = await fetch(`https://testeai-732767853162.us-west1.run.app/api/dietas/${dietId}`, {
-                        method: "DELETE"
-                    });
-                    if (response.ok) {
-                        setSavedDiets([]);
-                        setShowDietModal(false);
-                        setViewingDietHtml(null);
-                        showToast("Dieta removida com sucesso.", 'success');
-                    }
-                } catch(err) {
-                    showToast("Erro ao remover dieta.", 'error');
-                }
+                showToast("Erro ao remover dieta.", 'error');
             }
         },
         true 

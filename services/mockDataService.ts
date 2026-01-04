@@ -92,7 +92,8 @@ export const MockDataService = {
   // --- EXERCISES (GLOBAL LIST - For Admin or Fallback) ---
   fetchExercises: async (): Promise<ExerciseDTO[]> => {
       try {
-          const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/usuarios/exercises", {
+          // Ajuste: Inclui ID '1' (dummy) para satisfazer a rota /exercises/{userId} se este serviço for chamado
+          const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/usuarios/exercises/1", {
              method: 'GET',
              mode: 'cors',
              headers: { 
@@ -125,7 +126,24 @@ export const MockDataService = {
 
   // --- NEW: FETCH USER SPECIFIC EXERCISES ---
   fetchUserExercises: async (userId: string): Promise<ExerciseDTO[]> => {
-    const URL = `https://testeai-732767853162.us-west1.run.app/api/usuarios/${userId}/exercicios`;
+    // CORREÇÃO: Montagem da Query String com requesterId e requesterRole
+    // Isso evita o erro 400/403 de multi-tenancy quando o App cai neste fallback
+    let queryParams = "";
+    try {
+        const userStr = localStorage.getItem(CURRENT_USER_KEY);
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            const rId = user.id;
+            // Backend espera Role em Uppercase (USER, PERSONAL, ADMIN)
+            const rRole = user.role ? String(user.role).toUpperCase() : 'USER';
+            queryParams = `?requesterId=${rId}&requesterRole=${rRole}`;
+        }
+    } catch (e) {
+        // Se falhar o parse do local storage, tenta sem params (provavelmente falhará na API, mas evita crash JS)
+    }
+
+    const URL = `https://testeai-732767853162.us-west1.run.app/api/usuarios/exercises/${userId}${queryParams}`;
+    
     try {
       const response = await fetch(URL, {
         method: 'GET',
@@ -237,7 +255,7 @@ export const MockDataService = {
     return [];
   },
 
-  createUser: async (name: string, email: string, initialExercises?: string[], creatorId?: string, creatorRole?: string): Promise<User> => {
+  createUser: async (name: string, email: string, initialExercises?: string[], creatorId?: string, creatorRole?: string, role: string = 'user'): Promise<User> => {
     await delay(800);
     const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
     
@@ -252,7 +270,7 @@ export const MockDataService = {
       id: Date.now().toString(),
       name,
       email,
-      role: 'user',
+      role: role as UserRole,
       assignedExercises: defaultExercises,
       // Se quem criou for um Personal, vincula automaticamente
       personalId: (creatorRole === 'personal') ? creatorId : undefined

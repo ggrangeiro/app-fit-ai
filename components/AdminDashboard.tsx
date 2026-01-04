@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, AnalysisResult } from '../types';
+import { User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, AnalysisResult, DietPlan, WorkoutPlan } from '../types';
 import { MockDataService } from '../services/mockDataService';
 import { apiService } from '../services/apiService'; 
 import { generateExerciseThumbnail, analyzeVideo, generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { compressVideo } from '../utils/videoUtils';
 import { ResultView } from './ResultView';
-import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope } from 'lucide-react';
+import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 
@@ -22,6 +22,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
   const [userHistoryList, setUserHistoryList] = useState<ExerciseRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // States para exibir planos atuais do usuário
+  const [userDiet, setUserDiet] = useState<DietPlan | null>(null);
+  const [userWorkout, setUserWorkout] = useState<WorkoutPlan | null>(null);
+  const [viewingPlan, setViewingPlan] = useState<{ type: 'DIET' | 'WORKOUT', content: string, title: string } | null>(null);
+
   const [viewingRecord, setViewingRecord] = useState<ExerciseRecord | null>(null);
   const [detailedHistory, setDetailedHistory] = useState<ExerciseRecord[]>([]);
   
@@ -32,6 +37,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
   
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newRole, setNewRole] = useState('user'); // Novo estado para o papel do usuário
   
   const [editingAssignments, setEditingAssignments] = useState<string[]>([]);
 
@@ -89,6 +95,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
   useEffect(() => {
     if (selectedUser) {
+        // Carregar exercícios atribuídos
         apiService.getUserExercises(selectedUser.id).then(exs => {
             if (exs.length > 0) {
                  const ids = exs.map((e: any) => String(e.id)); 
@@ -100,9 +107,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             setEditingAssignments(selectedUser.assignedExercises || []);
         });
 
+        // Carregar Histórico
         fetchUserHistory(selectedUser.id);
+        
+        // Carregar Planos Atuais (Dieta e Treino)
+        fetchUserPlans(selectedUser.id);
+        
     } else {
         setUserHistoryList([]);
+        setUserDiet(null);
+        setUserWorkout(null);
     }
   }, [selectedUser]);
 
@@ -118,7 +132,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     return groups;
   }, [userHistoryList]);
 
-  // ... (fetchExercises, fetchBackendUsers, fetchUserHistory functions remain same - omitted for brevity but assumed present)
   const fetchExercises = async () => {
     try {
         const v2Exercises = await apiService.getAllExercises();
@@ -159,7 +172,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 id: String(u.id),
                 name: u.nome || u.name || 'Sem Nome',
                 email: u.email,
-                role: u.role || 'user', 
+                // CORREÇÃO: Converter role para minúsculo para garantir compatibilidade com o filtro (USER -> user)
+                role: u.role ? String(u.role).toLowerCase() : 'user', 
                 avatar: u.avatar,
                 assignedExercises: u.assignedExercises || []
             }));
@@ -178,25 +192,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
   const fetchUserHistory = async (userId: string) => {
     setLoadingHistory(true);
-    const API_URL = `https://testeai-732767853162.us-west1.run.app/api/historico/${userId}`;
     try {
-        const response = await fetch(API_URL, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        if (response.ok) {
-            const data = await response.json();
-            let allRecords: ExerciseRecord[] = [];
-            if (Array.isArray(data)) {
-                allRecords = data;
-            } else if (typeof data === 'object' && data !== null) {
-                allRecords = Object.values(data).flat() as ExerciseRecord[];
-            }
-            const sorted = allRecords.sort((a: any, b: any) => b.timestamp - a.timestamp);
-            setUserHistoryList(sorted);
-        } else {
-             setUserHistoryList(MockDataService.getUserHistory(userId));
+        const data = await apiService.getUserHistory(userId);
+        
+        let allRecords: ExerciseRecord[] = [];
+        if (Array.isArray(data)) {
+            allRecords = data;
+        } else if (typeof data === 'object' && data !== null) {
+            allRecords = Object.values(data).flat() as ExerciseRecord[];
         }
+        const sorted = allRecords.sort((a: any, b: any) => b.timestamp - a.timestamp);
+        setUserHistoryList(sorted);
     } catch (e) {
         setUserHistoryList(MockDataService.getUserHistory(userId));
     } finally {
@@ -204,19 +210,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     }
   };
 
+  const fetchUserPlans = async (userId: string) => {
+      try {
+          const diets = await apiService.getDiets(userId);
+          setUserDiet(diets.length > 0 ? diets[0] : null);
+          
+          const trainings = await apiService.getTrainings(userId);
+          setUserWorkout(trainings.length > 0 ? trainings[0] : null);
+      } catch (e) {
+          console.error("Erro ao buscar planos", e);
+      }
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (processing) return;
+
+    setProcessing(true);
+    setProgressMsg('Cadastrando usuário...');
+
     try {
       const creatorId = isPersonal ? currentUser.id : undefined;
-      await apiService.signup(newName, newEmail, "mudar123", creatorId);
-      await MockDataService.createUser(newName, newEmail, undefined, creatorId, currentUser.role); 
-      showToast(isPersonal ? 'Aluno criado com sucesso!' : 'Usuário criado com sucesso!', 'success');
+      // Define a role: se for Personal, força 'user'. Se for Admin, usa o que foi selecionado.
+      const roleToCreate = isPersonal ? 'user' : newRole;
+
+      await apiService.signup(newName, newEmail, "mudar123", creatorId, roleToCreate);
+      await MockDataService.createUser(newName, newEmail, undefined, creatorId, currentUser.role, roleToCreate); 
+      
+      const roleName = roleToCreate === 'user' ? 'Aluno' : (roleToCreate === 'personal' ? 'Personal' : 'Admin');
+      showToast(`${roleName} cadastrado com sucesso!`, 'success');
+      
       setNewName('');
       setNewEmail('');
-      fetchBackendUsers();
-      setTimeout(() => { setActiveTab('users'); }, 1500);
+      setNewRole('user');
+      
+      // Atualiza a lista antes de mudar a tab
+      await fetchBackendUsers();
+      
+      setTimeout(() => { setActiveTab('users'); }, 500);
     } catch (err: any) {
       showToast("Erro: " + err.message, 'error');
+    } finally {
+      setProcessing(false);
+      setProgressMsg('');
     }
   };
 
@@ -315,7 +351,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
           
           await apiService.createDiet(selectedUser.id, planHtml, actionFormData.goal);
           showToast(`Dieta salva para ${selectedUser.name}!`, 'success');
+          
+          // Abre preview imediatamente e atualiza lista
+          setViewingPlan({ type: 'DIET', content: planHtml, title: 'Nova Dieta Gerada' });
+          fetchUserPlans(selectedUser.id);
           setShowTeacherActionModal('NONE');
+
       } catch (err: any) {
           showToast("Erro: " + err.message, 'error');
       } finally {
@@ -342,7 +383,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
           
           await apiService.createTraining(selectedUser.id, planHtml, actionFormData.goal);
           showToast(`Treino salvo para ${selectedUser.name}!`, 'success');
+
+          // Abre preview imediatamente e atualiza lista
+          setViewingPlan({ type: 'WORKOUT', content: planHtml, title: 'Novo Treino Gerado' });
+          fetchUserPlans(selectedUser.id);
           setShowTeacherActionModal('NONE');
+          
       } catch (err: any) {
           showToast("Erro: " + err.message, 'error');
       } finally {
@@ -395,11 +441,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
       }
   };
 
-  // ... (getScoreColor, getMetricDisplay, getExerciseIcon logic remains same)
   const handleViewRecordDetails = async (record: ExerciseRecord) => {
     let exerciseIdToSend = record.exercise;
     const knownExercise = allExercises.find(e => e.name === record.exercise || e.alias === record.exercise);
     if (knownExercise) exerciseIdToSend = knownExercise.alias;
+    
     let normalizedRecord = { ...record };
     const lowerEx = exerciseIdToSend.toLowerCase();
     if (lowerEx.includes('postura') || lowerEx.includes('posture') || lowerEx === 'posture_analysis') {
@@ -409,16 +455,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     }
     setViewingRecord(normalizedRecord);
     setDetailedHistory([normalizedRecord]);
+    
     try {
-        const encodedExercise = encodeURIComponent(exerciseIdToSend);
-        const url = `https://testeai-732767853162.us-west1.run.app/api/historico/${record.userId}?exercise=${encodedExercise}`;
-        const response = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
-        if (response.ok) {
-            const data: ExerciseRecord[] = await response.json();
-            if (data && data.length > 0) setDetailedHistory(data.sort((a, b) => b.timestamp - a.timestamp));
+        // --- CORREÇÃO: Usar apiService ---
+        const data = await apiService.getUserHistory(record.userId, exerciseIdToSend);
+        
+        if (data && data.length > 0) {
+            const records = Array.isArray(data) ? data : Object.values(data).flat();
+            setDetailedHistory((records as ExerciseRecord[]).sort((a, b) => b.timestamp - a.timestamp));
         }
     } catch (e) {}
   };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-emerald-400 border-emerald-500/30 bg-emerald-500/10";
     if (score >= 60) return "text-yellow-400 border-yellow-500/30 bg-yellow-500/10";
@@ -488,16 +536,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                               <input type="number" placeholder="Peso (kg)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.weight} onChange={e => setActionFormData({...actionFormData, weight: e.target.value})} />
                               <input type="number" placeholder="Altura (cm)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.height} onChange={e => setActionFormData({...actionFormData, height: e.target.value})} />
                           </div>
+                          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.gender} onChange={e => setActionFormData({...actionFormData, gender: e.target.value})}>
+                              <option value="masculino">Masculino</option>
+                              <option value="feminino">Feminino</option>
+                          </select>
                           <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.goal} onChange={e => setActionFormData({...actionFormData, goal: e.target.value})}>
                               <option value="hipertrofia">Hipertrofia</option>
                               <option value="emagrecimento">Emagrecimento</option>
                               <option value="definicao">Definição</option>
                           </select>
-                          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.level} onChange={e => setActionFormData({...actionFormData, level: e.target.value})}>
-                              <option value="iniciante">Iniciante</option>
-                              <option value="intermediario">Intermediário</option>
-                              <option value="avancado">Avançado</option>
-                          </select>
+                          
+                          {/* NOVA GRID: NÍVEL E FREQUÊNCIA */}
+                          <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                  <label className="text-xs text-slate-400 ml-1">Nível</label>
+                                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.level} onChange={e => setActionFormData({...actionFormData, level: e.target.value})}>
+                                      <option value="iniciante">Iniciante</option>
+                                      <option value="intermediario">Intermediário</option>
+                                      <option value="avancado">Avançado</option>
+                                  </select>
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-xs text-slate-400 ml-1">Frequência</label>
+                                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.frequency} onChange={e => setActionFormData({...actionFormData, frequency: e.target.value})}>
+                                      <option value="1">1x na Semana</option>
+                                      <option value="2">2x na Semana</option>
+                                      <option value="3">3x na Semana</option>
+                                      <option value="4">4x na Semana</option>
+                                      <option value="5">5x na Semana</option>
+                                      <option value="6">6x na Semana</option>
+                                      <option value="7">Todos os dias</option>
+                                  </select>
+                              </div>
+                          </div>
+
                           <textarea placeholder="Lesões ou observações..." className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.observations} onChange={e => setActionFormData({...actionFormData, observations: e.target.value})} />
                           <button type="submit" disabled={processing} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl">{processing ? <Loader2 className="animate-spin mx-auto"/> : 'Gerar e Salvar'}</button>
                       </form>
@@ -543,6 +615,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                   )}
               </div>
           </div>
+      )}
+
+      {/* PLAN PREVIEW MODAL */}
+      {viewingPlan && (
+        <div className="fixed inset-0 z-[120] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
+           <div className="min-h-screen p-4 md:p-8 relative">
+              <div className="flex justify-between items-center max-w-6xl mx-auto mb-6">
+                 <button 
+                    onClick={() => setViewingPlan(null)}
+                    className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
+                 >
+                    <X className="w-6 h-6" /> Fechar Visualização
+                 </button>
+                 <div className="bg-slate-800 px-4 py-2 rounded-lg text-white font-bold border border-slate-700">
+                     {viewingPlan.title}
+                 </div>
+              </div>
+              <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
+                 <style>{`
+                     #admin-plan-view { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
+                 `}</style>
+                 <div id="admin-plan-view" dangerouslySetInnerHTML={{ __html: viewingPlan.content }} />
+              </div>
+           </div>
+        </div>
       )}
 
       {/* DETAILED VIEW MODAL */}
@@ -655,8 +752,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                   <label className="block text-sm font-medium text-slate-300 mb-2">E-mail</label>
                   <input type="email" required value={newEmail} onChange={e => setNewEmail(e.target.value)} className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all">
-                    {isPersonal ? 'Cadastrar Meu Aluno' : 'Cadastrar Usuário'}
+                
+                {/* Role Selector - Apenas para Admins (Personais só criam usuários 'user') */}
+                {isAdmin && (
+                    <div className="animate-in fade-in slide-in-from-top-2">
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Perfil de Acesso</label>
+                        <div className="relative">
+                            <ShieldAlert className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
+                            <select 
+                                value={newRole} 
+                                onChange={e => setNewRole(e.target.value)}
+                                className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                            >
+                                <option value="user">Aluno (Usuário Comum)</option>
+                                <option value="personal">Personal Trainer</option>
+                                <option value="admin">Administrador</option>
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                                <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2 ml-1">
+                            {newRole === 'admin' ? '⚠️ Acesso total ao sistema.' : (newRole === 'personal' ? 'ℹ️ Pode gerenciar alunos vinculados.' : '👤 Acesso apenas aos próprios treinos.')}
+                        </p>
+                    </div>
+                )}
+
+                <button type="submit" disabled={processing} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all disabled:opacity-70 disabled:cursor-not-allowed">
+                    {processing ? (
+                        <span className="flex items-center justify-center gap-2">
+                            <Loader2 className="w-5 h-5 animate-spin" /> Cadastrando...
+                        </span>
+                    ) : (
+                        isPersonal ? 'Cadastrar Meu Aluno' : 'Cadastrar Usuário'
+                    )}
                 </button>
               </form>
             </div>
@@ -710,7 +839,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                       <h3 className="text-xl font-bold text-white mb-1">{selectedUser.name}</h3>
                       <p className="text-slate-400 text-sm mb-6">{selectedUser.email}</p>
                       
-                      {/* --- PAINEL DE AÇÕES DO PROFESSOR (NOVO) --- */}
+                      {/* --- PAINEL DE AÇÕES DO PROFESSOR --- */}
                       {(isPersonal || isAdmin) && (
                           <div className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-indigo-500/20">
                               <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-3">Ações do Professor</h4>
@@ -726,6 +855,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                   </button>
                               </div>
                           </div>
+                      )}
+
+                      {/* --- PLANOS ATUAIS DO ALUNO (NOVO) --- */}
+                      {(isPersonal || isAdmin) && (
+                         <div className="mb-6">
+                            <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-3">
+                                <FileText className="w-4 h-4" /> Planos Atuais
+                            </h4>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button 
+                                   disabled={!userWorkout}
+                                   onClick={() => userWorkout && setViewingPlan({ type: 'WORKOUT', content: userWorkout.content, title: 'Treino Atual' })}
+                                   className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${userWorkout ? 'bg-blue-600/10 border-blue-500/30 text-blue-300 hover:bg-blue-600/20' : 'bg-slate-800/30 border-slate-700 text-slate-500 cursor-not-allowed'}`}
+                                >
+                                   <Calendar className="w-5 h-5" />
+                                   <span className="text-xs font-bold">{userWorkout ? 'Ver Treino' : 'Sem Treino'}</span>
+                                </button>
+                                <button 
+                                   disabled={!userDiet}
+                                   onClick={() => userDiet && setViewingPlan({ type: 'DIET', content: userDiet.content, title: 'Dieta Atual' })}
+                                   className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${userDiet ? 'bg-emerald-600/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/20' : 'bg-slate-800/30 border-slate-700 text-slate-500 cursor-not-allowed'}`}
+                                >
+                                   <Utensils className="w-5 h-5" />
+                                   <span className="text-xs font-bold">{userDiet ? 'Ver Dieta' : 'Sem Dieta'}</span>
+                                </button>
+                            </div>
+                         </div>
                       )}
 
                       <div className="flex items-center justify-between mb-4">

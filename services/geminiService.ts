@@ -111,8 +111,9 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
       ${detailedStyle}
       Contexto: O usuário enviou um vídeo de um exercício DESCONHECIDO.
       Instrução:
-      1. Identifique o nome do exercício e preencha OBRIGATORIAMENTE o campo "identifiedExercise".
+      1. Identifique o nome do exercício e preencha OBRIGATORIAMENTE o campo "identifiedExercise" com o nome em PORTUGUÊS (ex: "Agachamento", "Rosca Direta", "Polichinelo").
       2. Analise se ele está fazendo de um jeito seguro.
+      3. Se for impossível dar nome, coloque "Movimento Fitness".
       Responda EXCLUSIVAMENTE em JSON.
     `;
   } else {
