@@ -426,11 +426,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
           // Updated to use apiService with correct query params for Personal/Admin
           await apiService.saveHistory(payload, currentUser.id, currentUser.role);
 
-          showToast("Avaliação realizada e salva com sucesso!", 'success');
+          // --- ALTERAÇÃO: Abrir resultado imediatamente ---
+          const newRecord: ExerciseRecord = {
+              id: 'temp-new',
+              userId: selectedUser.id,
+              userName: selectedUser.name,
+              exercise: assessmentType, // SPECIAL_EXERCISES.FREE_MODE
+              result: { ...result, date: new Date().toISOString() },
+              timestamp: Date.now()
+          };
+          
+          showToast("Avaliação concluída! Visualizando resultado...", 'success');
+          
+          setDetailedHistory([newRecord]);
+          setViewingRecord(newRecord); // Abre o modal ResultView imediatamente
           setShowTeacherActionModal('NONE');
           setAssessmentFile(null);
           
-          // Refresh history
+          // Refresh background list
           fetchUserHistory(selectedUser.id);
 
       } catch (err: any) {

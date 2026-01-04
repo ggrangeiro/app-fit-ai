@@ -68,7 +68,8 @@ const EXERCISE_TIPS: Record<string, string[]> = {
   'BENCH_PRESS': ["Pés firmes no chão.", "Escápulas retraídas.", "Cotovelos levemente fechados."],
   'POSTURE_ANALYSIS': ["Posição relaxada.", "Corpo inteiro visível.", "Local bem iluminado."],
   'BODY_COMPOSITION': ["Roupa justa/banho.", "Frente e Lado.", "Pose natural."],
-  'FREE_ANALYSIS_MODE': ["Certifique-se que o corpo todo aparece.", "Boa iluminação ajuda na detecção.", "Execute o movimento completo."]
+  'FREE_ANALYSIS_MODE': ["Certifique-se que o corpo todo aparece.", "Boa iluminação ajuda na detecção.", "Execute o movimento completo."],
+  'DEFAULT': ["Mantenha a postura correta.", "Respire de forma controlada.", "Concentre-se na execução."]
 };
 
 const App: React.FC = () => {
@@ -179,7 +180,8 @@ const App: React.FC = () => {
   const getExerciseTip = () => {
       if (!selectedExercise) return "Prepare-se...";
       const alias = selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.alias || 'DEFAULT');
-      const tips = EXERCISE_TIPS[alias] || EXERCISE_TIPS['DEFAULT'];
+      // Garante um fallback seguro se a chave não existir
+      const tips = EXERCISE_TIPS[alias] || EXERCISE_TIPS['DEFAULT'] || ["Aguarde a análise da IA..."];
       return tips[currentTipIndex % tips.length];
   };
 
@@ -315,7 +317,8 @@ const App: React.FC = () => {
           if (!selectedExercise) return 0;
           const exerciseObj = exercisesList.find(e => e.id === selectedExercise);
           const typeKey = exerciseObj ? exerciseObj.alias : 'FREE_ANALYSIS_MODE';
-          const tips = EXERCISE_TIPS[typeKey] || ["Mantenha a postura correta."];
+          // Fallback seguro também no intervalo
+          const tips = EXERCISE_TIPS[typeKey] || EXERCISE_TIPS['DEFAULT'] || ["Mantenha a postura correta."];
           return (prev + 1) % tips.length;
         });
       }, 3000);
