@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, AnalysisResult, DietPlan, WorkoutPlan } from '../types';
+import { User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, AnalysisResult, DietPlan, WorkoutPlan, AppStep } from '../types';
 import { MockDataService } from '../services/mockDataService';
 import { apiService } from '../services/apiService'; 
 import { generateExerciseThumbnail, analyzeVideo, generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { compressVideo } from '../utils/videoUtils';
 import { ResultView } from './ResultView';
-import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert } from 'lucide-react';
+import LoadingScreen from './LoadingScreen';
+import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 
@@ -18,6 +19,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
   const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false); // Novo estado de loading
   
   const [userHistoryList, setUserHistoryList] = useState<ExerciseRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -45,6 +47,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
   const [showTeacherActionModal, setShowTeacherActionModal] = useState<'NONE' | 'DIET' | 'WORKOUT' | 'ASSESSMENT'>('NONE');
   const [assessmentType, setAssessmentType] = useState<string>(SPECIAL_EXERCISES.BODY_COMPOSITION);
   const [assessmentFile, setAssessmentFile] = useState<File | null>(null);
+  const [assessmentPreview, setAssessmentPreview] = useState<string | null>(null); // Preview visual
   const [actionFormData, setActionFormData] = useState({
       weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino'
   });
@@ -120,6 +123,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     }
   }, [selectedUser]);
 
+  // Limpeza de preview ao fechar modal
+  useEffect(() => {
+    if (showTeacherActionModal === 'NONE') {
+        if (assessmentPreview) URL.revokeObjectURL(assessmentPreview);
+        setAssessmentPreview(null);
+        setAssessmentFile(null);
+    }
+  }, [showTeacherActionModal]);
+
+  const handleAssessmentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setAssessmentFile(file);
+          setAssessmentPreview(URL.createObjectURL(file));
+      }
+  };
+
   const groupedRecords = useMemo(() => {
     const groups: Record<string, ExerciseRecord[]> = {};
     userHistoryList.forEach(record => {
@@ -165,6 +185,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
   };
 
   const fetchBackendUsers = async () => {
+    setIsLoadingUsers(true);
     try {
         const resultUsers = await apiService.getUsers(currentUser.id, currentUser.role);
         if (resultUsers && resultUsers.length > 0) {
@@ -187,6 +208,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             const mockUsers = MockDataService.getUsers(currentUser);
             setUsers(mockUsers);
         }
+    } finally {
+        setIsLoadingUsers(false);
     }
   };
 
@@ -442,6 +465,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
           setViewingRecord(newRecord); // Abre o modal ResultView imediatamente
           setShowTeacherActionModal('NONE');
           setAssessmentFile(null);
+          setAssessmentPreview(null);
           
           // Refresh background list
           fetchUserHistory(selectedUser.id);
@@ -480,6 +504,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     } catch (e) {}
   };
 
+  const handleSharePlan = async () => {
+      if (!viewingPlan) return;
+      
+      // Cria uma versão simplificada do texto para compartilhar
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = viewingPlan.content;
+      const textContent = tempDiv.innerText || tempDiv.textContent || "";
+      
+      const shareText = `📋 *${viewingPlan.title} - FitAI*\n\n${textContent.substring(0, 1000)}...\n\n(Acesse o app para ver completo)`;
+
+      if (navigator.share) {
+          try {
+              await navigator.share({
+                  title: viewingPlan.title,
+                  text: shareText
+              });
+          } catch(e) {}
+      } else {
+          try {
+              await navigator.clipboard.writeText(shareText);
+              showToast("Resumo copiado para a área de transferência!", 'success');
+          } catch (e) {
+              showToast("Erro ao copiar.", 'error');
+          }
+      }
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-emerald-400 border-emerald-500/30 bg-emerald-500/10";
     if (score >= 60) return "text-yellow-400 border-yellow-500/30 bg-yellow-500/10";
@@ -513,8 +564,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
       {/* TEACHER ACTION MODAL */}
       {showTeacherActionModal !== 'NONE' && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-                  <button onClick={() => {setShowTeacherActionModal('NONE'); setAssessmentFile(null);}} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+              <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+                  <button onClick={() => {setShowTeacherActionModal('NONE'); setAssessmentFile(null);}} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
                       <X className="w-6 h-6" />
                   </button>
 
@@ -524,20 +575,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                           <p className="text-sm text-slate-400 mb-4">Gerando dieta para: <span className="text-white font-bold">{selectedUser?.name}</span></p>
                           {/* Reuse logic from App.tsx forms */}
                           <div className="grid grid-cols-2 gap-4">
-                              <input type="number" placeholder="Peso (kg)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.weight} onChange={e => setActionFormData({...actionFormData, weight: e.target.value})} />
-                              <input type="number" placeholder="Altura (cm)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.height} onChange={e => setActionFormData({...actionFormData, height: e.target.value})} />
+                              <input type="number" placeholder="Peso (kg)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={actionFormData.weight} onChange={e => setActionFormData({...actionFormData, weight: e.target.value})} />
+                              <input type="number" placeholder="Altura (cm)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={actionFormData.height} onChange={e => setActionFormData({...actionFormData, height: e.target.value})} />
                           </div>
-                          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.gender} onChange={e => setActionFormData({...actionFormData, gender: e.target.value})}>
+                          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={actionFormData.gender} onChange={e => setActionFormData({...actionFormData, gender: e.target.value})}>
                               <option value="masculino">Masculino</option>
                               <option value="feminino">Feminino</option>
                           </select>
-                          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.goal} onChange={e => setActionFormData({...actionFormData, goal: e.target.value})}>
+                          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={actionFormData.goal} onChange={e => setActionFormData({...actionFormData, goal: e.target.value})}>
                               <option value="emagrecer">Emagrecer</option>
                               <option value="ganhar_massa">Hipertrofia</option>
                               <option value="manutencao">Manutenção</option>
                           </select>
-                          <textarea placeholder="Restrições alimentares..." className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.observations} onChange={e => setActionFormData({...actionFormData, observations: e.target.value})} />
-                          <button type="submit" disabled={processing} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl">{processing ? <Loader2 className="animate-spin mx-auto"/> : 'Gerar e Salvar'}</button>
+                          <textarea placeholder="Restrições alimentares..." className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={actionFormData.observations} onChange={e => setActionFormData({...actionFormData, observations: e.target.value})} />
+                          <button type="submit" disabled={processing} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all">{processing ? <Loader2 className="animate-spin mx-auto"/> : 'Gerar e Salvar'}</button>
                       </form>
                   )}
 
@@ -546,14 +597,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Dumbbell className="w-6 h-6 text-blue-400" /> Prescrever Treino IA</h3>
                           <p className="text-sm text-slate-400 mb-4">Gerando treino para: <span className="text-white font-bold">{selectedUser?.name}</span></p>
                           <div className="grid grid-cols-2 gap-4">
-                              <input type="number" placeholder="Peso (kg)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.weight} onChange={e => setActionFormData({...actionFormData, weight: e.target.value})} />
-                              <input type="number" placeholder="Altura (cm)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.height} onChange={e => setActionFormData({...actionFormData, height: e.target.value})} />
+                              <input type="number" placeholder="Peso (kg)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.weight} onChange={e => setActionFormData({...actionFormData, weight: e.target.value})} />
+                              <input type="number" placeholder="Altura (cm)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.height} onChange={e => setActionFormData({...actionFormData, height: e.target.value})} />
                           </div>
-                          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.gender} onChange={e => setActionFormData({...actionFormData, gender: e.target.value})}>
+                          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.gender} onChange={e => setActionFormData({...actionFormData, gender: e.target.value})}>
                               <option value="masculino">Masculino</option>
                               <option value="feminino">Feminino</option>
                           </select>
-                          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.goal} onChange={e => setActionFormData({...actionFormData, goal: e.target.value})}>
+                          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.goal} onChange={e => setActionFormData({...actionFormData, goal: e.target.value})}>
                               <option value="hipertrofia">Hipertrofia</option>
                               <option value="emagrecimento">Emagrecimento</option>
                               <option value="definicao">Definição</option>
@@ -563,7 +614,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                           <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1">
                                   <label className="text-xs text-slate-400 ml-1">Nível</label>
-                                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.level} onChange={e => setActionFormData({...actionFormData, level: e.target.value})}>
+                                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.level} onChange={e => setActionFormData({...actionFormData, level: e.target.value})}>
                                       <option value="iniciante">Iniciante</option>
                                       <option value="intermediario">Intermediário</option>
                                       <option value="avancado">Avançado</option>
@@ -571,7 +622,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                               </div>
                               <div className="space-y-1">
                                   <label className="text-xs text-slate-400 ml-1">Frequência</label>
-                                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.frequency} onChange={e => setActionFormData({...actionFormData, frequency: e.target.value})}>
+                                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.frequency} onChange={e => setActionFormData({...actionFormData, frequency: e.target.value})}>
                                       <option value="1">1x na Semana</option>
                                       <option value="2">2x na Semana</option>
                                       <option value="3">3x na Semana</option>
@@ -583,46 +634,94 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                               </div>
                           </div>
 
-                          <textarea placeholder="Lesões ou observações..." className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={actionFormData.observations} onChange={e => setActionFormData({...actionFormData, observations: e.target.value})} />
-                          <button type="submit" disabled={processing} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl">{processing ? <Loader2 className="animate-spin mx-auto"/> : 'Gerar e Salvar'}</button>
+                          <textarea placeholder="Lesões ou observações..." className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.observations} onChange={e => setActionFormData({...actionFormData, observations: e.target.value})} />
+                          <button type="submit" disabled={processing} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">{processing ? <Loader2 className="animate-spin mx-auto"/> : 'Gerar e Salvar'}</button>
                       </form>
                   )}
 
                   {showTeacherActionModal === 'ASSESSMENT' && (
                       <div className="space-y-6">
-                          <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2"><Stethoscope className="w-6 h-6 text-indigo-400" /> Nova Avaliação</h3>
-                          <p className="text-sm text-slate-400">Faça upload de mídia do aluno para análise via IA.</p>
+                          <div>
+                              <div className="flex items-center gap-3 mb-2">
+                                  <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg">
+                                      <Stethoscope className="w-6 h-6" />
+                                  </div>
+                                  <div>
+                                      <h3 className="text-xl font-bold text-white">Protocolo de Avaliação</h3>
+                                      <p className="text-xs text-indigo-300 font-medium">BETA CLINICAL IA™</p>
+                                  </div>
+                              </div>
+                              <p className="text-sm text-slate-400 leading-relaxed border-t border-slate-800 pt-3">
+                                  Selecione o protocolo clínico abaixo e faça o upload da mídia do paciente/aluno para iniciar o processamento biomecânico.
+                              </p>
+                          </div>
                           
-                          <div className="space-y-2">
-                              <label className="text-sm text-slate-300">Tipo de Avaliação</label>
-                              <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={assessmentType} onChange={e => setAssessmentType(e.target.value)}>
-                                  <option value={SPECIAL_EXERCISES.BODY_COMPOSITION}>% de Gordura / Biotipo</option>
-                                  <option value={SPECIAL_EXERCISES.POSTURE}>Análise Postural</option>
-                                  <option value={SPECIAL_EXERCISES.FREE_MODE}>Exercício Livre (Técnica)</option>
-                              </select>
+                          {/* SELEÇÃO DE TIPO COM CARDS VISUAIS */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                             <button 
+                                onClick={() => setAssessmentType(SPECIAL_EXERCISES.BODY_COMPOSITION)}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-300 ${assessmentType === SPECIAL_EXERCISES.BODY_COMPOSITION ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-900/40 scale-105 z-10' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750 hover:border-slate-600'}`}
+                             >
+                                <Scale className={`w-6 h-6 mb-2 ${assessmentType === SPECIAL_EXERCISES.BODY_COMPOSITION ? 'text-white' : 'text-slate-500'}`} />
+                                <span className={`text-xs font-bold ${assessmentType === SPECIAL_EXERCISES.BODY_COMPOSITION ? 'text-white' : 'text-slate-400'}`}>Biotipo & Gordura</span>
+                             </button>
+
+                             <button 
+                                onClick={() => setAssessmentType(SPECIAL_EXERCISES.POSTURE)}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-300 ${assessmentType === SPECIAL_EXERCISES.POSTURE ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-900/40 scale-105 z-10' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750 hover:border-slate-600'}`}
+                             >
+                                <ScanLine className={`w-6 h-6 mb-2 ${assessmentType === SPECIAL_EXERCISES.POSTURE ? 'text-white' : 'text-slate-500'}`} />
+                                <span className={`text-xs font-bold ${assessmentType === SPECIAL_EXERCISES.POSTURE ? 'text-white' : 'text-slate-400'}`}>Análise Postural</span>
+                             </button>
+
+                             <button 
+                                onClick={() => setAssessmentType(SPECIAL_EXERCISES.FREE_MODE)}
+                                className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-300 ${assessmentType === SPECIAL_EXERCISES.FREE_MODE ? 'bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-900/40 scale-105 z-10' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750 hover:border-slate-600'}`}
+                             >
+                                <Activity className={`w-6 h-6 mb-2 ${assessmentType === SPECIAL_EXERCISES.FREE_MODE ? 'text-white' : 'text-slate-500'}`} />
+                                <span className={`text-xs font-bold ${assessmentType === SPECIAL_EXERCISES.FREE_MODE ? 'text-white' : 'text-slate-400'}`}>Técnica de Movimento</span>
+                             </button>
                           </div>
 
+                          {/* ÁREA DE UPLOAD APRIMORADA */}
                           <div 
                             onClick={() => fileInputRef.current?.click()}
-                            className={`border-2 border-dashed rounded-xl h-32 flex flex-col items-center justify-center cursor-pointer transition-colors ${assessmentFile ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-600 hover:border-slate-400 bg-slate-800/30'}`}
+                            className={`group relative border-2 border-dashed rounded-2xl h-48 flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden ${assessmentFile ? 'border-indigo-500 bg-slate-900' : 'border-slate-600 hover:border-indigo-400 hover:bg-slate-800/50 bg-slate-800/20'}`}
                           >
-                              {assessmentFile ? (
-                                  <div className="text-center">
-                                      <Check className="w-8 h-8 text-indigo-400 mx-auto mb-2"/>
-                                      <p className="text-sm text-indigo-200">{assessmentFile.name}</p>
-                                  </div>
+                              {assessmentPreview ? (
+                                  <>
+                                    {assessmentFile?.type.startsWith('video/') ? (
+                                        <video src={assessmentPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" muted loop autoPlay playsInline />
+                                    ) : (
+                                        <img src={assessmentPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                                    )}
+                                    <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all flex flex-col items-center justify-center backdrop-blur-[1px]">
+                                        <div className="bg-indigo-600 p-3 rounded-full shadow-xl mb-2 group-hover:scale-110 transition-transform">
+                                            <Check className="w-6 h-6 text-white"/>
+                                        </div>
+                                        <p className="text-white font-bold text-sm drop-shadow-md">{assessmentFile?.name}</p>
+                                        <p className="text-indigo-200 text-xs mt-1">Clique para trocar</p>
+                                    </div>
+                                  </>
                               ) : (
-                                  <div className="text-center text-slate-400">
-                                      <UploadCloud className="w-8 h-8 mx-auto mb-2"/>
-                                      <p className="text-sm">Clique para upload (Vídeo/Foto)</p>
+                                  <div className="text-center p-6 transition-transform group-hover:scale-105">
+                                      <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-4 group-hover:bg-indigo-500/20 transition-colors">
+                                          <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-indigo-400 transition-colors"/>
+                                      </div>
+                                      <p className="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">Arraste ou clique para upload</p>
+                                      <p className="text-xs text-slate-500 mt-2 max-w-[200px] mx-auto">Suporta Vídeos (MP4, MOV) e Imagens (JPG, PNG) de alta resolução.</p>
                                   </div>
                               )}
-                              <input ref={fileInputRef} type="file" className="hidden" accept="video/*,image/*" onChange={e => setAssessmentFile(e.target.files?.[0] || null)} />
+                              <input ref={fileInputRef} type="file" className="hidden" accept="video/*,image/*" onChange={handleAssessmentFileChange} />
                           </div>
 
-                          <button onClick={handleTeacherAssessment} disabled={!assessmentFile || processing} className={`w-full font-bold py-3 rounded-xl flex items-center justify-center gap-2 ${!assessmentFile || processing ? 'bg-slate-700 text-slate-500' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
-                              {processing ? <Loader2 className="animate-spin"/> : <Sparkles className="w-4 h-4"/>}
-                              {processing ? 'Analisando...' : 'Realizar Análise'}
+                          <button 
+                             onClick={handleTeacherAssessment} 
+                             disabled={!assessmentFile || processing} 
+                             className={`w-full font-bold py-4 rounded-xl flex items-center justify-center gap-2 text-sm shadow-lg transition-all ${!assessmentFile || processing ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-indigo-500/25 active:scale-[0.98]'}`}
+                          >
+                              {processing ? <Loader2 className="animate-spin w-5 h-5"/> : <Sparkles className="w-5 h-5"/>}
+                              {processing ? 'Processando Dados...' : 'INICIAR ANÁLISE CLÍNICA'}
                           </button>
                       </div>
                   )}
@@ -634,22 +733,46 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
       {viewingPlan && (
         <div className="fixed inset-0 z-[120] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
            <div className="min-h-screen p-4 md:p-8 relative">
-              <div className="flex justify-between items-center max-w-6xl mx-auto mb-6">
+              <div className="flex justify-between items-center max-w-6xl mx-auto mb-6 no-print">
                  <button 
                     onClick={() => setViewingPlan(null)}
                     className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
                  >
                     <X className="w-6 h-6" /> Fechar Visualização
                  </button>
-                 <div className="bg-slate-800 px-4 py-2 rounded-lg text-white font-bold border border-slate-700">
-                     {viewingPlan.title}
+                 <div className="flex gap-3">
+                     <button onClick={handleSharePlan} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold shadow-lg transition-all">
+                        <Share2 className="w-4 h-4" /> Compartilhar
+                     </button>
+                     <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold shadow-lg transition-all border border-slate-600">
+                        <Printer className="w-4 h-4" /> Imprimir
+                     </button>
                  </div>
               </div>
-              <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
+              <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh] printable-content">
                  <style>{`
                      #admin-plan-view { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
+                     @media print {
+                       body * { visibility: hidden; }
+                       .printable-content, .printable-content * { visibility: visible; }
+                       .printable-content { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: white; box-shadow: none; border-radius: 0; }
+                       .no-print { display: none !important; }
+                     }
                  `}</style>
+                 {/* Title Header inside Printable Area */}
+                 <div className="mb-6 border-b border-slate-200 pb-4">
+                    <div className="bg-slate-800 text-white inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
+                        FitAI Pro
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-900">{viewingPlan.title}</h2>
+                    <p className="text-sm text-slate-500">Plano gerado para: {selectedUser?.name}</p>
+                 </div>
+                 
                  <div id="admin-plan-view" dangerouslySetInnerHTML={{ __html: viewingPlan.content }} />
+                 
+                 <div className="mt-8 pt-4 border-t border-slate-200 text-center text-xs text-slate-400">
+                    Documento gerado automaticamente por FitAI Analyzer. Acompanhamento profissional recomendado.
+                 </div>
               </div>
            </div>
         </div>
@@ -661,7 +784,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
            <div className="min-h-screen p-4 md:p-8 relative">
               <button 
                 onClick={() => setViewingRecord(null)}
-                className="fixed top-4 right-4 z-[110] p-2 bg-slate-800 rounded-full text-white hover:bg-slate-700 hover:text-red-400 transition-colors shadow-lg border border-slate-700"
+                className="fixed top-4 right-4 z-[110] p-2 bg-slate-800 rounded-full text-white hover:bg-slate-700 hover:text-red-400 transition-colors shadow-lg border border-slate-700 no-print"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -731,11 +854,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
         <div className="flex-1 glass-panel rounded-3xl p-6 md:p-8 relative overflow-hidden min-h-[600px]">
           
           {processing && activeTab !== 'assets' && (
-             <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in">
-                <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-                <h3 className="text-xl font-bold text-white">{progressMsg}</h3>
-                <p className="text-slate-400 mt-2">Processando solicitação...</p>
-             </div>
+             showTeacherActionModal === 'ASSESSMENT' ? (
+                <div className="fixed inset-0 z-[200] bg-slate-900/95 flex items-center justify-center animate-in fade-in duration-300">
+                     <LoadingScreen 
+                        step={AppStep.ANALYZING}
+                        tip="A IA está processando os dados biomecânicos do aluno."
+                        exerciseType={assessmentType}
+                        isTeacherMode={true}
+                     />
+                </div>
+             ) : (
+                <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in">
+                    <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+                    <h3 className="text-xl font-bold text-white">{progressMsg}</h3>
+                    <p className="text-slate-400 mt-2">Processando solicitação...</p>
+                </div>
+             )
           )}
 
           {activeTab === 'assets' && isAdmin && (
@@ -815,30 +949,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                   </button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar">
-                {users.length === 0 && <div className="text-slate-500 col-span-full text-center py-10">
-                    {isPersonal ? 'Você ainda não tem alunos cadastrados.' : 'Nenhum usuário encontrado no backend.'}
-                </div>}
-                
-                {users.filter(u => isPersonal ? u.role === 'user' : u.role !== 'admin').map(user => {
-                  return (
-                    <div key={user.id} onClick={() => setSelectedUser(user)} className="bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 rounded-2xl p-5 cursor-pointer transition-all group">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold">{user.name.charAt(0)}</div>
-                        <div className="px-2 py-1 rounded text-xs font-bold text-slate-500 bg-slate-700/30">
-                            {user.role === 'personal' ? 'Personal' : 'Aluno'}
-                        </div>
-                      </div>
-                      <h3 className="text-white font-bold text-lg truncate">{user.name}</h3>
-                      <p className="text-slate-400 text-sm truncate mb-4">{user.email}</p>
-                      <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-700/50 pt-3">
-                         <span className={user.assignedExercises && user.assignedExercises.length > 0 ? 'text-emerald-400' : 'text-slate-500'}>
-                             {user.assignedExercises?.length || 0} exercícios
-                         </span>
-                         <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">Ver histórico <ChevronRight className="w-3 h-3" /></span>
-                      </div>
-                    </div>
-                  );
-                })}
+                {isLoadingUsers ? (
+                   <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-80">
+                      <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+                      <p className="text-white font-bold text-lg">Carregando lista de alunos...</p>
+                      <p className="text-slate-400 text-sm">Sincronizando com o banco de dados</p>
+                   </div>
+                ) : (
+                   <>
+                       {users.length === 0 && <div className="text-slate-500 col-span-full text-center py-10">
+                           {isPersonal ? 'Você ainda não tem alunos cadastrados.' : 'Nenhum usuário encontrado no backend.'}
+                       </div>}
+                       
+                       {users.filter(u => isPersonal ? u.role === 'user' : u.role !== 'admin').map(user => {
+                         return (
+                           <div key={user.id} onClick={() => setSelectedUser(user)} className="bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 rounded-2xl p-5 cursor-pointer transition-all group">
+                             <div className="flex justify-between items-start mb-3">
+                               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold">{user.name.charAt(0)}</div>
+                               <div className="px-2 py-1 rounded text-xs font-bold text-slate-500 bg-slate-700/30">
+                                   {user.role === 'personal' ? 'Personal' : 'Aluno'}
+                               </div>
+                             </div>
+                             <h3 className="text-white font-bold text-lg truncate">{user.name}</h3>
+                             <p className="text-slate-400 text-sm truncate mb-4">{user.email}</p>
+                             <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-700/50 pt-3">
+                                <span className={user.assignedExercises && user.assignedExercises.length > 0 ? 'text-emerald-400' : 'text-slate-500'}>
+                                    {user.assignedExercises?.length || 0} exercícios
+                                </span>
+                                <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">Ver histórico <ChevronRight className="w-3 h-3" /></span>
+                             </div>
+                           </div>
+                         );
+                       })}
+                   </>
+                )}
               </div>
             </div>
           )}

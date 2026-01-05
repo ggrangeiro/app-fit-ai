@@ -25,7 +25,15 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
   const [comparisonInsight, setComparisonInsight] = useState<string | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
 
-  const isBodyCompAnalysis = exerciseType === SPECIAL_EXERCISES.BODY_COMPOSITION;
+  // CORREÇÃO: Verificação mais robusta para detectar Composição Corporal, 
+  // pois exerciseType pode vir como nome ("Composição Corporal") ou ID ("BODY_COMPOSITION")
+  const lowerType = exerciseType.toLowerCase();
+  const isBodyCompAnalysis = 
+    exerciseType === SPECIAL_EXERCISES.BODY_COMPOSITION || 
+    lowerType.includes('composição') || 
+    lowerType.includes('corporal') || 
+    lowerType.includes('biotipo') ||
+    lowerType.includes('gordura');
 
   useEffect(() => {
     if (isOpen && history.length >= 2) {
@@ -188,7 +196,7 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
                           <span className={`block text-xl font-bold ${isCurrentSession ? 'text-white' : 'text-slate-400'}`}>
                             {rec.result.repetitions}{isBodyCompAnalysis && '%'}
                           </span>
-                          <span className="text-xs text-slate-600 uppercase">{isBodyCompAnalysis ? 'Gordura' : 'Reps'}</span>
+                          <span className="text-xs text-slate-600 uppercase">{isBodyCompAnalysis ? '% Corporal' : 'Reps'}</span>
                         </div>
                       </div>
                       

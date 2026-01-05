@@ -16,8 +16,8 @@ const ExerciseCard: React.FC<ExerciseCardProps> = ({ type, icon, selected, onCli
       className={`
         group relative flex flex-col items-center justify-center p-6 rounded-3xl transition-all duration-300 h-48 w-full overflow-hidden border
         ${selected 
-          ? 'bg-blue-900/20 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] scale-[1.02]' 
-          : 'bg-slate-800/40 border-slate-700 hover:bg-slate-800 hover:border-slate-500 hover:shadow-xl hover:-translate-y-1'}
+          ? 'bg-blue-900/20 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] scale-[1.02] z-10' 
+          : 'bg-slate-800/40 border-slate-700 hover:bg-slate-800 hover:border-slate-500 hover:shadow-xl hover:-translate-y-1 hover:z-20'}
       `}
     >
       {/* Background Decor: Grid Pattern & Gradient Glow */}

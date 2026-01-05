@@ -71,13 +71,14 @@ export const ResultView: React.FC<ResultViewProps> = ({
   const isPostureAnalysis = exercise === SPECIAL_EXERCISES.POSTURE;
   const isBodyCompAnalysis = exercise === SPECIAL_EXERCISES.BODY_COMPOSITION;
   
-  // Verifica modo livre: Pelo ID constante OU se o exercício for a string "Análise Livre" OU se existe identifiedExercise
-  const isFreeMode = exercise === SPECIAL_EXERCISES.FREE_MODE || exercise === 'Análise Livre' || !!result.identifiedExercise;
+  // CORREÇÃO: isFreeMode não deve depender de result.identifiedExercise para exercícios padrão.
+  // Isso evita que o botão suma se a IA preencher o nome do exercício em uma análise normal.
+  const isFreeMode = exercise === SPECIAL_EXERCISES.FREE_MODE || exercise === 'Análise Livre';
   
   // Título Dinâmico: Se for modo livre, usa o identificado pela IA
   const exerciseDisplayName = isBodyCompAnalysis 
     ? 'Avaliação Corporal' 
-    : (isFreeMode 
+    : ((isFreeMode && result.identifiedExercise)
         ? (result.identifiedExercise || 'Exercício Livre') 
         : exercise);
 
@@ -546,6 +547,17 @@ ${strengthsText}${improvementsText}
 
          {/* Score Ring */}
          <div className="relative shrink-0 flex flex-col items-center">
+             {/* Shortcut History Button (Mobile/Desktop) - Posicionado no topo direito */}
+             {!isFreeMode && (
+                <button 
+                  onClick={() => setShowHistoryModal(true)}
+                  className="absolute -top-6 -right-2 p-2 text-slate-400 hover:text-white transition-colors bg-slate-800/50 rounded-full border border-slate-700/50 no-print"
+                  title="Ver Histórico Rápido"
+                >
+                  <History className="w-4 h-4" />
+                </button>
+             )}
+            
             <div className="w-32 h-32 md:w-40 md:h-40 relative">
                <ResponsiveContainer width="100%" height="100%">
                   <RadialBarChart 
@@ -602,34 +614,45 @@ ${strengthsText}${improvementsText}
             </div>
 
             {/* Action Buttons */}
-            {!isHistoricalView && (
-              <div className="grid grid-cols-2 gap-3 no-print">
-                 <button onClick={() => setShowDietForm(true)} className="p-4 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
-                    <Utensils className="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-bold text-emerald-100">Gerar Dieta</span>
-                 </button>
-                 <button onClick={() => setShowWorkoutForm(true)} className="p-4 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
-                    <Dumbbell className="w-6 h-6 text-blue-400 group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-bold text-blue-100">Gerar Treino</span>
-                 </button>
+            <div className="grid grid-cols-2 gap-3 no-print">
+                 {/* BOTÃO DE EVOLUÇÃO MOVIDO PARA O TOPO (PRIMEIRA AÇÃO) */}
+                 {!isFreeMode && (
+                   <button 
+                      onClick={() => setShowHistoryModal(true)} 
+                      className="col-span-2 p-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 transition-all transform hover:scale-[1.02]"
+                   >
+                      <History className="w-5 h-5" />
+                      <span className="font-bold">Ver Evolução & Histórico</span>
+                      {history.length > 0 && <span className="bg-white/20 px-2 py-0.5 rounded text-xs ml-1">{history.length}</span>}
+                   </button>
+                 )}
+
+                 {!isHistoricalView && (
+                   <>
+                     <button onClick={() => setShowDietForm(true)} className="p-4 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
+                        <Utensils className="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-emerald-100">Gerar Dieta</span>
+                     </button>
+                     <button onClick={() => setShowWorkoutForm(true)} className="p-4 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all group">
+                        <Dumbbell className="w-6 h-6 text-blue-400 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-blue-100">Gerar Treino</span>
+                     </button>
+                   </>
+                 )}
+                 
                  <button onClick={handleShare} className="col-span-2 p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl flex items-center justify-center gap-2 text-slate-300 hover:text-white transition-all">
                     <Share2 className="w-4 h-4" /> Compartilhar Resultado
                  </button>
                  
-                 {history.length > 0 && (
-                   <button 
-                      onClick={() => setShowHistoryModal(true)} 
-                      className="col-span-2 p-4 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-2 text-indigo-200 transition-all"
-                   >
-                      <History className="w-4 h-4" /> Ver Evolução ({history.length})
-                   </button>
-                 )}
-              </div>
-            )}
+                 <button onClick={handlePrint} className="col-span-2 p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl flex items-center justify-center gap-2 text-slate-300 hover:text-white transition-all">
+                    <Printer className="w-4 h-4" /> Imprimir Relatório
+                 </button>
+            </div>
          </div>
 
          {/* Middle & Right Column: Detailed Feedback */}
          <div className="lg:col-span-2 space-y-6">
+            {/* ... Restante do código inalterado ... */}
             
             {/* Main Correction Card (Dica de Mestre) */}
             <div className="bg-gradient-to-r from-blue-900/40 to-slate-900/40 border border-blue-500/30 p-6 rounded-3xl relative overflow-hidden">
