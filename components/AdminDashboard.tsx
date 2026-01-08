@@ -10,12 +10,45 @@ import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus,
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 
+// LISTA FIXA DE EXERCÍCIOS PARA O PERSONAL (SUBSTITUI CHAMADA DE API)
+const FIXED_EXERCISES_LIST = [
+    { exercicio: "Abdominal Supra", id: 536, nomeExibicao: "Abdominal supra" },
+    { exercicio: "Afundo (Lunge)", id: 538, nomeExibicao: "Afundo (lunge)" },
+    { exercicio: "Agachamento (Squat)", id: 539, nomeExibicao: "Agachamento (squat)" },
+    { exercicio: "Barra Fixa (Pull-up)", id: 543, nomeExibicao: "Barra fixa (pull-up)" },
+    { exercicio: "Burpee", id: 545, nomeExibicao: "Burpee" },
+    { exercicio: "Cadeira Abdutora", id: 546, nomeExibicao: "Cadeira abdutora" },
+    { exercicio: "Crucifixo no Cross Over", id: 547, nomeExibicao: "Crucifixo no cross over" },
+    { exercicio: "Elevação Frontal no Cabo", id: 548, nomeExibicao: "Elevação frontal no cabo" },
+    { exercicio: "Elevação Pélvica", id: 549, nomeExibicao: "Elevação pélvica" },
+    { exercicio: "Escalador (Mountain Climber)", id: 550, nomeExibicao: "Escalador (mountain climber)" },
+    { exercicio: "Flexão de Braço (Push-up)", id: 551, nomeExibicao: "Flexão de braço (push-up)" },
+    { exercicio: "Leg Press 45 Graus", id: 552, nomeExibicao: "Leg press 45 graus" },
+    { exercicio: "Leg Press Horizontal", id: 553, nomeExibicao: "Leg press horizontal" },
+    { exercicio: "Levantamento Terra (Deadlift)", id: 554, nomeExibicao: "Levantamento terra (deadlift)" },
+    { exercicio: "Polichinelo", id: 555, nomeExibicao: "Polichinelo" },
+    { exercicio: "Prancha (Plank)", id: 556, nomeExibicao: "Prancha (plank)" },
+    { exercicio: "Puxada Alta (Pulldown)", id: 558, nomeExibicao: "Puxada alta (pulldown)" },
+    { exercicio: "Puxada na Máquina Articulada", id: 559, nomeExibicao: "Puxada na máquina articulada" },
+    { exercicio: "Remada Alta no Smith", id: 560, nomeExibicao: "Remada alta no smith" },
+    { exercicio: "Remada Baixa na Máquina", id: 561, nomeExibicao: "Remada baixa na máquina" },
+    { exercicio: "Remada no TRX", id: 562, nomeExibicao: "Remada no trx" },
+    { exercicio: "Rosca Biceps no Cabo", id: 563, nomeExibicao: "Rosca biceps no cabo" },
+    { exercicio: "Rosca Direta (Bicep Curl)", id: 564, nomeExibicao: "Rosca direta (bicep curl)" },
+    { exercicio: "Rosca Martelo com Halter", id: 565, nomeExibicao: "Rosca martelo com halter" },
+    { exercicio: "Rosca Scott com Halter", id: 566, nomeExibicao: "Rosca scott com halter" },
+    { exercicio: "Supino na Máquina (Chest Press)", id: 567, nomeExibicao: "Supino na máquina (chest press)" },
+    { exercicio: "Supino Reto com Barra", id: 568, nomeExibicao: "Supino reto com barra" },
+    { exercicio: "Tríceps Banco (Dips)", id: 569, nomeExibicao: "Tríceps banco (dips)" }
+];
+
 interface AdminDashboardProps {
   currentUser: User;
-  onRefreshData?: () => void; 
+  onRefreshData?: () => void;
+  onUpdateUser?: (updatedUser: User) => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshData }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshData, onUpdateUser }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -33,6 +66,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
   const [detailedHistory, setDetailedHistory] = useState<ExerciseRecord[]>([]);
   
   const [allExercises, setAllExercises] = useState<ExerciseDTO[]>([]);
+  const [studentExercises, setStudentExercises] = useState<ExerciseDTO[]>([]); // New state for student specific exercises
 
   const [processing, setProcessing] = useState(false);
   const [progressMsg, setProgressMsg] = useState('');
@@ -45,7 +79,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
   // --- STATES PARA AÇÕES DO PROFESSOR ---
   const [showTeacherActionModal, setShowTeacherActionModal] = useState<'NONE' | 'DIET' | 'WORKOUT' | 'ASSESSMENT'>('NONE');
-  const [assessmentType, setAssessmentType] = useState<string>(SPECIAL_EXERCISES.BODY_COMPOSITION);
+  const [assessmentType, setAssessmentType] = useState<string>(''); // Start empty to force selection or default
   const [assessmentFile, setAssessmentFile] = useState<File | null>(null);
   const [assessmentPreview, setAssessmentPreview] = useState<string | null>(null); // Preview visual
   const [actionFormData, setActionFormData] = useState({
@@ -98,28 +132,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
   useEffect(() => {
     if (selectedUser) {
-        // Carregar exercícios atribuídos
-        apiService.getUserExercises(selectedUser.id).then(exs => {
-            if (exs.length > 0) {
-                 const ids = exs.map((e: any) => String(e.id)); 
-                 setEditingAssignments(ids);
-            } else {
-                 setEditingAssignments(selectedUser.assignedExercises || []);
-            }
-        }).catch(() => {
-            setEditingAssignments(selectedUser.assignedExercises || []);
-        });
-
-        // Carregar Histórico
-        fetchUserHistory(selectedUser.id);
+        // --- USANDO LISTA FIXA DE EXERCÍCIOS PARA O PERSONAL ---
+        const mapped = FIXED_EXERCISES_LIST.map((e: any) => ({
+            id: String(e.id),
+            alias: e.exercicio.toUpperCase().replace(/[\s\(\)]+/g, '_').replace(/_$/, ''), // Gera um alias consistente
+            name: e.nomeExibicao,
+            category: 'STANDARD'
+        }));
+        setStudentExercises(mapped);
         
-        // Carregar Planos Atuais (Dieta e Treino)
+        // Mantemos apenas a chamada para buscar o histórico e planos
+        fetchUserHistory(selectedUser.id);
         fetchUserPlans(selectedUser.id);
         
     } else {
         setUserHistoryList([]);
         setUserDiet(null);
         setUserWorkout(null);
+        setStudentExercises([]);
     }
   }, [selectedUser]);
 
@@ -129,6 +159,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
         if (assessmentPreview) URL.revokeObjectURL(assessmentPreview);
         setAssessmentPreview(null);
         setAssessmentFile(null);
+        setAssessmentType(''); // Reset selection
+    } else if (showTeacherActionModal === 'ASSESSMENT') {
+        // Start empty to allow "Free Analysis/Auto-detect" if user doesn't pick anything
+        setAssessmentType(''); 
     }
   }, [showTeacherActionModal]);
 
@@ -195,6 +229,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 email: u.email,
                 // CORREÇÃO: Converter role para minúsculo para garantir compatibilidade com o filtro (USER -> user)
                 role: u.role ? String(u.role).toLowerCase() : 'user', 
+                credits: u.credits || 0,
                 avatar: u.avatar,
                 assignedExercises: u.assignedExercises || []
             }));
@@ -422,26 +457,59 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
   const handleTeacherAssessment = async () => {
       if (!selectedUser || !assessmentFile) return;
+      
+      // --- VERIFICAÇÃO DE CRÉDITO PARA PERSONAL ---
+      if (currentUser.role !== 'admin') {
+          if (currentUser.credits !== undefined && currentUser.credits <= 0) {
+              showToast("Créditos insuficientes. Recarregue para continuar.", 'error');
+              return;
+          }
+      }
+
       setProcessing(true);
       setProgressMsg("Analisando vídeo/imagem com IA...");
       
       try {
-          // 1. Optimize video if needed
+          // 2. Optimize video if needed
           let finalFile = assessmentFile;
           if (assessmentFile.type.startsWith('video/') && assessmentFile.size > 15 * 1024 * 1024) {
               setProgressMsg("Otimizando arquivo...");
               finalFile = await compressVideo(assessmentFile);
           }
 
-          // 2. Analyze with Gemini
+          // 3. Analyze with Gemini
           setProgressMsg("IA Biomecânica em processamento...");
-          const result = await analyzeVideo(finalFile, assessmentType);
+          // Use assessmentType OR default to FREE_ANALYSIS_MODE if nothing selected
+          const finalType = assessmentType || SPECIAL_EXERCISES.FREE_MODE;
+          const result = await analyzeVideo(finalFile, finalType);
 
-          // 3. Save to History (using selectedUser.id)
+          // --- 1. CONSUMIR CRÉDITO (MOVED TO AFTER SUCCESS) ---
+          if (currentUser.role !== 'admin') {
+              try {
+                  const creditResponse = await apiService.consumeCredit(currentUser.id);
+                  if (creditResponse && typeof creditResponse.novoSaldo === 'number') {
+                      if (onUpdateUser) {
+                          onUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
+                      }
+                  }
+              } catch (e: any) {
+                  if (e.message === 'CREDITS_EXHAUSTED' || e.message.includes('402')) {
+                      showToast("Saldo insuficiente para realizar a análise.", 'error');
+                      // Optional: decide if you want to stop here or show result anyway.
+                      // Usually if IA already processed, we might want to show it, but blocking future requests.
+                      // For now, let's allow showing since it's already processed.
+                  } else {
+                      // Log error but continue
+                      console.error("Erro ao debitar crédito", e);
+                  }
+              }
+          }
+
+          // 4. Save to History (using selectedUser.id as owner, but log who requested)
           const payload = {
               userId: selectedUser.id,
               userName: selectedUser.name,
-              exercise: assessmentType,
+              exercise: finalType,
               timestamp: Date.now(),
               result: { ...result, date: new Date().toISOString() }
           };
@@ -454,7 +522,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
               id: 'temp-new',
               userId: selectedUser.id,
               userName: selectedUser.name,
-              exercise: assessmentType, // SPECIAL_EXERCISES.FREE_MODE
+              exercise: finalType, 
               result: { ...result, date: new Date().toISOString() },
               timestamp: Date.now()
           };
@@ -466,6 +534,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
           setShowTeacherActionModal('NONE');
           setAssessmentFile(null);
           setAssessmentPreview(null);
+          setAssessmentType(''); // Reset type
           
           // Refresh background list
           fetchUserHistory(selectedUser.id);
@@ -682,6 +751,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                 <span className={`text-xs font-bold ${assessmentType === SPECIAL_EXERCISES.FREE_MODE ? 'text-white' : 'text-slate-400'}`}>Técnica de Movimento</span>
                              </button>
                           </div>
+                          
+                          {/* Dropdown de Exercícios do Aluno (NOVO) */}
+                          <div className="pt-4 border-t border-slate-700">
+                             <label className="text-xs text-slate-400 mb-2 block uppercase font-bold">Ou selecione um exercício do aluno:</label>
+                             <select 
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-indigo-500 focus:outline-none"
+                                onChange={(e) => setAssessmentType(e.target.value)}
+                                value={assessmentType}
+                             >
+                                <option value="">Identificar Automaticamente (IA)</option>
+                                
+                                {studentExercises.length > 0 ? (
+                                    studentExercises.map(ex => (
+                                        <option key={ex.id} value={ex.alias}>{ex.name}</option>
+                                    ))
+                                ) : (
+                                    allExercises.filter(ex => ex.category !== 'SPECIAL').map(ex => (
+                                        <option key={ex.id} value={ex.alias}>{ex.name}</option>
+                                    ))
+                                )}
+                             </select>
+                             {studentExercises.length === 0 && (
+                                <p className="text-[10px] text-slate-500 mt-1 italic">Mostrando lista completa (Aluno sem exercícios atribuídos).</p>
+                             )}
+                          </div>
 
                           {/* ÁREA DE UPLOAD APRIMORADA */}
                           <div 
@@ -718,7 +812,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                           <button 
                              onClick={handleTeacherAssessment} 
                              disabled={!assessmentFile || processing} 
-                             className={`w-full font-bold py-4 rounded-xl flex items-center justify-center gap-2 text-sm shadow-lg transition-all ${!assessmentFile || processing ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-indigo-500/25 active:scale-[0.98]'}`}
+                             className={`w-full font-bold py-4 rounded-xl flex items-center justify-center gap-2 text-sm shadow-lg transition-all ${(!assessmentFile || processing) ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-indigo-500/25 active:scale-[0.98]'}`}
                           >
                               {processing ? <Loader2 className="animate-spin w-5 h-5"/> : <Sparkles className="w-5 h-5"/>}
                               {processing ? 'Processando Dados...' : 'INICIAR ANÁLISE CLÍNICA'}
@@ -732,7 +826,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
       {/* PLAN PREVIEW MODAL */}
       {viewingPlan && (
         <div className="fixed inset-0 z-[120] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
-           <div className="min-h-screen p-4 md:p-8 relative">
+           <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
               <div className="flex justify-between items-center max-w-6xl mx-auto mb-6 no-print">
                  <button 
                     onClick={() => setViewingPlan(null)}
@@ -781,10 +875,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
       {/* DETAILED VIEW MODAL */}
       {viewingRecord && selectedUser && (
         <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
-           <div className="min-h-screen p-4 md:p-8 relative">
+           <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
               <button 
                 onClick={() => setViewingRecord(null)}
-                className="fixed top-4 right-4 z-[110] p-2 bg-slate-800 rounded-full text-white hover:bg-slate-700 hover:text-red-400 transition-colors shadow-lg border border-slate-700 no-print"
+                className="fixed right-4 z-[110] p-2 bg-slate-800 rounded-full text-white hover:bg-slate-700 hover:text-red-400 transition-colors shadow-lg border border-slate-700 no-print"
+                style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -836,6 +931,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                   <ImageIcon className="w-5 h-5" /> Assets IA
                 </button>
                 <div className="h-px bg-slate-700/50 my-2"></div>
+                {/* 
                 <button 
                   onClick={runAssignmentScript}
                   disabled={processing}
@@ -844,6 +940,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                   {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Database className="w-5 h-5" />}
                   <span className="text-xs font-bold">Rodar Script de Atribuição</span>
                 </button>
+                */}
                 </>
             )}
           </div>
@@ -1041,6 +1138,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                          </div>
                       )}
 
+                      {/* --- EXERCÍCIOS ATRIBUÍDOS REMOVIDOS --- */}
+                      {/* 
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-sm font-bold text-white flex items-center gap-2"><Dumbbell className="w-4 h-4" /> Exercícios Atribuídos</h4>
                         <div className="flex gap-2 text-xs">
@@ -1065,6 +1164,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                           {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                           Salvar Permissões
                       </button>
+                      */}
                    </div>
                 </div>
 

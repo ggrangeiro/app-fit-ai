@@ -196,7 +196,7 @@ export const EvolutionModal: React.FC<EvolutionModalProps> = ({
                           <span className={`block text-xl font-bold ${isCurrentSession ? 'text-white' : 'text-slate-400'}`}>
                             {rec.result.repetitions}{isBodyCompAnalysis && '%'}
                           </span>
-                          <span className="text-xs text-slate-600 uppercase">{isBodyCompAnalysis ? '% Corporal' : 'Reps'}</span>
+                          <span className="text-xs text-slate-600 uppercase">{isBodyCompAnalysis ? '% Gordura' : 'Reps'}</span>
                         </div>
                       </div>
                       

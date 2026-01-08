@@ -96,6 +96,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  credits: number; // Campo obrigatório para controle de fluxo
   avatar?: string;
   assignedExercises: string[]; // Agora é string[] pois vem do banco dinâmico
   token?: string; // JWT Token para o novo backend

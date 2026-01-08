@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { AnalysisResult, ExerciseType, ExerciseRecord, SPECIAL_EXERCISES } from '../types';
+import { AnalysisResult, ExerciseType, ExerciseRecord, SPECIAL_EXERCISES, User } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download, Lightbulb } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User as UserIcon, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download, Lightbulb } from 'lucide-react';
 import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { EvolutionModal } from './EvolutionModal';
@@ -13,11 +13,14 @@ interface ResultViewProps {
   exercise: ExerciseType;
   history: ExerciseRecord[];
   userId: string;
+  currentUser?: User | null; // Adicionado para controle de créditos
   onReset: () => void;
   onSave?: () => void;
   onDeleteRecord?: (recordId: string) => void;
   onWorkoutSaved?: () => void;
   onDietSaved?: () => void; 
+  onUpdateUser?: (user: User) => void; // Adicionado para atualizar créditos
+  onBuyCredits?: () => void; // Adicionado para abrir modal de compra
   isHistoricalView?: boolean;
   showToast?: (message: string, type: ToastType) => void;
   triggerConfirm?: (title: string, message: string, onConfirm: () => void, isDestructive?: boolean) => void;
@@ -28,11 +31,14 @@ export const ResultView: React.FC<ResultViewProps> = ({
   exercise, 
   history, 
   userId, 
+  currentUser,
   onReset, 
   onSave, 
   onDeleteRecord, 
   onWorkoutSaved,
   onDietSaved,
+  onUpdateUser,
+  onBuyCredits,
   isHistoricalView = false,
   showToast = () => {}, 
   triggerConfirm = () => {} 
@@ -69,13 +75,15 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
   const isHighPerformance = result.score > 80;
   const isPostureAnalysis = exercise === SPECIAL_EXERCISES.POSTURE;
-  const isBodyCompAnalysis = exercise === SPECIAL_EXERCISES.BODY_COMPOSITION;
+  const lowerExercise = exercise.toLowerCase();
+  const isBodyCompAnalysis = 
+    exercise === SPECIAL_EXERCISES.BODY_COMPOSITION || 
+    lowerExercise.includes('gordura') || 
+    lowerExercise.includes('corporal') || 
+    lowerExercise.includes('biotipo');
   
-  // CORREÇÃO: isFreeMode não deve depender de result.identifiedExercise para exercícios padrão.
-  // Isso evita que o botão suma se a IA preencher o nome do exercício em uma análise normal.
   const isFreeMode = exercise === SPECIAL_EXERCISES.FREE_MODE || exercise === 'Análise Livre';
   
-  // Título Dinâmico: Se for modo livre, usa o identificado pela IA
   const exerciseDisplayName = isBodyCompAnalysis 
     ? 'Avaliação Corporal' 
     : ((isFreeMode && result.identifiedExercise)
@@ -99,14 +107,41 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
   const handleGenerateDiet = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // --- VERIFICAÇÃO DE CRÉDITO ---
+    if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
+        if (currentUser.credits !== undefined && currentUser.credits <= 0) {
+            if (onBuyCredits) {
+                onBuyCredits();
+            } else {
+                showToast("Créditos insuficientes.", 'error');
+            }
+            return;
+        }
+    }
+
     setDietLoading(true);
     try {
       const planHtml = await generateDietPlan(dietFormData, result);
       
-      // Usa apiService para garantir segurança com requesterId
       await apiService.createDiet(userId, planHtml, dietFormData.goal);
       if (onDietSaved) onDietSaved();
       
+      // --- DEBITAR CRÉDITO ---
+      if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
+          try {
+              const creditResponse = await apiService.consumeCredit(currentUser.id);
+              if (creditResponse && typeof creditResponse.novoSaldo === 'number' && onUpdateUser) {
+                  onUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
+              }
+          } catch (e: any) {
+              console.error("Erro ao debitar crédito da dieta", e);
+              if (e.message === 'CREDITS_EXHAUSTED' || e.message.includes('402')) {
+                  showToast("Atenção: Saldo insuficiente para debitar a geração.", 'error');
+              }
+          }
+      }
+
       setDietPlanHtml(planHtml);
       setShowDietForm(false);
       showToast("Dieta gerada com sucesso!", 'success');
@@ -119,13 +154,40 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
   const handleGenerateWorkout = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // --- VERIFICAÇÃO DE CRÉDITO ---
+    if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
+        if (currentUser.credits !== undefined && currentUser.credits <= 0) {
+            if (onBuyCredits) {
+                onBuyCredits();
+            } else {
+                showToast("Créditos insuficientes.", 'error');
+            }
+            return;
+        }
+    }
+
     setWorkoutLoading(true);
     try {
       const planHtml = await generateWorkoutPlan(workoutFormData, result);
       
-      // Usa apiService para garantir segurança com requesterId
       await apiService.createTraining(userId, planHtml, workoutFormData.goal);
       if (onWorkoutSaved) onWorkoutSaved();
+
+      // --- DEBITAR CRÉDITO ---
+      if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
+          try {
+              const creditResponse = await apiService.consumeCredit(currentUser.id);
+              if (creditResponse && typeof creditResponse.novoSaldo === 'number' && onUpdateUser) {
+                  onUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
+              }
+          } catch (e: any) {
+              console.error("Erro ao debitar crédito do treino", e);
+              if (e.message === 'CREDITS_EXHAUSTED' || e.message.includes('402')) {
+                  showToast("Atenção: Saldo insuficiente para debitar a geração.", 'error');
+              }
+          }
+      }
 
       setWorkoutPlanHtml(planHtml);
       setShowWorkoutForm(false);
@@ -230,7 +292,7 @@ ${strengthsText}${improvementsText}
               <Scale className="w-6 h-6" />
             </div>
             <span className="text-4xl font-bold text-white print:text-black">{result.repetitions}%</span>
-            <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Gordura Estimada</span>
+            <span className="text-xs text-slate-400 uppercase font-semibold tracking-wider">% de Gordura</span>
             {result.gender && (
                <span className="text-[10px] text-slate-500 mt-1 uppercase font-bold bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700 print:border-slate-300 print:bg-slate-100">
                  {result.gender}
@@ -415,7 +477,7 @@ ${strengthsText}${improvementsText}
 
                 <button type="submit" disabled={dietLoading} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
                   {dietLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                  {dietLoading ? "Gerando..." : "Gerar Dieta"}
+                  {dietLoading ? "Gerando..." : "Gerar Dieta (1 Crédito)"}
                 </button>
              </form>
           </div>
@@ -508,7 +570,7 @@ ${strengthsText}${improvementsText}
 
                 <button type="submit" disabled={workoutLoading} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
                   {workoutLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                  {workoutLoading ? "Gerando..." : "Gerar Treino"}
+                  {workoutLoading ? "Gerando..." : "Gerar Treino (1 Crédito)"}
                 </button>
              </form>
           </div>
@@ -537,7 +599,7 @@ ${strengthsText}${improvementsText}
                  {exerciseDisplayName}
                </h1>
                <div className="flex items-center gap-2 mt-2 text-slate-400 text-sm">
-                  <User className="w-4 h-4" /> 
+                  <UserIcon className="w-4 h-4" /> 
                   <span>Aluno: {userId === 'guest' ? 'Visitante' : 'Atleta Registrado'}</span>
                   <span className="mx-2">•</span>
                   <span>{new Date().toLocaleDateString()}</span>

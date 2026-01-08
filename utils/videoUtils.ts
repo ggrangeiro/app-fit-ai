@@ -3,25 +3,22 @@
  * Optimized for Gemini API limits.
  */
 export const compressVideo = async (file: File): Promise<File> => {
-  // If file is already small, return it as is.
-  if (file.size <= 10 * 1024 * 1024) return file;
-  
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.muted = true;
     video.playsInline = true;
     video.src = URL.createObjectURL(file);
-    
+
     video.onerror = () => {
       reject(new Error("Não foi possível carregar o vídeo para otimização. Codec não suportado ou arquivo corrompido."));
     };
 
     video.onloadedmetadata = () => {
-      // Lower resolution even further for better reliability (Max height 480p)
-      const MAX_HEIGHT = 480;
+      // Improved resolution for better AI detection (Max height 720p)
+      const MAX_HEIGHT = 720;
       let width = video.videoWidth;
       let height = video.videoHeight;
-      
+
       if (height > MAX_HEIGHT) {
         const scale = MAX_HEIGHT / height;
         height = MAX_HEIGHT;
@@ -32,7 +29,7 @@ export const compressVideo = async (file: File): Promise<File> => {
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
-      
+
       if (!ctx) {
         reject(new Error("Erro interno: Contexto gráfico (Canvas) indisponível."));
         return;
@@ -46,10 +43,10 @@ export const compressVideo = async (file: File): Promise<File> => {
         mimeType = 'video/webm;codecs=vp9';
       }
 
-      const stream = canvas.captureStream(24); // 24fps is standard and saves space
+      const stream = canvas.captureStream(15); // Increased to 15fps for smoother motion analysis
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType,
-        videoBitsPerSecond: 1000000 // 1.0 Mbps is very light but enough for form analysis
+        videoBitsPerSecond: 1500000 // Increased to 1.5Mbps for better clarity
       });
 
       const chunks: BlobPart[] = [];
@@ -60,17 +57,17 @@ export const compressVideo = async (file: File): Promise<File> => {
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunks, { type: mimeType });
         const compressedFile = new File([blob], "optimized_exercise.mp4", { type: mimeType });
-        
+
         URL.revokeObjectURL(video.src);
         video.remove();
         canvas.remove();
-        
+
         resolve(compressedFile);
       };
 
       mediaRecorder.start();
-      video.playbackRate = 1.0; 
-      
+      video.playbackRate = 1.0;
+
       video.play().then(() => {
         const draw = () => {
           if (video.paused || video.ended) return;

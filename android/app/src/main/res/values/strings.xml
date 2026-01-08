@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">fitai-analizer</string>
+    <string name="title_activity_main">fitai-analizer</string>
+    <string name="package_name">com.gustavo.fitai</string>
+    <string name="custom_url_scheme">com.gustavo.fitai</string>
+</resources>

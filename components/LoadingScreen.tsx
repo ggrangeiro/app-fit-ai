@@ -100,16 +100,16 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ step, tip, exerciseType, 
               <h2 className="text-xl font-bold text-white mb-1 font-mono tracking-wide text-center">
                   {step === AppStep.COMPRESSING ? 'OTIMIZANDO BUFFER...' : 'PROCESSANDO...'}
               </h2>
-              <p className="text-sm text-indigo-300 mb-6 font-mono text-center opacity-80">
-                  {steps[currentStep].label}
-              </h2>
+  <p className="text-sm text-indigo-300 mb-6 font-mono text-center opacity-80">
+      {steps[currentStep].label}
+ </p>
 
               {/* Simulated Terminal Log */}
               <div className="w-full bg-black/50 rounded-lg p-3 font-mono text-xs text-green-400/80 mb-4 border border-slate-700/50 h-24 overflow-hidden flex flex-col justify-end">
                   <div className="opacity-50">Initializing Neural Net... OK</div>
                   <div className="opacity-70">Loading Biomechanical Models... OK</div>
                   <div className="opacity-90">Detecting Human Keypoints...</div>
-                  <div className="text-green-300 animate-pulse">> {steps[currentStep].label.toUpperCase()}...</div>
+                  <div className="text-green-300 animate-pulse"> {steps[currentStep].label.toUpperCase()}...</div>
               </div>
 
               {/* Steps Indicator */}

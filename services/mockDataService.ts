@@ -1,4 +1,5 @@
 import { ExerciseDTO, ExerciseRecord, User, UserRole, AnalysisResult } from "../types";
+import { apiService } from "./apiService"; // Importando o serviço que já tem a correção de CORS
 
 // Keys for LocalStorage
 const USERS_KEY = 'fitai_users';
@@ -6,7 +7,6 @@ const RECORDS_KEY = 'fitai_records';
 const CURRENT_USER_KEY = 'fitai_current_session';
 const IMAGES_KEY = 'fitai_exercise_images';
 
-// Fallback exercises caso a API falhe, para o app não quebrar totalmente
 const FALLBACK_EXERCISES: ExerciseDTO[] = [
   { id: 'SQUAT', alias: 'SQUAT', name: 'Agachamento (Squat)', category: 'STANDARD' },
   { id: 'PUSHUP', alias: 'PUSHUP', name: 'Flexão de Braço (Push-up)', category: 'STANDARD' },
@@ -15,53 +15,10 @@ const FALLBACK_EXERCISES: ExerciseDTO[] = [
   { id: 'FREE_ANALYSIS_MODE', alias: 'FREE_ANALYSIS_MODE', name: 'Análise Livre', category: 'SPECIAL' }
 ];
 
-// Initial Seed Data (Default Admin)
-const DEFAULT_ADMIN: User = {
-  id: 'admin-1',
-  name: 'Administrador Principal',
-  email: 'admin@fitai.com',
-  role: 'admin',
-  assignedExercises: []
-};
-
-// Default Personal Trainer
-const DEFAULT_PERSONAL: User = {
-  id: 'personal-1',
-  name: 'Personal Trainer',
-  email: 'personal@fitai.com',
-  role: 'personal',
-  assignedExercises: []
-};
-
-// Default Test User (Linked to Personal)
-const DEFAULT_TEST_USER: User = {
-  id: 'test-user-1',
-  name: 'Aluno do Personal',
-  email: 'aluno@teste.com',
-  role: 'user',
-  assignedExercises: ['SQUAT', 'PUSHUP', 'POSTURE_ANALYSIS', 'BODY_COMPOSITION'],
-  personalId: 'personal-1'
-};
-
-// Independent User (Linked to no one/Admin)
-const INDEPENDENT_USER: User = {
-  id: 'indep-user-1',
-  name: 'Aluno Independente',
-  email: 'indep@teste.com',
-  role: 'user',
-  assignedExercises: ['SQUAT'],
-};
-
-// Helper to simulate delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// --- HELPER: MAP BACKEND NAMES TO INTERNAL IDS ---
-// Isso garante que "Agachamento (Squat)" vire "SQUAT" para carregar a imagem e as regras corretas.
 const mapBackendToInternalId = (backendName: string): string => {
   const lower = backendName.toLowerCase();
-  
   if (lower.includes('squat') || lower.includes('agachamento')) return 'SQUAT';
-  if (lower.includes('bench') || lower.includes('supino')) return 'BENCH_PRESS'; // Adicionado Supino antes de validações genéricas de barra
+  if (lower.includes('bench') || lower.includes('supino')) return 'BENCH_PRESS';
   if (lower.includes('push-up') || lower.includes('flexão')) return 'PUSHUP';
   if (lower.includes('lunge') || lower.includes('afundo')) return 'LUNGE';
   if (lower.includes('burpee')) return 'BURPEE';
@@ -69,11 +26,7 @@ const mapBackendToInternalId = (backendName: string): string => {
   if (lower.includes('jumping') || lower.includes('polichinelo')) return 'JUMPING_JACK';
   if (lower.includes('mountain') || lower.includes('escalador')) return 'MOUNTAIN_CLIMBER';
   if (lower.includes('crunch') || lower.includes('abdominal')) return 'CRUNCH';
-  
-  // Refinado para evitar falso positivo com "Supino com Barra" ou "Agachamento com Barra"
-  // Só marca como PULLUP se for "barra fixa", "barra" isolado ou "pull-up"
   if (lower.includes('pull-up') || (lower.includes('barra') && !lower.includes('com barra')) || lower.includes('barra fixa')) return 'PULLUP';
-  
   if (lower.includes('bridge') || lower.includes('pélvica')) return 'BRIDGE';
   if (lower.includes('búlgaro') || lower.includes('bulgarian')) return 'BULGARIAN_SQUAT';
   if (lower.includes('deadlift') || lower.includes('terra')) return 'DEADLIFT';
@@ -82,41 +35,33 @@ const mapBackendToInternalId = (backendName: string): string => {
   if (lower.includes('cross over') || lower.includes('crucifixo')) return 'CABLE_CROSSOVER';
   if (lower.includes('postura') || lower.includes('biofeedback')) return 'POSTURE_ANALYSIS';
   if (lower.includes('biotipo') || lower.includes('gordura') || lower.includes('corporal')) return 'BODY_COMPOSITION';
-  
-  // Fallback: Retorna o próprio nome limpo como ID se não reconhecer
   return backendName.toUpperCase().replace(/\s+/g, '_');
 };
 
 export const MockDataService = {
-  
-  // --- EXERCISES (GLOBAL LIST - For Admin or Fallback) ---
+
+  init: () => {
+    // Inicialização básica de sessão local se necessário
+    if (!localStorage.getItem(USERS_KEY)) {
+      localStorage.setItem(USERS_KEY, JSON.stringify([]));
+    }
+  },
+
+  // --- EXERCISES (GLOBAL LIST) ---
   fetchExercises: async (): Promise<ExerciseDTO[]> => {
       try {
-          // Ajuste: Inclui ID '1' (dummy) para satisfazer a rota /exercises/{userId} se este serviço for chamado
-          const response = await fetch("https://testeai-732767853162.us-west1.run.app/api/usuarios/exercises/1", {
-             method: 'GET',
-             mode: 'cors',
-             headers: { 
-                 'Content-Type': 'application/json',
-                 'Accept': 'application/json'
-             }
-          });
-          
-          if (response.ok) {
-              const data = await response.json();
-              if (Array.isArray(data) && data.length > 0) {
-                   // Aplica o mesmo mapeamento caso o admin use essa rota
-                   return data.map((item: any) => {
-                      const alias = mapBackendToInternalId(item.exercicio || item.name);
-                      return {
-                          // Se tiver ID do banco usa, senão usa o nome como fallback de ID único
-                          id: item.id ? String(item.id) : (item.exercicio || item.name), 
-                          alias: alias,
-                          name: item.exercicio || item.name,
-                          category: (alias === 'POSTURE_ANALYSIS' || alias === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
-                      };
-                  });
-              }
+          // Agora usamos o apiService para evitar CORS
+          const data = await apiService.getAllExercises(1);
+          if (Array.isArray(data) && data.length > 0) {
+               return data.map((item: any) => {
+                  const alias = mapBackendToInternalId(item.exercicio || item.name);
+                  return {
+                      id: item.id ? String(item.id) : (item.exercicio || item.name),
+                      alias: alias,
+                      name: item.exercicio || item.name,
+                      category: (alias === 'POSTURE_ANALYSIS' || alias === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
+                  };
+              });
           }
           return FALLBACK_EXERCISES;
       } catch (e) {
@@ -124,101 +69,34 @@ export const MockDataService = {
       }
   },
 
-  // --- NEW: FETCH USER SPECIFIC EXERCISES ---
+  // --- FETCH USER SPECIFIC EXERCISES ---
   fetchUserExercises: async (userId: string): Promise<ExerciseDTO[]> => {
-    // CORREÇÃO: Montagem da Query String com requesterId e requesterRole
-    // Isso evita o erro 400/403 de multi-tenancy quando o App cai neste fallback
-    let queryParams = "";
     try {
-        const userStr = localStorage.getItem(CURRENT_USER_KEY);
-        if (userStr) {
-            const user = JSON.parse(userStr);
-            const rId = user.id;
-            // Backend espera Role em Uppercase (USER, PERSONAL, ADMIN)
-            const rRole = user.role ? String(user.role).toUpperCase() : 'USER';
-            queryParams = `?requesterId=${rId}&requesterRole=${rRole}`;
-        }
-    } catch (e) {
-        // Se falhar o parse do local storage, tenta sem params (provavelmente falhará na API, mas evita crash JS)
-    }
+      // USANDO O MOTOR NATIVO VIA APISERVICE
+      const data = await apiService.getUserExercises(userId);
 
-    const URL = `https://testeai-732767853162.us-west1.run.app/api/usuarios/exercises/${userId}${queryParams}`;
-    
-    try {
-      const response = await fetch(URL, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (Array.isArray(data)) {
-            
-            // MAP TRANSFORM: Backend Format -> Frontend ExerciseDTO
-            const mappedExercises: ExerciseDTO[] = data.map((item: any) => {
-                // Backend retorna: { id: 4, exercicio: "Agachamento (Squat)" }
-                
-                // 1. Alias: Identificador de TIPO (ex: 'SQUAT') para imagens/regras
-                const alias = mapBackendToInternalId(item.exercicio);
-                
-                // 2. ID: Identificador ÚNICO (ex: "4") para seleção na UI
-                // Se não vier ID, usamos o próprio nome para garantir unicidade relativa
-                const uniqueId = item.id ? String(item.id) : item.exercicio;
-
-                return {
-                    id: uniqueId, 
-                    alias: alias,
-                    name: item.exercicio, 
-                    category: (alias === 'POSTURE_ANALYSIS' || alias === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
-                };
-            });
-            
-            return mappedExercises;
-        }
+      if (Array.isArray(data)) {
+          return data.map((item: any) => {
+              const alias = mapBackendToInternalId(item.exercicio);
+              return {
+                  id: item.id ? String(item.id) : item.exercicio,
+                  alias: alias,
+                  name: item.exercicio,
+                  category: (alias === 'POSTURE_ANALYSIS' || alias === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
+              };
+          });
       }
       return [];
     } catch (error) {
+      console.error("Erro no MockDataService ao buscar exercícios:", error);
       return [];
     }
   },
 
   // --- AUTH ---
-
-  init: () => {
-    const usersRaw = localStorage.getItem(USERS_KEY);
-    let users: User[] = usersRaw ? JSON.parse(usersRaw) : [];
-    let hasChanges = false;
-
-    // Ensure Admin exists
-    if (!users.find(u => u.email === DEFAULT_ADMIN.email)) {
-      users.push(DEFAULT_ADMIN);
-      hasChanges = true;
-    }
-    
-    // Ensure Personal exists
-    if (!users.find(u => u.email === DEFAULT_PERSONAL.email)) {
-      users.push(DEFAULT_PERSONAL);
-      hasChanges = true;
-    }
-
-    // Ensure Test User exists
-    if (!users.find(u => u.email === DEFAULT_TEST_USER.email)) {
-      users.push(DEFAULT_TEST_USER);
-      users.push(INDEPENDENT_USER);
-      hasChanges = true;
-    }
-
-    if (hasChanges || !usersRaw) {
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    }
-  },
-
   login: async (email: string): Promise<User | null> => {
-    await delay(800); // Simulate network request
     const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    
     if (user) {
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
       return user;
@@ -235,65 +113,7 @@ export const MockDataService = {
     return stored ? JSON.parse(stored) : null;
   },
 
-  // --- USER MANAGEMENT ---
-
-  // Obtém usuários filtrados pela Role de quem está pedindo
-  getUsers: (requester?: User): User[] => {
-    const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-    
-    // Se não for passado, retorna tudo (comportamento legado/admin)
-    if (!requester || requester.role === 'admin') {
-      return users;
-    }
-
-    // Se for Personal, retorna apenas seus alunos
-    if (requester.role === 'personal') {
-      return users.filter(u => u.personalId === requester.id);
-    }
-
-    // Se for Aluno, não deveria chamar isso, mas retorna vazio por segurança
-    return [];
-  },
-
-  createUser: async (name: string, email: string, initialExercises?: string[], creatorId?: string, creatorRole?: string, role: string = 'user'): Promise<User> => {
-    await delay(800);
-    const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-    
-    if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-      throw new Error("Este e-mail já possui cadastro.");
-    }
-
-    // If no specific exercises are passed, assign defaults
-    const defaultExercises = initialExercises || ['SQUAT', 'PUSHUP']; 
-
-    const newUser: User = {
-      id: Date.now().toString(),
-      name,
-      email,
-      role: role as UserRole,
-      assignedExercises: defaultExercises,
-      // Se quem criou for um Personal, vincula automaticamente
-      personalId: (creatorRole === 'personal') ? creatorId : undefined
-    };
-
-    users.push(newUser);
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    return newUser;
-  },
-
-  updateUserExercises: (userId: string, exercises: string[]) => {
-    const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-    const updatedUsers = users.map(u => {
-      if (u.id === userId) {
-        return { ...u, assignedExercises: exercises };
-      }
-      return u;
-    });
-    localStorage.setItem(USERS_KEY, JSON.stringify(updatedUsers));
-  },
-
   // --- RECORDS / HISTORY ---
-
   saveResult: (userId: string, userName: string, exercise: string, result: AnalysisResult) => {
     const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
     const newRecord: ExerciseRecord = {
@@ -308,35 +128,15 @@ export const MockDataService = {
     localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
   },
 
+  // Atualizado para usar o backend via apiService se necessário, ou apenas local
   deleteRecord: async (userId: string, recordId: string): Promise<boolean> => {
-    const URL = `https://testeai-732767853162.us-west1.run.app/api/historico/${userId}/${recordId}`;
-    
     try {
-        const response = await fetch(URL, { method: 'DELETE' });
-        
-        // Verifica se a requisição HTTP foi bem sucedida
-        if (response.ok) {
-            try {
-                const data = await response.json();
-                
-                // Validação solicitada: verifica o campo success
-                if (data.success || data.message) {
-                    // Remover do LocalStorage (Cache local para atualização imediata)
-                    const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
-                    const updatedRecords = records.filter(r => r.id !== recordId);
-                    localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
-                    return true;
-                }
-            } catch (jsonError) {
-                // Fallback: se não retornar JSON mas foi 200 OK (algumas APIs retornam 204 No Content)
-                // Assumimos sucesso e limpamos localmente
-                const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
-                const updatedRecords = records.filter(r => r.id !== recordId);
-                localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
-                return true;
-            }
-        }
-        return false;
+        // Se quiser deletar do backend também, adicione uma rota no apiService
+        // Por enquanto, limpamos o local para a UI atualizar
+        const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
+        const updatedRecords = records.filter(r => r.id !== recordId);
+        localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
+        return true;
     } catch (e) {
         return false;
     }
@@ -346,39 +146,21 @@ export const MockDataService = {
     const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
     return records
       .filter(r => r.userId === userId)
-      .sort((a, b) => b.timestamp - a.timestamp); // Newest first
-  },
-
-  // Novo método para pegar histórico filtrado por exercício (ignorando o registro atual se ele acabou de ser salvo)
-  getHistoryByExercise: (userId: string, exercise: string): ExerciseRecord[] => {
-    const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
-    return records
-      .filter(r => r.userId === userId && r.exercise === exercise)
-      .sort((a, b) => b.timestamp - a.timestamp); // Mais recente primeiro
-  },
-
-  getAllHistory: (): ExerciseRecord[] => {
-    const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
-    return records.sort((a, b) => b.timestamp - a.timestamp);
+      .sort((a, b) => b.timestamp - a.timestamp);
   },
 
   // --- ASSETS ---
-
   getExerciseImages: (): Record<string, string> => {
     try {
       return JSON.parse(localStorage.getItem(IMAGES_KEY) || '{}');
-    } catch (e) {
-      return {};
-    }
+    } catch (e) { return {}; }
   },
 
   saveExerciseImages: (images: Record<string, string>) => {
     try {
       localStorage.setItem(IMAGES_KEY, JSON.stringify(images));
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 };
 
-// Initialize on load
 MockDataService.init();

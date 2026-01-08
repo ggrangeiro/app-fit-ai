@@ -8,26 +8,27 @@ import ExerciseCard from './components/ExerciseCard';
 import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Footprints, BicepsFlexed, ArrowDownToLine, Flame, Shield, Activity, Timer, MoveDown, ChevronDown, CheckCircle2, BrainCircuit, ScanFace } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import LoadingScreen from './components/LoadingScreen';
 import Toast, { ToastType } from './components/Toast';
 import ConfirmModal from './components/ConfirmModal';
+import BuyCreditsModal from './components/BuyCreditsModal';
 
 // --- ICON MAPPING SYSTEM ---
 const EXERCISE_ICONS: Record<string, React.ReactNode> = {
   // Legs / Agachamentos
-  'SQUAT': <MoveDown />,
-  'LUNGE': <Footprints />,
-  'BULGARIAN_SQUAT': <Footprints />,
+  'SQUAT': <ChevronDown />,
+  'LUNGE': <Activity />,
+  'BULGARIAN_SQUAT': <Activity />,
   'BRIDGE': <Activity />, // Pelvic bridge
-  'DEADLIFT': <ArrowDownToLine />, // Pulling from ground
+  'DEADLIFT': <ChevronDown />, // Pulling from ground
 
   // Arms / Upper Body
-  'PUSHUP': <ArrowDownToLine className="rotate-180" />, // Pushing up
-  'PULLUP': <ArrowDownToLine />,
-  'TRICEP_DIP': <ArrowDownToLine />,
-  'BICEP_CURL': <BicepsFlexed />,
+  'PUSHUP': <ChevronDown className="rotate-180" />, // Pushing up
+  'PULLUP': <ChevronDown />,
+  'TRICEP_DIP': <ChevronDown />,
+  'BICEP_CURL': <Dumbbell />,
   'BENCH_PRESS': <Dumbbell />,
   'CABLE_CROSSOVER': <Activity />,
 
@@ -44,7 +45,7 @@ const EXERCISE_ICONS: Record<string, React.ReactNode> = {
   'POSTURE_ANALYSIS': <ScanLine />,
   'BODY_COMPOSITION': <Scale />,
   'FREE_ANALYSIS_MODE': <Sparkles />,
-  
+
   // Default Fallback
   'DEFAULT': <Dumbbell />
 };
@@ -92,7 +93,7 @@ const App: React.FC = () => {
         const user = JSON.parse(stored);
         // Se for admin OU personal, vai para dashboard
         if (user.role === 'admin' || user.role === 'personal') {
-            return AppStep.ADMIN_DASHBOARD;
+          return AppStep.ADMIN_DASHBOARD;
         }
         return AppStep.SELECT_EXERCISE;
       }
@@ -112,7 +113,9 @@ const App: React.FC = () => {
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  
+  const [showBuyCreditsModal, setShowBuyCreditsModal] = useState(false);
+  const [isOffline, setIsOffline] = useState(!window.navigator.onLine);
+
   // Accordion State - INICIA FECHADO (false) PARA MINIMIZAR POLUIÇÃO
   const [showExerciseList, setShowExerciseList] = useState(false);
 
@@ -141,19 +144,19 @@ const App: React.FC = () => {
   const [dietFormData, setDietFormData] = useState({
     weight: '', height: '', goal: 'emagrecer', gender: 'masculino', observations: ''
   });
-  
+
   const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
     message: '', type: 'info', isVisible: false
   });
-  
-  const [confirmModal, setConfirmModal] = useState<{ 
-    isOpen: boolean; 
-    title: string; 
-    message: string; 
-    onConfirm: () => void; 
+
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
     isDestructive?: boolean;
   }>({
-    isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false
+    isOpen: false, title: '', message: '', onConfirm: () => { }, isDestructive: false
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -167,56 +170,69 @@ const App: React.FC = () => {
   // Rola para o topo quando um arquivo é selecionado para focar no preview
   useEffect(() => {
     if (mediaFile) {
-       window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [mediaFile]);
 
   // --- DERIVED STATE ---
   const standardExercises = exercisesList.filter(e => e.category === 'STANDARD');
-  
+
   const postureExercise = exercisesList.find(e => e.alias === SPECIAL_EXERCISES.POSTURE || e.id === SPECIAL_EXERCISES.POSTURE);
   const bodyCompExercise = exercisesList.find(e => e.alias === SPECIAL_EXERCISES.BODY_COMPOSITION || e.id === SPECIAL_EXERCISES.BODY_COMPOSITION);
-  
+
   const hasPostureAccess = !!postureExercise;
   const hasBodyCompAccess = !!bodyCompExercise;
 
   const selectedExerciseObj = exercisesList.find(e => e.id === selectedExercise);
-  
+
   const isSpecialMode = (selectedExercise === SPECIAL_EXERCISES.FREE_MODE) || (selectedExerciseObj?.category === 'SPECIAL');
-  
+
   const isSelectedInStandard = !!selectedExerciseObj && selectedExerciseObj.category === 'STANDARD';
 
-  const selectedExerciseName = selectedExercise === SPECIAL_EXERCISES.FREE_MODE 
-     ? 'Análise Livre' 
-     : (selectedExerciseObj?.name || 'Exercício Selecionado');
+  const selectedExerciseName = selectedExercise === SPECIAL_EXERCISES.FREE_MODE
+    ? 'Análise Livre'
+    : (selectedExerciseObj?.name || 'Exercício Selecionado');
 
   const getExerciseTip = () => {
-      if (!selectedExercise) return "Prepare-se...";
-      const alias = selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.alias || 'DEFAULT');
-      // Garante um fallback seguro se a chave não existir
-      const tips = EXERCISE_TIPS[alias] || EXERCISE_TIPS['DEFAULT'] || ["Aguarde a análise da IA..."];
-      return tips[currentTipIndex % tips.length];
+    if (!selectedExercise) return "Prepare-se...";
+    const alias = selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.alias || 'DEFAULT');
+    // Garante um fallback seguro se a chave não existir
+    const tips = EXERCISE_TIPS[alias] || EXERCISE_TIPS['DEFAULT'] || ["Aguarde a análise da IA..."];
+    return tips[currentTipIndex % tips.length];
   };
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // --- SAFETY CHECK FOR SESSION PERSISTENCE ---
   // Mantém este effect como backup caso o estado inicial falhe por algum motivo raro
   useEffect(() => {
     if (!currentUser) {
-       const stored = localStorage.getItem('fitai_current_session');
-       if (stored) {
-           try {
-             const storedUser = JSON.parse(stored);
-             setCurrentUser(storedUser);
-             // Redirecionamento baseado em role
-             if (storedUser.role === 'admin' || storedUser.role === 'personal') {
-                 setStep(AppStep.ADMIN_DASHBOARD);
-             } else {
-                 setStep(AppStep.SELECT_EXERCISE);
-             }
-           } catch(e) {
-             // Se falhar o parse, deixa como está (login)
-           }
-       }
+      const stored = localStorage.getItem('fitai_current_session');
+      if (stored) {
+        try {
+          const storedUser = JSON.parse(stored);
+          setCurrentUser(storedUser);
+          // Redirecionamento baseado em role
+          if (storedUser.role === 'admin' || storedUser.role === 'personal') {
+            setStep(AppStep.ADMIN_DASHBOARD);
+          } else {
+            setStep(AppStep.SELECT_EXERCISE);
+          }
+        } catch (e) {
+          // Se falhar o parse, deixa como está (login)
+        }
+      }
     }
   }, []);
 
@@ -242,44 +258,49 @@ const App: React.FC = () => {
     });
   };
 
+  const handleUpdateUser = (updatedUser: User) => {
+    setCurrentUser(updatedUser);
+    localStorage.setItem('fitai_current_session', JSON.stringify(updatedUser));
+  };
+
   const loadExercisesList = async (user: User) => {
     setLoadingExercises(true);
     try {
       if (user.role === 'admin' || user.role === 'personal') {
-         // Admins e Personais carregam lista completa
-         try {
-           const allEx = await apiService.getAllExercises();
-           if(allEx.length > 0) {
-             const mapped = allEx.map((e: any) => ({
-                 id: String(e.id),
-                 alias: e.name.toUpperCase().replace(/\s+/g, '_'), 
-                 name: e.name,
-                 category: 'STANDARD'
-             }));
-             setExercisesList(mapped);
-             return;
-           }
-         } catch(e) {}
-         
-         const exercises = await MockDataService.fetchExercises();
-         setExercisesList(exercises);
-      } else {
-         try {
-            const myExercisesV2 = await apiService.getUserExercises(user.id);
-            if(myExercisesV2.length > 0) {
-                const mapped = myExercisesV2.map((e: any) => ({
-                    id: String(e.id),
-                    alias: e.name.toUpperCase().replace(/\s+/g, '_'),
-                    name: e.name,
-                    category: 'STANDARD'
-                }));
-                setExercisesList(mapped);
-                return;
-            }
-         } catch(e) {}
+        // Admins e Personais carregam lista completa
+        try {
+          const allEx = await apiService.getAllExercises();
+          if (allEx.length > 0) {
+            const mapped = allEx.map((e: any) => ({
+              id: String(e.id),
+              alias: e.name.toUpperCase().replace(/\s+/g, '_'),
+              name: e.name,
+              category: 'STANDARD'
+            }));
+            setExercisesList(mapped);
+            return;
+          }
+        } catch (e) { }
 
-         const myExercises = await MockDataService.fetchUserExercises(user.id);
-         setExercisesList(myExercises);
+        const exercises = await MockDataService.fetchExercises();
+        setExercisesList(exercises);
+      } else {
+        try {
+          const myExercisesV2 = await apiService.getUserExercises(user.id);
+          if (myExercisesV2.length > 0) {
+            const mapped = myExercisesV2.map((e: any) => ({
+              id: String(e.id),
+              alias: e.name.toUpperCase().replace(/\s+/g, '_'),
+              name: e.name,
+              category: 'STANDARD'
+            }));
+            setExercisesList(mapped);
+            return;
+          }
+        } catch (e) { }
+
+        const myExercises = await MockDataService.fetchUserExercises(user.id);
+        setExercisesList(myExercises);
       }
     } catch (e) {
     } finally {
@@ -343,9 +364,9 @@ const App: React.FC = () => {
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     if (user.role === 'admin' || user.role === 'personal') {
-        setStep(AppStep.ADMIN_DASHBOARD);
+      setStep(AppStep.ADMIN_DASHBOARD);
     } else {
-        setStep(AppStep.SELECT_EXERCISE);
+      setStep(AppStep.SELECT_EXERCISE);
     }
     showToast(`Bem-vindo, ${user.name || 'Usuário'}!`, 'success');
   };
@@ -389,15 +410,15 @@ const App: React.FC = () => {
       const isImage = file.type.startsWith('image/');
 
       if (isSpecialMode) {
-          if (!isVideo && !isImage) {
-            setError("Envie vídeo ou imagem.");
-            return;
-          }
+        if (!isVideo && !isImage) {
+          setError("Envie vídeo ou imagem.");
+          return;
+        }
       } else {
-          if (!isVideo) {
-            setError("Para este modo, envie apenas vídeo.");
-            return;
-          }
+        if (!isVideo) {
+          setError("Para este modo, envie apenas vídeo.");
+          return;
+        }
       }
 
       setMediaFile(file);
@@ -408,16 +429,16 @@ const App: React.FC = () => {
 
   const handleExerciseToggle = (id: string) => {
     if (selectedExercise === id) {
-        setSelectedExercise(null);
+      setSelectedExercise(null);
     } else {
-        setSelectedExercise(id);
-        setMediaFile(null);
-        if (mediaPreview) {
-            URL.revokeObjectURL(mediaPreview);
-        }
-        setMediaPreview(null);
-        setError(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
+      setSelectedExercise(id);
+      setMediaFile(null);
+      if (mediaPreview) {
+        URL.revokeObjectURL(mediaPreview);
+      }
+      setMediaPreview(null);
+      setError(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -427,26 +448,26 @@ const App: React.FC = () => {
 
     setLoadingHistory(true);
     try {
-        const exerciseObj = exercisesList.find(e => e.id === selectedExercise);
-        const idToSend = exerciseObj ? exerciseObj.alias : selectedExercise;
-        
-        // --- CORREÇÃO: Usar apiService que já inclui os parâmetros de autenticação (requesterId/Role) ---
-        const data = await apiService.getUserHistory(currentUser.id, idToSend);
-        
-        if (data && data.length > 0) {
-            // Se vier objeto agrupado, tenta pegar array flat ou apenas os valores
-            const records = Array.isArray(data) ? data : Object.values(data).flat();
-            const sorted = (records as ExerciseRecord[]).sort((a, b) => b.timestamp - a.timestamp);
-            setHistoryRecords(sorted);
-            setShowEvolutionModal(true);
-        } else {
-            showToast("Você ainda não realizou este exercício.", 'info');
-        }
+      const exerciseObj = exercisesList.find(e => e.id === selectedExercise);
+      const idToSend = exerciseObj ? exerciseObj.alias : selectedExercise;
+
+      // --- CORREÇÃO: Usar apiService que já inclui os parâmetros de autenticação (requesterId/Role) ---
+      const data = await apiService.getUserHistory(currentUser.id, idToSend);
+
+      if (data && data.length > 0) {
+        // Se vier objeto agrupado, tenta pegar array flat ou apenas os valores
+        const records = Array.isArray(data) ? data : Object.values(data).flat();
+        const sorted = (records as ExerciseRecord[]).sort((a, b) => b.timestamp - a.timestamp);
+        setHistoryRecords(sorted);
+        setShowEvolutionModal(true);
+      } else {
+        showToast("Você ainda não realizou este exercício.", 'info');
+      }
 
     } catch (e) {
-        showToast("Erro de conexão ao buscar histórico.", 'error');
+      showToast("Erro de conexão ao buscar histórico.", 'error');
     } finally {
-        setLoadingHistory(false);
+      setLoadingHistory(false);
     }
   };
 
@@ -454,100 +475,129 @@ const App: React.FC = () => {
     if (!currentUser) return;
     const success = await MockDataService.deleteRecord(currentUser.id, recordId);
     if (success) {
-        setHistoryRecords(prev => prev.filter(r => r.id !== recordId));
-        showToast("Registro removido com sucesso.", 'success');
-        // Close modal if no records left
-        if (historyRecords.length <= 1) setShowEvolutionModal(false);
+      setHistoryRecords(prev => prev.filter(r => r.id !== recordId));
+      showToast("Registro removido com sucesso.", 'success');
+      // Close modal if no records left
+      if (historyRecords.length <= 1) setShowEvolutionModal(false);
     } else {
-        showToast("Erro ao remover registro.", 'error');
+      showToast("Erro ao remover registro.", 'error');
     }
   };
 
   const handleAnalysis = async () => {
     if (!mediaFile || !selectedExercise || !currentUser) return;
 
+    // --- BLOQUEIO PREVENTIVO DE CRÉDITOS ---
+    if (currentUser.role === 'user' && (currentUser.credits === undefined || currentUser.credits <= 0)) {
+      setShowBuyCreditsModal(true);
+      return;
+    }
+
     const exerciseObj = exercisesList.find(e => e.id === selectedExercise);
     let aiContextName = selectedExercise;
     let backendId = selectedExercise;
-    
+
     if (selectedExercise === SPECIAL_EXERCISES.FREE_MODE) {
-        aiContextName = "Análise Livre";
-        backendId = SPECIAL_EXERCISES.FREE_MODE;
+      aiContextName = "Análise Livre";
+      backendId = SPECIAL_EXERCISES.FREE_MODE;
     } else if (exerciseObj) {
-        aiContextName = exerciseObj.name;
-        backendId = exerciseObj.alias;
+      // CORREÇÃO: Prioriza o ALIAS (ID Técnico) para exercícios especiais
+      if (exerciseObj.category === 'SPECIAL') {
+        aiContextName = exerciseObj.alias; // Envia 'BODY_COMPOSITION'
+      } else {
+        aiContextName = exerciseObj.name;  // Envia 'Agachamento'
+      }
+      backendId = exerciseObj.alias;
     }
 
     try {
       let finalFile = mediaFile;
-      if (mediaFile.type.startsWith('video/') && mediaFile.size > 15 * 1024 * 1024) {
-         setStep(AppStep.COMPRESSING);
-         try {
-           finalFile = await compressVideo(mediaFile);
-         } catch (compressError: any) {
-           setError("Erro ao otimizar vídeo.");
-           setStep(AppStep.UPLOAD_VIDEO);
-           return;
-         }
+      if (mediaFile.type.startsWith('video/')) {
+        setStep(AppStep.COMPRESSING);
+        try {
+          finalFile = await compressVideo(mediaFile);
+        } catch (compressError: any) {
+          setError("Erro ao otimizar vídeo.");
+          setStep(AppStep.UPLOAD_VIDEO);
+          return;
+        }
       }
 
       setStep(AppStep.ANALYZING);
 
       let previousRecord: ExerciseRecord | null = null;
-      
+
       if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
-          try {
-            // --- CORREÇÃO: Usar apiService para buscar histórico prévio com os parâmetros corretos ---
-            const historyData = await apiService.getUserHistory(currentUser.id, backendId);
-            
-            if (historyData) {
-               const records = Array.isArray(historyData) ? historyData : Object.values(historyData).flat() as ExerciseRecord[];
-               if (records.length > 0) {
-                   // Sort descending to get latest
-                   records.sort((a, b) => b.timestamp - a.timestamp);
-                   previousRecord = records[0];
-               }
+        try {
+          // --- CORREÇÃO: Usar apiService para buscar histórico prévio com os parâmetros corretos ---
+          const historyData = await apiService.getUserHistory(currentUser.id, backendId);
+
+          if (historyData) {
+            const records = Array.isArray(historyData) ? historyData : Object.values(historyData).flat() as ExerciseRecord[];
+            if (records.length > 0) {
+              // Sort descending to get latest
+              records.sort((a, b) => b.timestamp - a.timestamp);
+              previousRecord = records[0];
             }
-          } catch (histErr) {
           }
+        } catch (histErr) {
+        }
       }
 
       const result = await analyzeVideo(finalFile, aiContextName, previousRecord?.result);
-      
+
       if (!result.isValidContent) {
         setError(result.validationError || "Conteúdo inválido para este exercício.");
         setStep(AppStep.UPLOAD_VIDEO);
         return;
       }
-      
-      setAnalysisResult(result);
-      
-      if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
-          try {
-            const payload = {
-              userId: currentUser.id,
-              userName: currentUser.name,
-              exercise: backendId,
-              timestamp: Date.now(),
-              result: { ...result, date: new Date().toISOString() }
-            };
-            
-            // USE APISERVICE TO SAVE HISTORY (Auto-handles requester logic)
-            await apiService.saveHistory(payload);
-            
-            try {
-                // --- CORREÇÃO: Re-busca com apiService para garantir lista atualizada ---
-                const fullHistoryData = await apiService.getUserHistory(currentUser.id, backendId);
-                
-                if (fullHistoryData) {
-                    const records = Array.isArray(fullHistoryData) ? fullHistoryData : Object.values(fullHistoryData).flat() as ExerciseRecord[];
-                    setHistoryRecords(records.sort((a, b) => b.timestamp - a.timestamp));
-                }
-            } catch (e) {
-            }
 
-          } catch (saveError) {
+      // --- CONSUMIR CRÉDITO (SE FOR ALUNO E SUCESSO) ---
+      if (currentUser.role === 'user') {
+        try {
+          const creditResponse = await apiService.consumeCredit(currentUser.id);
+          if (creditResponse && typeof creditResponse.novoSaldo === 'number') {
+            handleUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
           }
+        } catch (e: any) {
+          if (e.message === 'CREDITS_EXHAUSTED' || e.message.includes('402')) {
+            setShowBuyCreditsModal(true);
+            // Opcional: Se quiser impedir de mostrar o resultado se falhar a cobrança, descomente:
+            // setStep(AppStep.UPLOAD_VIDEO);
+            // return;
+          }
+          // throw e; // Repassa outros erros se necessário, mas aqui deixamos continuar para mostrar o resultado já obtido
+        }
+      }
+
+      setAnalysisResult(result);
+
+      if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
+        try {
+          const payload = {
+            userId: currentUser.id,
+            userName: currentUser.name,
+            exercise: backendId,
+            timestamp: Date.now(),
+            result: { ...result, date: new Date().toISOString() }
+          };
+
+          // USE APISERVICE TO SAVE HISTORY (Auto-handles requester logic)
+          await apiService.saveHistory(payload);
+
+          try {
+            // --- CORREÇÃO: Re-busca com apiService para garantir lista atualizada ---
+            const fullHistoryData = await apiService.getUserHistory(currentUser.id, backendId);
+
+            if (fullHistoryData) {
+              const records = Array.isArray(fullHistoryData) ? fullHistoryData : Object.values(fullHistoryData).flat() as ExerciseRecord[];
+              setHistoryRecords(records.sort((a, b) => b.timestamp - a.timestamp));
+            }
+          } catch (e) {
+          }
+
+        } catch (saveError) {
+        }
       }
 
       setStep(AppStep.RESULTS);
@@ -564,20 +614,20 @@ const App: React.FC = () => {
 
     setGeneratingWorkout(true);
     try {
-        const planHtml = await generateWorkoutPlan(workoutFormData);
-        // Usa apiService para criar e refresh, sem fallbacks quebrados
-        await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal);
-        await fetchUserWorkouts(currentUser.id);
-        showToast("Treino gerado com sucesso!", 'success');
+      const planHtml = await generateWorkoutPlan(workoutFormData);
+      // Usa apiService para criar e refresh, sem fallbacks quebrados
+      await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal);
+      await fetchUserWorkouts(currentUser.id);
+      showToast("Treino gerado com sucesso!", 'success');
 
-        setShowGenerateWorkoutForm(false);
-        setViewingWorkoutHtml(planHtml);
-        setShowWorkoutModal(true);
-        
+      setShowGenerateWorkoutForm(false);
+      setViewingWorkoutHtml(planHtml);
+      setShowWorkoutModal(true);
+
     } catch (err: any) {
-        showToast("Erro ao gerar treino: " + err.message, 'error');
+      showToast("Erro ao gerar treino: " + err.message, 'error');
     } finally {
-        setGeneratingWorkout(false);
+      setGeneratingWorkout(false);
     }
   };
 
@@ -587,65 +637,65 @@ const App: React.FC = () => {
 
     setGeneratingDiet(true);
     try {
-        const planHtml = await generateDietPlan(dietFormData);
-        
-        // Usa apiService para criar e refresh
-        await apiService.createDiet(currentUser.id, planHtml, dietFormData.goal);
-        await fetchUserDiets(currentUser.id);
-        showToast("Dieta gerada com sucesso!", 'success');
+      const planHtml = await generateDietPlan(dietFormData);
 
-        setShowGenerateDietForm(false);
-        setViewingDietHtml(planHtml);
-        setShowDietModal(true);
-        
+      // Usa apiService para criar e refresh
+      await apiService.createDiet(currentUser.id, planHtml, dietFormData.goal);
+      await fetchUserDiets(currentUser.id);
+      showToast("Dieta gerada com sucesso!", 'success');
+
+      setShowGenerateDietForm(false);
+      setViewingDietHtml(planHtml);
+      setShowDietModal(true);
+
     } catch (err: any) {
-        showToast("Erro ao gerar dieta: " + err.message, 'error');
+      showToast("Erro ao gerar dieta: " + err.message, 'error');
     } finally {
-        setGeneratingDiet(false);
+      setGeneratingDiet(false);
     }
   };
 
   const confirmDeleteWorkout = () => {
     triggerConfirm(
-        "Excluir Treino Atual?",
-        "Você perderá sua ficha de treino atual permanentemente. Deseja continuar?",
-        async () => {
-            if (!currentUser || savedWorkouts.length === 0) return;
-            const workoutId = savedWorkouts[0].id;
+      "Excluir Treino Atual?",
+      "Você perderá sua ficha de treino atual permanentemente. Deseja continuar?",
+      async () => {
+        if (!currentUser || savedWorkouts.length === 0) return;
+        const workoutId = savedWorkouts[0].id;
 
-            try {
-                await apiService.deleteTraining(currentUser.id, workoutId);
-                setSavedWorkouts([]);
-                setShowWorkoutModal(false);
-                setViewingWorkoutHtml(null);
-                showToast("Treino removido com sucesso.", 'success');
-            } catch (e) {
-                showToast("Erro ao remover treino.", 'error');
-            }
-        },
-        true 
+        try {
+          await apiService.deleteTraining(currentUser.id, workoutId);
+          setSavedWorkouts([]);
+          setShowWorkoutModal(false);
+          setViewingWorkoutHtml(null);
+          showToast("Treino removido com sucesso.", 'success');
+        } catch (e) {
+          showToast("Erro ao remover treino.", 'error');
+        }
+      },
+      true
     );
   };
 
   const confirmDeleteDiet = () => {
     triggerConfirm(
-        "Excluir Dieta Atual?",
-        "Você perderá seu plano nutricional atual permanentemente. Deseja continuar?",
-        async () => {
-            if (!currentUser || savedDiets.length === 0) return;
-            const dietId = savedDiets[0].id;
-            
-            try {
-                await apiService.deleteDiet(currentUser.id, dietId);
-                setSavedDiets([]);
-                setShowDietModal(false);
-                setViewingDietHtml(null);
-                showToast("Dieta removida com sucesso.", 'success');
-            } catch (e) {
-                showToast("Erro ao remover dieta.", 'error');
-            }
-        },
-        true 
+      "Excluir Dieta Atual?",
+      "Você perderá seu plano nutricional atual permanentemente. Deseja continuar?",
+      async () => {
+        if (!currentUser || savedDiets.length === 0) return;
+        const dietId = savedDiets[0].id;
+
+        try {
+          await apiService.deleteDiet(currentUser.id, dietId);
+          setSavedDiets([]);
+          setShowDietModal(false);
+          setViewingDietHtml(null);
+          showToast("Dieta removida com sucesso.", 'success');
+        } catch (e) {
+          showToast("Erro ao remover dieta.", 'error');
+        }
+      },
+      true
     );
   };
 
@@ -663,25 +713,25 @@ const App: React.FC = () => {
 
   const renderWorkoutModal = () => (
     <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
-      <div className="min-h-screen p-4 md:p-8 relative">
-          <div className="flex justify-between items-center max-w-7xl mx-auto mb-6">
-             <button 
-                onClick={() => { setShowWorkoutModal(false); setViewingWorkoutHtml(null); }}
-                className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
-             >
-                <ArrowLeft className="w-5 h-5" /> Voltar
-             </button>
-             <div className="flex gap-3">
-                 <button onClick={() => window.print()} className="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white">
-                    <Printer className="w-5 h-5" />
-                 </button>
-                 <button onClick={confirmDeleteWorkout} className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white">
-                    <Trash2 className="w-5 h-5" />
-                 </button>
-             </div>
+      <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
+        <div className="flex justify-between items-center max-w-7xl mx-auto mb-6">
+          <button
+            onClick={() => { setShowWorkoutModal(false); setViewingWorkoutHtml(null); }}
+            className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" /> Voltar
+          </button>
+          <div className="flex gap-3">
+            <button onClick={() => window.print()} className="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white">
+              <Printer className="w-5 h-5" />
+            </button>
+            <button onClick={confirmDeleteWorkout} className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white">
+              <Trash2 className="w-5 h-5" />
+            </button>
           </div>
-          <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
-             <style>{`
+        </div>
+        <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
+          <style>{`
                  #workout-view-content { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
                  @media print {
                    body * { visibility: hidden; }
@@ -689,33 +739,33 @@ const App: React.FC = () => {
                    #workout-view-content { position: absolute; left: 0; top: 0; width: 100%; }
                  }
              `}</style>
-             <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: viewingWorkoutHtml || (savedWorkouts[0]?.content || '') }} />
-          </div>
+          <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: viewingWorkoutHtml || (savedWorkouts[0]?.content || '') }} />
+        </div>
       </div>
     </div>
   );
 
   const renderDietModal = () => (
     <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
-      <div className="min-h-screen p-4 md:p-8 relative">
-          <div className="flex justify-between items-center max-w-7xl mx-auto mb-6">
-             <button 
-                onClick={() => { setShowDietModal(false); setViewingDietHtml(null); }}
-                className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
-             >
-                <ArrowLeft className="w-5 h-5" /> Voltar
-             </button>
-             <div className="flex gap-3">
-                 <button onClick={() => window.print()} className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white">
-                    <Printer className="w-5 h-5" />
-                 </button>
-                 <button onClick={confirmDeleteDiet} className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white">
-                    <Trash2 className="w-5 h-5" />
-                 </button>
-             </div>
+      <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
+        <div className="flex justify-between items-center max-w-7xl mx-auto mb-6">
+          <button
+            onClick={() => { setShowDietModal(false); setViewingDietHtml(null); }}
+            className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" /> Voltar
+          </button>
+          <div className="flex gap-3">
+            <button onClick={() => window.print()} className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white">
+              <Printer className="w-5 h-5" />
+            </button>
+            <button onClick={confirmDeleteDiet} className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white">
+              <Trash2 className="w-5 h-5" />
+            </button>
           </div>
-          <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
-             <style>{`
+        </div>
+        <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
+          <style>{`
                  #diet-view-content { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
                  @media print {
                    body * { visibility: hidden; }
@@ -723,8 +773,81 @@ const App: React.FC = () => {
                    #diet-view-content { position: absolute; left: 0; top: 0; width: 100%; }
                  }
              `}</style>
-             <div id="diet-view-content" dangerouslySetInnerHTML={{ __html: viewingDietHtml || (savedDiets[0]?.content || '') }} />
+          <div id="diet-view-content" dangerouslySetInnerHTML={{ __html: viewingDietHtml || (savedDiets[0]?.content || '') }} />
+        </div>
+      </div>
+    </div>
+  );
+
+  // --- RENDERIZADORES DE FORMULÁRIO (NOVO) ---
+  const renderGenerateWorkoutForm = () => (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+      <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <button onClick={() => setShowGenerateWorkoutForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+          <X className="w-6 h-6" />
+        </button>
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Dumbbell className="w-6 h-6 text-blue-400" /> Gerar Treino Personalizado</h3>
+        <form onSubmit={handleGenerateWorkout} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <input type="number" placeholder="Peso (kg)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={workoutFormData.weight} onChange={e => setWorkoutFormData({ ...workoutFormData, weight: e.target.value })} />
+            <input type="number" placeholder="Altura (cm)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={workoutFormData.height} onChange={e => setWorkoutFormData({ ...workoutFormData, height: e.target.value })} />
           </div>
+          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={workoutFormData.gender} onChange={e => setWorkoutFormData({ ...workoutFormData, gender: e.target.value })}>
+            <option value="masculino">Masculino</option>
+            <option value="feminino">Feminino</option>
+          </select>
+          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={workoutFormData.goal} onChange={e => setWorkoutFormData({ ...workoutFormData, goal: e.target.value })}>
+            <option value="hipertrofia">Hipertrofia</option>
+            <option value="emagrecimento">Emagrecimento</option>
+            <option value="definicao">Definição</option>
+          </select>
+          <div className="grid grid-cols-2 gap-4">
+            <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={workoutFormData.level} onChange={e => setWorkoutFormData({ ...workoutFormData, level: e.target.value })}>
+              <option value="iniciante">Iniciante</option>
+              <option value="intermediario">Intermediário</option>
+              <option value="avancado">Avançado</option>
+            </select>
+            <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={workoutFormData.frequency} onChange={e => setWorkoutFormData({ ...workoutFormData, frequency: e.target.value })}>
+              <option value="1">1x Semana</option>
+              <option value="2">2x Semana</option>
+              <option value="3">3x Semana</option>
+              <option value="4">4x Semana</option>
+              <option value="5">5x Semana</option>
+              <option value="6">6x Semana</option>
+              <option value="7">Todos dias</option>
+            </select>
+          </div>
+          <textarea placeholder="Observações (lesões, foco...)" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={workoutFormData.observations} onChange={e => setWorkoutFormData({ ...workoutFormData, observations: e.target.value })} />
+          <button type="submit" disabled={generatingWorkout} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">{generatingWorkout ? <Loader2 className="animate-spin mx-auto" /> : 'Gerar Treino com IA'}</button>
+        </form>
+      </div>
+    </div>
+  );
+
+  const renderGenerateDietForm = () => (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+      <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <button onClick={() => setShowGenerateDietForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+          <X className="w-6 h-6" />
+        </button>
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Utensils className="w-6 h-6 text-emerald-400" /> Gerar Dieta Personalizada</h3>
+        <form onSubmit={handleGenerateDiet} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <input type="number" placeholder="Peso (kg)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={dietFormData.weight} onChange={e => setDietFormData({ ...dietFormData, weight: e.target.value })} />
+            <input type="number" placeholder="Altura (cm)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={dietFormData.height} onChange={e => setDietFormData({ ...dietFormData, height: e.target.value })} />
+          </div>
+          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={dietFormData.gender} onChange={e => setDietFormData({ ...dietFormData, gender: e.target.value })}>
+            <option value="masculino">Masculino</option>
+            <option value="feminino">Feminino</option>
+          </select>
+          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={dietFormData.goal} onChange={e => setDietFormData({ ...dietFormData, goal: e.target.value })}>
+            <option value="emagrecer">Emagrecer</option>
+            <option value="ganhar_massa">Hipertrofia</option>
+            <option value="manutencao">Manutenção</option>
+          </select>
+          <textarea placeholder="Restrições alimentares..." className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={dietFormData.observations} onChange={e => setDietFormData({ ...dietFormData, observations: e.target.value })} />
+          <button type="submit" disabled={generatingDiet} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all">{generatingDiet ? <Loader2 className="animate-spin mx-auto" /> : 'Gerar Dieta com IA'}</button>
+        </form>
       </div>
     </div>
   );
@@ -732,16 +855,20 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col font-[Plus Jakarta Sans]">
       <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} onClose={closeToast} />
-      <ConfirmModal 
-        isOpen={confirmModal.isOpen} 
-        title={confirmModal.title} 
-        message={confirmModal.message} 
-        onConfirm={confirmModal.onConfirm} 
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
         isDestructive={confirmModal.isDestructive}
       />
+      <BuyCreditsModal
+        isOpen={showBuyCreditsModal}
+        onClose={() => setShowBuyCreditsModal(false)}
+      />
 
-      <header className="sticky top-0 z-50 glass-panel border-b-0">
+      <header className="sticky top-0 z-50 glass-panel border-b-0" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 group cursor-default">
             <div className="p-2 bg-blue-600 rounded-lg group-hover:bg-blue-500 transition-colors shadow-lg">
@@ -750,28 +877,39 @@ const App: React.FC = () => {
             <h1 className="text-xl font-bold tracking-tight text-white hidden md:block">FitAI <span className="text-blue-400 font-light">Analyzer</span></h1>
           </div>
           <div className="flex items-center gap-4">
-             <div className="flex items-center gap-2">
-                <div className="hidden md:block text-right">
-                  <p className="text-sm font-bold text-white">{currentUser?.name}</p>
-                  <p className="text-xs text-slate-400 capitalize">
-                      {currentUser?.role === 'admin' ? 'Administrador' : (currentUser?.role === 'personal' ? 'Personal Trainer' : 'Aluno')}
-                  </p>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600">
-                  <UserIcon className="w-5 h-5 text-slate-300" />
-                </div>
-             </div>
-             <button onClick={handleLogout} className="p-2 rounded-lg text-slate-400 hover:text-red-400 transition-colors"><LogOut className="w-5 h-5" /></button>
+            {currentUser && (currentUser.role === 'user' || currentUser.role === 'personal') && (
+              <button
+                onClick={() => setShowBuyCreditsModal(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-full border border-yellow-500/30 transition-all group"
+              >
+                <Coins className="w-4 h-4 text-yellow-400 group-hover:scale-110 transition-transform" />
+                <span className="text-sm font-bold text-yellow-100">{currentUser.credits ?? 0}</span>
+              </button>
+            )}
+            <div className="flex items-center gap-2">
+              <div className="hidden md:block text-right">
+                <p className="text-sm font-bold text-white">{currentUser?.name}</p>
+                <p className="text-xs text-slate-400 capitalize">
+                  {currentUser?.role === 'admin' ? 'Administrador' : (currentUser?.role === 'personal' ? 'Personal Trainer' : 'Aluno')}
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600">
+                <UserIcon className="w-5 h-5 text-slate-300" />
+              </div>
+            </div>
+            <button onClick={handleLogout} className="p-2 rounded-lg text-slate-400 hover:text-red-400 transition-colors"><LogOut className="w-5 h-5" /></button>
           </div>
         </div>
       </header>
 
       {showWorkoutModal && renderWorkoutModal()}
       {showDietModal && renderDietModal()}
-      
+      {showGenerateWorkoutForm && renderGenerateWorkoutForm()}
+      {showGenerateDietForm && renderGenerateDietForm()}
+
       {/* Evolution Modal Rendering */}
       {showEvolutionModal && selectedExercise && (
-        <EvolutionModal 
+        <EvolutionModal
           isOpen={showEvolutionModal}
           onClose={() => setShowEvolutionModal(false)}
           history={historyRecords}
@@ -784,192 +922,192 @@ const App: React.FC = () => {
 
       {/* Renderização Condicional baseada no Role */}
       <main className="flex-grow flex items-center justify-center p-4 md:p-8">
-        
+
         {/* DASHBOARD PARA ADMIN E PERSONAL */}
         {step === AppStep.ADMIN_DASHBOARD && (currentUser?.role === 'admin' || currentUser?.role === 'personal') && (
-          <AdminDashboard currentUser={currentUser} onRefreshData={() => {}} />
+          <AdminDashboard currentUser={currentUser} onRefreshData={() => { }} onUpdateUser={handleUpdateUser} />
         )}
 
         {/* FLUXO DE ALUNO (SELEÇÃO DE EXERCÍCIO) */}
         {step === AppStep.SELECT_EXERCISE && (
           <div className="w-full max-w-6xl animate-fade-in flex flex-col items-center">
-            
+
             <div className="text-center mb-8">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-semibold uppercase mb-4 border border-blue-500/20">
                 <Sparkles className="w-3 h-3" /> Sua Área de Treino
               </div>
               <h2 className="text-3xl md:text-5xl font-bold text-white">Olá! <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">O que vamos fazer hoje?</span></h2>
             </div>
-            
+
             {/* ... Restante do código de seleção de exercício (igual ao anterior) ... */}
             <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              
+
               {/* CARD DE TREINO DINÂMICO */}
               {loadingWorkouts ? (
-                 <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-dashed border-2 border-slate-700/50 h-full min-h-[160px] animate-pulse">
-                    <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
-                    <span className="text-slate-500 text-xs">Buscando treinos...</span>
-                 </div>
+                <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-dashed border-2 border-slate-700/50 h-full min-h-[160px] animate-pulse">
+                  <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                  <span className="text-slate-500 text-xs">Buscando treinos...</span>
+                </div>
               ) : (
                 savedWorkouts.length > 0 ? (
-                  <button 
+                  <button
                     onClick={() => setShowWorkoutModal(true)}
                     className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
                   >
-                     <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Calendar className="w-8 h-8" /></div>
-                     <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Ver Meu Treino</h3><p className="text-slate-400 text-xs mt-1">Ficha ativa disponível</p></div>
+                    <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Calendar className="w-8 h-8" /></div>
+                    <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Ver Meu Treino</h3><p className="text-slate-400 text-xs mt-1">Ficha ativa disponível</p></div>
                   </button>
                 ) : (
-                  <button 
+                  <button
                     onClick={() => setShowGenerateWorkoutForm(true)}
                     className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
                   >
-                     <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Dumbbell className="w-8 h-8" /></div>
-                     <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Gerar Treino IA</h3><p className="text-slate-400 text-xs mt-1">Crie sua ficha personalizada</p></div>
+                    <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Dumbbell className="w-8 h-8" /></div>
+                    <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Gerar Treino IA</h3><p className="text-slate-400 text-xs mt-1">Crie sua ficha personalizada</p></div>
                   </button>
                 )
               )}
 
               {/* CARD DE DIETA DINÂMICO */}
               {loadingDiets ? (
-                 <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-dashed border-2 border-slate-700/50 h-full min-h-[160px] animate-pulse">
-                    <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
-                    <span className="text-slate-500 text-xs">Buscando dietas...</span>
-                 </div>
+                <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-dashed border-2 border-slate-700/50 h-full min-h-[160px] animate-pulse">
+                  <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                  <span className="text-slate-500 text-xs">Buscando dietas...</span>
+                </div>
               ) : (
                 savedDiets.length > 0 ? (
-                  <button 
+                  <button
                     onClick={() => setShowDietModal(true)}
                     className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
                   >
-                     <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Utensils className="w-8 h-8" /></div>
-                     <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">Ver Minha Dieta</h3><p className="text-slate-400 text-xs mt-1">Plano nutricional ativo</p></div>
+                    <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Utensils className="w-8 h-8" /></div>
+                    <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">Ver Minha Dieta</h3><p className="text-slate-400 text-xs mt-1">Plano nutricional ativo</p></div>
                   </button>
                 ) : (
-                  <button 
+                  <button
                     onClick={() => setShowGenerateDietForm(true)}
                     className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
                   >
-                     <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Utensils className="w-8 h-8" /></div>
-                     <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">Gerar Dieta IA</h3><p className="text-slate-400 text-xs mt-1">Crie seu cardápio ideal</p></div>
+                    <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Utensils className="w-8 h-8" /></div>
+                    <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">Gerar Dieta IA</h3><p className="text-slate-400 text-xs mt-1">Crie seu cardápio ideal</p></div>
                   </button>
                 )
               )}
 
               {/* Card de Análise Livre */}
-              <button 
-                 onClick={() => handleExerciseToggle(SPECIAL_EXERCISES.FREE_MODE)}
-                 className={`glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 h-full min-h-[160px] group ${selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? 'border-yellow-500 bg-yellow-600/10' : 'border-yellow-500/30 hover:bg-yellow-600/10'}`}
+              <button
+                onClick={() => handleExerciseToggle(SPECIAL_EXERCISES.FREE_MODE)}
+                className={`glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 h-full min-h-[160px] group ${selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? 'border-yellow-500 bg-yellow-600/10' : 'border-yellow-500/30 hover:bg-yellow-600/10'}`}
               >
-                 <div className={`p-4 rounded-full text-white shadow-lg transition-transform ${selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? 'bg-yellow-500' : 'bg-yellow-600/80 group-hover:scale-110'}`}>
-                    <HelpCircle className="w-8 h-8" />
-                 </div>
-                 <div className="text-center">
-                   <h3 className="text-white font-bold text-xl">Análise Livre</h3>
-                   <p className="text-slate-400 text-xs mt-1">Exercício não listado? Envie aqui.</p>
-                 </div>
+                <div className={`p-4 rounded-full text-white shadow-lg transition-transform ${selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? 'bg-yellow-500' : 'bg-yellow-600/80 group-hover:scale-110'}`}>
+                  <HelpCircle className="w-8 h-8" />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-white font-bold text-xl">Análise Livre</h3>
+                  <p className="text-slate-400 text-xs mt-1">Exercício não listado? Envie aqui.</p>
+                </div>
               </button>
             </div>
-            
-            <div className="w-full max-w-5xl flex gap-3 mb-8">
-                {/* Posture Analysis Card */}
-                {postureExercise && (
-                  <button 
-                    className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${selectedExercise === postureExercise.id ? 'border-emerald-500 bg-emerald-600/20' : 'border-emerald-500/30 hover:bg-emerald-600/20'}`}
-                    onClick={() => handleExerciseToggle(postureExercise.id)}
-                  >
-                     <div className={`p-3 rounded-full text-white shadow-lg transition-transform ${hasPostureAccess ? 'bg-emerald-600 group-hover:scale-110' : 'bg-slate-700'}`}><ScanLine className="w-5 h-5" /></div>
-                     <div className="text-left"><h3 className="text-white font-bold text-lg">{postureExercise.name}</h3><p className="text-slate-400 text-xs">Biofeedback Postural</p></div>
-                  </button>
-                )}
 
-                {/* Body Composition Card */}
-                {bodyCompExercise && (
-                  <button 
-                    className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${selectedExercise === bodyCompExercise.id ? 'border-violet-500 bg-violet-600/20' : 'border-violet-500/30 hover:bg-violet-600/20'}`}
-                    onClick={() => handleExerciseToggle(bodyCompExercise.id)}
-                  >
-                     <div className={`p-3 rounded-full text-white shadow-lg transition-transform ${hasBodyCompAccess ? 'bg-violet-600 group-hover:scale-110' : 'bg-slate-700'}`}><Scale className="w-5 h-5" /></div>
-                     <div className="text-left"><h3 className="text-white font-bold text-lg">{bodyCompExercise.name}</h3><p className="text-slate-400 text-xs">Biotipo & % Gordura</p></div>
-                  </button>
-                )}
+            <div className="w-full max-w-5xl flex gap-3 mb-8">
+              {/* Posture Analysis Card */}
+              {postureExercise && (
+                <button
+                  className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${selectedExercise === postureExercise.id ? 'border-emerald-500 bg-emerald-600/20' : 'border-emerald-500/30 hover:bg-emerald-600/20'}`}
+                  onClick={() => handleExerciseToggle(postureExercise.id)}
+                >
+                  <div className={`p-3 rounded-full text-white shadow-lg transition-transform ${hasPostureAccess ? 'bg-emerald-600 group-hover:scale-110' : 'bg-slate-700'}`}><ScanLine className="w-5 h-5" /></div>
+                  <div className="text-left"><h3 className="text-white font-bold text-lg">{postureExercise.name}</h3><p className="text-slate-400 text-xs">Biofeedback Postural</p></div>
+                </button>
+              )}
+
+              {/* Body Composition Card */}
+              {bodyCompExercise && (
+                <button
+                  className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${selectedExercise === bodyCompExercise.id ? 'border-violet-500 bg-violet-600/20' : 'border-violet-500/30 hover:bg-violet-600/20'}`}
+                  onClick={() => handleExerciseToggle(bodyCompExercise.id)}
+                >
+                  <div className={`p-3 rounded-full text-white shadow-lg transition-transform ${hasBodyCompAccess ? 'bg-violet-600 group-hover:scale-110' : 'bg-slate-700'}`}><Scale className="w-5 h-5" /></div>
+                  <div className="text-left"><h3 className="text-white font-bold text-lg">{bodyCompExercise.name}</h3><p className="text-slate-400 text-xs">Biotipo & % Gordura</p></div>
+                </button>
+              )}
             </div>
 
             {/* --- ACCORDION CONTAINER FOR EXERCISE LIST --- */}
             <div className="w-full max-w-5xl mb-12">
-               <button
-                  onClick={() => setShowExerciseList(!showExerciseList)}
-                  className={`w-full glass-panel p-4 md:p-6 rounded-2xl flex items-center justify-between group hover:bg-slate-800/60 transition-all border ${isSelectedInStandard ? 'border-blue-500/40 bg-blue-900/10' : 'border-slate-700/50'}`}
-               >
-                  <div className="flex items-center gap-4">
-                     <div className={`p-3 rounded-full transition-colors ${isSelectedInStandard ? 'bg-blue-600 text-white' : 'bg-blue-600/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white'}`}>
-                        {isSelectedInStandard ? <CheckCircle2 className="w-6 h-6" /> : <Dumbbell className="w-6 h-6" />}
-                     </div>
-                     <div className="text-left">
-                        <h3 className={`font-bold text-lg ${isSelectedInStandard ? 'text-blue-400' : 'text-white'}`}>
-                           {isSelectedInStandard ? 'Exercício Selecionado' : 'Exercícios de Força'}
-                        </h3>
-                        <p className="text-slate-400 text-xs">
-                           {isSelectedInStandard ? 'Toque para alterar' : `${standardExercises.length} disponíveis`}
-                        </p>
-                     </div>
+              <button
+                onClick={() => setShowExerciseList(!showExerciseList)}
+                className={`w-full glass-panel p-4 md:p-6 rounded-2xl flex items-center justify-between group hover:bg-slate-800/60 transition-all border ${isSelectedInStandard ? 'border-blue-500/40 bg-blue-900/10' : 'border-slate-700/50'}`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-full transition-colors ${isSelectedInStandard ? 'bg-blue-600 text-white' : 'bg-blue-600/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white'}`}>
+                    {isSelectedInStandard ? <CheckCircle2 className="w-6 h-6" /> : <Dumbbell className="w-6 h-6" />}
                   </div>
-                  <div className={`p-2 rounded-full bg-slate-800 text-slate-400 transition-transform duration-300 ${showExerciseList ? 'rotate-180' : ''}`}>
-                     <ChevronDown className="w-5 h-5" />
+                  <div className="text-left">
+                    <h3 className={`font-bold text-lg ${isSelectedInStandard ? 'text-blue-400' : 'text-white'}`}>
+                      {isSelectedInStandard ? 'Exercício Selecionado' : 'Exercícios de Força'}
+                    </h3>
+                    <p className="text-slate-400 text-xs">
+                      {isSelectedInStandard ? 'Toque para alterar' : `${standardExercises.length} disponíveis`}
+                    </p>
                   </div>
-               </button>
+                </div>
+                <div className={`p-2 rounded-full bg-slate-800 text-slate-400 transition-transform duration-300 ${showExerciseList ? 'rotate-180' : ''}`}>
+                  <ChevronDown className="w-5 h-5" />
+                </div>
+              </button>
 
-               <div className={`grid transition-all duration-500 ease-in-out overflow-hidden ${showExerciseList ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0 mt-0'}`}>
-                   {/* MODIFICAÇÃO: Removido overflow-hidden interno e adicionado padding para permitir scale sem corte */}
-                   <div className="overflow-visible p-4">
-                       <div id="exercise-grid" className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 w-full min-h-[10px]">
-                          {loadingExercises ? (
-                            <div className="col-span-full flex flex-col items-center justify-center py-12 bg-slate-800/30 rounded-3xl border border-slate-700/50 backdrop-blur-sm animate-pulse">
-                               <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-3" />
-                               <p className="text-slate-300 font-medium">Sincronizando catálogo de exercícios...</p>
-                            </div>
-                          ) : (
-                            standardExercises.length > 0 ? (
-                              standardExercises.map((ex) => (
-                                <ExerciseCard 
-                                  key={ex.id} // Usa ID único
-                                  type={ex.name} 
-                                  // USA O ÍCONE MAPEADO OU UM FALLBACK
-                                  icon={EXERCISE_ICONS[ex.alias] || <Dumbbell />}
-                                  selected={selectedExercise === ex.id} 
-                                  onClick={() => handleExerciseToggle(ex.id)} 
-                                />
-                              ))
-                            ) : (
-                              <div className="col-span-full text-center py-10 text-slate-400">
-                                <p>Nenhum exercício de força atribuído para você.</p>
-                              </div>
-                            )
-                          )}
-                       </div>
-                   </div>
-               </div>
+              <div className={`grid transition-all duration-500 ease-in-out overflow-hidden ${showExerciseList ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0 mt-0'}`}>
+                {/* MODIFICAÇÃO: Removido overflow-hidden interno e adicionado padding para permitir scale sem corte */}
+                <div className="overflow-visible p-4">
+                  <div id="exercise-grid" className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 w-full min-h-[10px]">
+                    {loadingExercises ? (
+                      <div className="col-span-full flex flex-col items-center justify-center py-12 bg-slate-800/30 rounded-3xl border border-slate-700/50 backdrop-blur-sm animate-pulse">
+                        <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-3" />
+                        <p className="text-slate-300 font-medium">Sincronizando catálogo de exercícios...</p>
+                      </div>
+                    ) : (
+                      standardExercises.length > 0 ? (
+                        standardExercises.map((ex) => (
+                          <ExerciseCard
+                            key={ex.id} // Usa ID único
+                            type={ex.name}
+                            // USA O ÍCONE MAPEADO OU UM FALLBACK
+                            icon={EXERCISE_ICONS[ex.alias] || <Dumbbell />}
+                            selected={selectedExercise === ex.id}
+                            onClick={() => handleExerciseToggle(ex.id)}
+                          />
+                        ))
+                      ) : (
+                        <div className="col-span-full text-center py-10 text-slate-400">
+                          <p>Nenhum exercício de força atribuído para você.</p>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-            
+
             <div className={`sticky bottom-8 z-40 flex items-center gap-4 transition-all duration-300 justify-center ${selectedExercise ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
-                {selectedExercise && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE && (
-                    <button 
-                        onClick={handleViewHistory}
-                        disabled={loadingHistory}
-                        className="group flex items-center justify-center gap-3 px-6 py-5 rounded-full text-lg font-bold bg-slate-700 hover:bg-slate-600 text-white shadow-2xl transition-all"
-                    >
-                        {loadingHistory ? <Loader2 className="w-5 h-5 animate-spin" /> : <History className="w-5 h-5" />}
-                        <span className="hidden md:inline">Comparar Evolução</span>
-                    </button>
-                )}
-                
-                <button 
-                    disabled={!selectedExercise} 
-                    onClick={() => setStep(AppStep.UPLOAD_VIDEO)} 
-                    className="group flex items-center justify-center gap-3 px-10 py-5 rounded-full text-lg font-bold transition-all duration-300 shadow-2xl bg-blue-600 hover:bg-blue-500 text-white"
+              {selectedExercise && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE && (
+                <button
+                  onClick={handleViewHistory}
+                  disabled={loadingHistory}
+                  className="group flex items-center justify-center gap-3 px-6 py-5 rounded-full text-lg font-bold bg-slate-700 hover:bg-slate-600 text-white shadow-2xl transition-all"
                 >
-                    Continuar <ArrowRight className="w-5 h-5" />
+                  {loadingHistory ? <Loader2 className="w-5 h-5 animate-spin" /> : <History className="w-5 h-5" />}
+                  <span className="hidden md:inline">Comparar Evolução</span>
                 </button>
+              )}
+
+              <button
+                disabled={!selectedExercise}
+                onClick={() => setStep(AppStep.UPLOAD_VIDEO)}
+                className="group flex items-center justify-center gap-3 px-10 py-5 rounded-full text-lg font-bold transition-all duration-300 shadow-2xl bg-blue-600 hover:bg-blue-500 text-white"
+              >
+                Continuar <ArrowRight className="w-5 h-5" />
+              </button>
             </div>
           </div>
         )}
@@ -977,49 +1115,49 @@ const App: React.FC = () => {
         {/* ... (Step UPLOAD_VIDEO mantido) ... */}
         {step === AppStep.UPLOAD_VIDEO && selectedExercise && (
           <div className="w-full max-w-4xl animate-fade-in relative">
-            
+
             {/* Background Glow Effect for Depth */}
             <div className="absolute inset-0 bg-blue-600/10 blur-[100px] rounded-full pointer-events-none -z-10 transform scale-150 opacity-50"></div>
 
             <div className="glass-panel rounded-3xl p-6 md:p-12 shadow-2xl border border-slate-700/50 backdrop-blur-xl relative overflow-hidden">
-              
+
               {/* Decorative Header Bar */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-70"></div>
 
               <div className="text-center mb-8">
                 <div className="inline-flex items-center justify-center p-3 bg-blue-500/20 text-blue-400 rounded-full mb-4 shadow-inner ring-1 ring-blue-500/30">
-                    {selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? <Sparkles className="w-8 h-8" /> : (selectedExerciseObj ? EXERCISE_ICONS[selectedExerciseObj.alias] || <Dumbbell className="w-8 h-8" /> : <Dumbbell className="w-8 h-8" />)}
+                  {selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? <Sparkles className="w-8 h-8" /> : (selectedExerciseObj ? EXERCISE_ICONS[selectedExerciseObj.alias] || <Dumbbell className="w-8 h-8" /> : <Dumbbell className="w-8 h-8" />)}
                 </div>
                 <h2 className="text-2xl md:text-4xl font-bold text-white mb-2 tracking-tight">Envio de Mídia</h2>
                 <p className="text-slate-400 text-lg">Analise seu <span className="text-white font-bold">{selectedExerciseName}</span></p>
-                
+
                 {/* AI Features Badge Grid */}
                 <div className="grid grid-cols-3 gap-2 max-w-md mx-auto mt-6">
-                    <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                        <ScanFace className="w-4 h-4 text-emerald-400 mb-1" />
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Biomecânica</span>
-                    </div>
-                    <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                        <ShieldCheck className="w-4 h-4 text-blue-400 mb-1" />
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Segurança</span>
-                    </div>
-                    <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                        <Activity className="w-4 h-4 text-purple-400 mb-1" />
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Performance</span>
-                    </div>
+                  <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                    <ScanLine className="w-4 h-4 text-emerald-400 mb-1" />
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Biomecânica</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                    <ShieldCheck className="w-4 h-4 text-blue-400 mb-1" />
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Segurança</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                    <Activity className="w-4 h-4 text-purple-400 mb-1" />
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Performance</span>
+                  </div>
                 </div>
               </div>
-              
+
               <div className="flex flex-col gap-6 mb-8">
                 {/* Pre-Upload Tip Context */}
                 {!mediaFile && (
-                    <div className="bg-blue-900/20 border border-blue-500/20 p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-bottom-2">
-                        <Lightbulb className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
-                        <div>
-                            <p className="text-blue-100 text-sm font-medium">Dica de Ouro:</p>
-                            <p className="text-slate-400 text-xs italic">"{getExerciseTip()}"</p>
-                        </div>
+                  <div className="bg-blue-900/20 border border-blue-500/20 p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-bottom-2">
+                    <Lightbulb className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-blue-100 text-sm font-medium">Dica de Ouro:</p>
+                      <p className="text-slate-400 text-xs italic">"{getExerciseTip()}"</p>
                     </div>
+                  </div>
                 )}
 
                 <div className="relative w-full">
@@ -1027,28 +1165,28 @@ const App: React.FC = () => {
                     {mediaPreview ? (
                       <>
                         {mediaFile?.type.startsWith('image/') ? <img src={mediaPreview} className="h-full w-full object-contain" /> : <video src={mediaPreview} className="h-full w-full object-contain" controls={false} autoPlay muted loop playsInline />}
-                        
+
                         {/* TECH HUD OVERLAY */}
                         <div className="absolute inset-0 pointer-events-none">
-                            <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-blue-500/70 rounded-tl-lg"></div>
-                            <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-blue-500/70 rounded-tr-lg"></div>
-                            <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-blue-500/70 rounded-bl-lg"></div>
-                            <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-blue-500/70 rounded-br-lg"></div>
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border border-white/20 rounded-full flex items-center justify-center">
-                                <div className="w-1 h-1 bg-red-500 rounded-full animate-pulse"></div>
-                            </div>
-                            <div className="absolute bottom-6 left-0 right-0 text-center">
-                                <span className="bg-black/60 px-3 py-1 rounded text-[10px] text-white font-mono uppercase tracking-widest border border-white/10">Análise Pronta</span>
-                            </div>
+                          <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-blue-500/70 rounded-tl-lg"></div>
+                          <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-blue-500/70 rounded-tr-lg"></div>
+                          <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-blue-500/70 rounded-bl-lg"></div>
+                          <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-blue-500/70 rounded-br-lg"></div>
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border border-white/20 rounded-full flex items-center justify-center">
+                            <div className="w-1 h-1 bg-red-500 rounded-full animate-pulse"></div>
+                          </div>
+                          <div className="absolute bottom-6 left-0 right-0 text-center">
+                            <span className="bg-black/60 px-3 py-1 rounded text-[10px] text-white font-mono uppercase tracking-widest border border-white/10">Análise Pronta</span>
+                          </div>
                         </div>
 
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                           <div className="flex flex-col items-center gap-2 text-white">
-                             <div className="p-3 bg-white/10 rounded-full backdrop-blur-md border border-white/20">
-                                <RefreshCcw className="w-8 h-8" />
-                             </div>
-                             <span className="font-bold text-sm tracking-wide">Clique para Trocar</span>
-                           </div>
+                          <div className="flex flex-col items-center gap-2 text-white">
+                            <div className="p-3 bg-white/10 rounded-full backdrop-blur-md border border-white/20">
+                              <RefreshCcw className="w-8 h-8" />
+                            </div>
+                            <span className="font-bold text-sm tracking-wide">Clique para Trocar</span>
+                          </div>
                         </div>
                       </>
                     ) : (
@@ -1060,15 +1198,19 @@ const App: React.FC = () => {
                         </div>
                         <p className="text-slate-200 font-bold text-lg group-hover:text-white transition-colors">Selecionar da Galeria</p>
                         <p className="text-slate-500 text-xs mt-2 max-w-[200px] text-center group-hover:text-slate-400">
-                            Certifique-se de que o corpo inteiro esteja visível e iluminado
+                          Certifique-se de que o corpo inteiro esteja visível e iluminado
                         </p>
+                        <div className="mt-4 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full flex items-center gap-2">
+                          <Timer className="w-3 h-3 text-yellow-500" />
+                          <span className="text-[10px] text-yellow-200 font-medium">Recomendado: vídeos de até 2 min</span>
+                        </div>
                       </div>
                     )}
                     <input ref={fileInputRef} id="video-upload" type="file" accept={isSpecialMode ? "video/*,image/*" : "video/*"} className="hidden" onChange={handleFileChange} />
                   </label>
-                  
+
                   {mediaFile && (
-                    <button 
+                    <button
                       onClick={clearSelectedMedia}
                       className="absolute -top-3 -right-3 p-2 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-500 transition-colors z-10 border-2 border-slate-900"
                       title="Remover arquivo"
@@ -1081,50 +1223,50 @@ const App: React.FC = () => {
 
               {error && (
                 <div className="mb-6 p-5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-200 text-center text-sm flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 shadow-xl shadow-red-950/20">
-                   <div className="flex items-center gap-4 text-left">
-                     <div className="p-2 bg-red-500/20 rounded-full"><AlertTriangle className="w-6 h-6 text-red-400 shrink-0" /></div>
-                     <div>
-                       <p className="font-bold text-red-400">Conteúdo Rejeitado</p>
-                       <p className="opacity-80 leading-relaxed">{error}</p>
-                     </div>
-                   </div>
-                   <button 
+                  <div className="flex items-center gap-4 text-left">
+                    <div className="p-2 bg-red-500/20 rounded-full"><AlertTriangle className="w-6 h-6 text-red-400 shrink-0" /></div>
+                    <div>
+                      <p className="font-bold text-red-400">Conteúdo Rejeitado</p>
+                      <p className="opacity-80 leading-relaxed">{error}</p>
+                    </div>
+                  </div>
+                  <button
                     onClick={triggerFilePicker}
                     className="flex items-center gap-2 whitespace-nowrap px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg text-xs font-bold transition-all border border-red-500/30"
-                   >
-                     <RefreshCcw className="w-3 h-3" /> Trocar Arquivo
-                   </button>
+                  >
+                    <RefreshCcw className="w-3 h-3" /> Trocar Arquivo
+                  </button>
                 </div>
               )}
 
               {mediaFile && !error && (
                 <div className="mb-6 flex justify-center">
-                   <button 
+                  <button
                     onClick={triggerFilePicker}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-700 text-slate-300 rounded-full text-xs font-semibold transition-all border border-slate-700"
-                   >
-                     <RefreshCcw className="w-3 h-3" /> Escolher outro arquivo
-                   </button>
+                  >
+                    <RefreshCcw className="w-3 h-3" /> Escolher outro arquivo
+                  </button>
                 </div>
               )}
 
               <div className="flex gap-4 pt-4 border-t border-slate-700/50">
-                <button 
-                  onClick={handleGoBackToSelect} 
+                <button
+                  onClick={handleGoBackToSelect}
                   className="px-6 py-4 rounded-2xl bg-transparent border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white transition-all font-semibold"
                 >
                   Voltar
                 </button>
-                <button 
-                    disabled={!mediaFile} 
-                    onClick={handleAnalysis} 
-                    className={`flex-1 px-8 py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-3 text-lg group ${mediaFile ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:scale-[1.02]' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                <button
+                  disabled={!mediaFile}
+                  onClick={handleAnalysis}
+                  className={`flex-1 px-8 py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-3 text-lg group ${mediaFile ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:scale-[1.02]' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
                 >
                   {mediaFile ? (
-                      <>
-                        <Sparkles className="w-5 h-5 text-yellow-300 group-hover:animate-spin" /> 
-                        <span>Iniciar Análise IA</span>
-                      </>
+                    <>
+                      <Sparkles className="w-5 h-5 text-yellow-300 group-hover:animate-spin" />
+                      <span>Iniciar Análise IA</span>
+                    </>
                   ) : 'Analisar Agora'}
                 </button>
               </div>
@@ -1133,28 +1275,37 @@ const App: React.FC = () => {
         )}
 
         {(step === AppStep.ANALYZING || step === AppStep.COMPRESSING) && selectedExercise && (
-           <LoadingScreen 
-                step={step} 
-                tip={getExerciseTip()} 
-                exerciseType={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.alias || 'STANDARD')} 
-           />
+          <LoadingScreen
+            step={step}
+            tip={getExerciseTip()}
+            exerciseType={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.alias || 'STANDARD')}
+          />
         )}
 
         {step === AppStep.RESULTS && analysisResult && selectedExercise && (
-          <ResultView 
-            result={analysisResult} 
-            exercise={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.name || 'Exercício')} 
-            history={historyRecords} 
-            userId={currentUser?.id || ''} 
+          <ResultView
+            result={analysisResult}
+            exercise={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.name || 'Exercício')}
+            history={historyRecords}
+            userId={currentUser?.id || ''}
             onReset={resetAnalysis}
-            onDeleteRecord={handleDeleteRecord} 
-            onWorkoutSaved={() => currentUser && fetchUserWorkouts(currentUser.id)} 
-            onDietSaved={() => currentUser && fetchUserDiets(currentUser.id)} 
+            onDeleteRecord={handleDeleteRecord}
+            onWorkoutSaved={() => currentUser && fetchUserWorkouts(currentUser.id)}
+            onDietSaved={() => currentUser && fetchUserDiets(currentUser.id)}
             showToast={showToast}
             triggerConfirm={triggerConfirm}
           />
         )}
       </main>
+
+      {/* --- OFFLINE BANNER --- */}
+      {isOffline && (
+        <div className="fixed bottom-0 left-0 right-0 bg-red-600 text-white py-2 px-4 flex items-center justify-center gap-3 z-[1000] animate-in slide-in-from-bottom-full duration-300">
+          <Smartphone className="w-5 h-5 opacity-80" />
+          <span className="text-sm font-bold">Você está offline. Algumas funções podem não funcionar.</span>
+          <RefreshCcw className="w-4 h-4 animate-spin-slow opacity-60" />
+        </div>
+      )}
     </div>
   );
 };
