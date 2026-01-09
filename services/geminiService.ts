@@ -138,17 +138,34 @@ export const generateDietPlan = async (userData: any): Promise<string> => {
 };
 
 // --- GERAÇÃO DE TREINO (LAYOUT REFINADO) ---
+/**
+ * Gera um plano de treino personalizado baseado nos dados do usuário.
+ * userData espera: { weight, height, gender, goal, level, frequency, observations }
+ */
 export const generateWorkoutPlan = async (userData: any): Promise<string> => {
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
   const prompt = `
-    Atue como um Personal Trainer Motivador. Objetivo: ${userData.goal}, Nível: ${userData.level}.
-    Crie um plano de treino em HTML usando sistema de CARDS.
-    REGRAS:
-    1. Texto dos exercícios OBRIGATORIAMENTE ESCURO (text-slate-900) em cards brancos.
-    2. Adicione um BOTÃO YOUTUBE para cada exercício:
-       <a href="https://www.youtube.com/results?search_query=NOME_DO_EXERCICIO" target="_blank" class="text-red-600 bg-red-50 px-2 py-1 rounded-full text-xs font-bold">🎥 Ver vídeo</a>
-    3. Dia de descanso em card escuro (bg-slate-800).
-    4. Output apenas o código HTML interno.
+    Atue como um Personal Trainer Especialista e Motivador.
+    PERFIL DO ALUNO:
+    - Sexo: ${userData.gender}
+    - Peso: ${userData.weight}kg
+    - Altura: ${userData.height}cm
+    - Objetivo: ${userData.goal}
+    - Nível de Experiência: ${userData.level}
+    - Frequência Semanal: ${userData.frequency}x
+    - Observações/Restrições: ${userData.observations || 'Nenhuma'}
+
+    Crie um plano de treino semanal em HTML usando um sistema de CARDS modernos com Tailwind CSS.
+    
+    REGRAS DE LAYOUT E CONTEÚDO:
+    1. O estilo deve ser PREMIUM e LIMPO. Use cards brancos com sombra suave.
+    2. TEXTO DOS EXERCÍCIOS: OBRIGATORIAMENTE ESCURO (text-slate-900) para máxima legibilidade.
+    3. Para cada exercício, inclua: Nome, Séries x Repetições, Descanso e uma breve dica técnica.
+    4. Adicione um BOTÃO YOUTUBE para cada exercício:
+       <a href="https://www.youtube.com/results?search_query=como+fazer+${encodeURIComponent(userData.gender)}+${encodeURIComponent(userData.goal)}+${encodeURIComponent('exercicio')}" target="_blank" class="text-red-600 bg-red-50 px-3 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1 hover:bg-red-100 transition-colors mt-2">🎥 Ver técnica no YouTube</a>
+    5. Dias de descanso (OFF) devem ter um card com fundo escuro (bg-slate-800) e texto claro.
+    6. Personalize o volume e a escolha de exercícios considerando o sexo (${userData.gender}) e o objetivo (${userData.goal}).
+    7. Output APENAS o código HTML interno da <div> principal.
   `;
 
   try {
