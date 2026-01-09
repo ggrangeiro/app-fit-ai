@@ -24,8 +24,9 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
 };
 
 // --- ANÁLISE DE VÍDEO (PROMPTS REFINADOS) ---
-export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previousAnalysis?: AnalysisResult | null): Promise<AnalysisResult> => {
-  const mediaPart = await fileToGenerativePart(file);
+export const analyzeVideo = async (files: File | File[], exerciseType: ExerciseType, previousAnalysis?: AnalysisResult | null): Promise<AnalysisResult> => {
+  const fileArray = Array.isArray(files) ? files : [files];
+  const mediaParts = await Promise.all(fileArray.map(fileToGenerativePart));
 
   // 1. Definição de Persona e Estilo (Detailed Style)
   const detailedStyle = `
@@ -64,11 +65,16 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
   let specificContext = "";
 
   if (isPosture) {
-    specificContext = "Análise Postural: Diga se a pessoa está curvada ou alinhada no dia a dia.";
+    specificContext = `
+      Análise Postural COMPLETA: Analise TODAS as imagens fornecidas (Frente, Lado, Costas) em conjunto.
+      - Identifique desvios posturais visíveis (hiperlordose, cifose, escoliose, desnivelamento de ombros/quadril).
+      - Diga se a pessoa está alinhada ou se precisa de correções específicas.
+    `;
   } else if (isBodyComp) {
     specificContext = `
-      Contexto: Avaliação Visual do Corpo (Body Composition).
-      Instrução: Estime o biotipo e a gordura corporal aproximada.
+      Contexto: Avaliação Visual do Corpo (Body Composition) com múltiplas visualizações.
+      Instrução: Analise o físico como um todo considerando todas as fotos.
+      - Estime o biotipo e a gordura corporal aproximada com base no conjunto.
       IMPORTANTE: Preencha "repetitions" com a % de gordura estimada (ex: 18).
     `;
   } else {
@@ -104,7 +110,7 @@ export const analyzeVideo = async (file: File, exerciseType: ExerciseType, previ
     });
 
     const result = await model.generateContent([
-      { inlineData: mediaPart.inlineData },
+      ...mediaParts.map(part => ({ inlineData: part.inlineData })),
       { text: prompt }
     ]);
 
@@ -160,7 +166,7 @@ export const generateWorkoutPlan = async (userData: any): Promise<string> => {
     REGRAS DE LAYOUT E CONTEÚDO:
     1. O estilo deve ser PREMIUM e LIMPO. Use cards brancos com sombra suave.
     2. TEXTO DOS EXERCÍCIOS: OBRIGATORIAMENTE ESCURO (text-slate-900) para máxima legibilidade.
-    3. Para cada exercício, inclua: Nome, Séries x Repetições, Descanso e uma breve dica técnica.
+    3. Para cada exercício, inclua OBRIGATORIAMENTE: Nome, Séries x Repetições, Tempo de Descanso (ex: 60s ou 90s) e uma breve dica técnica.
     4. Adicione um BOTÃO YOUTUBE para cada exercício:
        <a href="https://www.youtube.com/results?search_query=como+fazer+${encodeURIComponent(userData.gender)}+${encodeURIComponent(userData.goal)}+${encodeURIComponent('exercicio')}" target="_blank" class="text-red-600 bg-red-50 px-3 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1 hover:bg-red-100 transition-colors mt-2">🎥 Ver técnica no YouTube</a>
     5. Dias de descanso (OFF) devem ter um card com fundo escuro (bg-slate-800) e texto claro.

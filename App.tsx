@@ -8,7 +8,7 @@ import ExerciseCard from './components/ExerciseCard';
 import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import LoadingScreen from './components/LoadingScreen';
 import Toast, { ToastType } from './components/Toast';
@@ -271,12 +271,27 @@ const App: React.FC = () => {
         try {
           const allEx = await apiService.getAllExercises();
           if (allEx.length > 0) {
-            const mapped = allEx.map((e: any) => ({
-              id: String(e.id),
-              alias: e.name.toUpperCase().replace(/\s+/g, '_'),
-              name: e.name,
-              category: 'STANDARD'
-            }));
+            const mapped = allEx.map((e: any) => {
+              const name = e.exercicio || e.name || "Exercício";
+              let category: 'STANDARD' | 'SPECIAL' = 'STANDARD';
+              let alias = name.toUpperCase().replace(/\s+/g, '_');
+
+              // Identifica exercícios especiais pelo nome para aplicar lógica/ícones corretos
+              if (name.toLowerCase().includes("postura")) {
+                alias = SPECIAL_EXERCISES.POSTURE;
+                category = 'SPECIAL';
+              } else if (name.toLowerCase().includes("corporal") || name.toLowerCase().includes("biotipo")) {
+                alias = SPECIAL_EXERCISES.BODY_COMPOSITION;
+                category = 'SPECIAL';
+              }
+
+              return {
+                id: String(e.id),
+                alias,
+                name,
+                category
+              };
+            });
             setExercisesList(mapped);
             return;
           }
@@ -288,12 +303,26 @@ const App: React.FC = () => {
         try {
           const myExercisesV2 = await apiService.getUserExercises(user.id);
           if (myExercisesV2.length > 0) {
-            const mapped = myExercisesV2.map((e: any) => ({
-              id: String(e.id),
-              alias: e.name.toUpperCase().replace(/\s+/g, '_'),
-              name: e.name,
-              category: 'STANDARD'
-            }));
+            const mapped = myExercisesV2.map((e: any) => {
+              const name = e.exercicio || e.name || "Exercício";
+              let category: 'STANDARD' | 'SPECIAL' = 'STANDARD';
+              let alias = name.toUpperCase().replace(/\s+/g, '_');
+
+              if (name.toLowerCase().includes("postura")) {
+                alias = SPECIAL_EXERCISES.POSTURE;
+                category = 'SPECIAL';
+              } else if (name.toLowerCase().includes("corporal") || name.toLowerCase().includes("biotipo")) {
+                alias = SPECIAL_EXERCISES.BODY_COMPOSITION;
+                category = 'SPECIAL';
+              }
+
+              return {
+                id: String(e.id),
+                alias,
+                name,
+                category
+              };
+            });
             setExercisesList(mapped);
             return;
           }
@@ -404,27 +433,32 @@ const App: React.FC = () => {
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const isVideo = file.type.startsWith('video/');
-      const isImage = file.type.startsWith('image/');
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
 
-      if (isSpecialMode) {
-        if (!isVideo && !isImage) {
-          setError("Envie vídeo ou imagem.");
-          return;
-        }
-      } else {
-        if (!isVideo) {
-          setError("Para este modo, envie apenas vídeo.");
-          return;
-        }
+    // Validate Types - simplified for single file
+    const file = files[0];
+    const isVideo = file.type.startsWith('video/');
+    const isImage = file.type.startsWith('image/');
+
+    const isFreeMode = selectedExercise === SPECIAL_EXERCISES.FREE_MODE;
+
+    if (isSpecialMode && !isFreeMode) {
+      if (!isVideo && !isImage) {
+        setError("Tipo de arquivo inválido.");
+        return;
       }
-
-      setMediaFile(file);
-      setMediaPreview(URL.createObjectURL(file));
-      setError(null);
+    } else {
+      if (!isVideo) {
+        setError("Para este modo, envie apenas 1 vídeo.");
+        return;
+      }
     }
+
+    // Always use Single File Mode
+    setMediaFile(file);
+    setMediaPreview(URL.createObjectURL(file));
+    setError(null);
   };
 
   const handleExerciseToggle = (id: string) => {
@@ -499,7 +533,7 @@ const App: React.FC = () => {
 
     if (selectedExercise === SPECIAL_EXERCISES.FREE_MODE) {
       aiContextName = "Análise Livre";
-      backendId = SPECIAL_EXERCISES.FREE_MODE;
+      backendId = "Análise Livre";
     } else if (exerciseObj) {
       // CORREÇÃO: Prioriza o ALIAS (ID Técnico) para exercícios especiais
       if (exerciseObj.category === 'SPECIAL') {
@@ -507,44 +541,47 @@ const App: React.FC = () => {
       } else {
         aiContextName = exerciseObj.name;  // Envia 'Agachamento'
       }
-      backendId = exerciseObj.alias;
+      backendId = exerciseObj.name;
     }
 
     try {
-      let finalFile = mediaFile;
-      if (mediaFile.type.startsWith('video/')) {
+      setStep(AppStep.ANALYZING);
+
+      let filesToSend: File = mediaFile;
+
+      // Optimization Check (Only for single video currently)
+      // If we have a single file and it's a large video, compress it.
+      if (filesToSend.type.startsWith('video/')) {
         setStep(AppStep.COMPRESSING);
         try {
-          finalFile = await compressVideo(mediaFile);
+          filesToSend = await compressVideo(filesToSend);
         } catch (compressError: any) {
           setError("Erro ao otimizar vídeo.");
           setStep(AppStep.UPLOAD_VIDEO);
           return;
         }
+        // Reset step back to ANALYZING after compression
+        setStep(AppStep.ANALYZING);
       }
-
-      setStep(AppStep.ANALYZING);
 
       let previousRecord: ExerciseRecord | null = null;
 
-      if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
-        try {
-          // --- CORREÇÃO: Usar apiService para buscar histórico prévio com os parâmetros corretos ---
-          const historyData = await apiService.getUserHistory(currentUser.id, backendId);
+      try {
+        // --- CORREÇÃO: Usar apiService para buscar histórico prévio com os parâmetros corretos ---
+        const historyData = await apiService.getUserHistory(currentUser.id, backendId);
 
-          if (historyData) {
-            const records = Array.isArray(historyData) ? historyData : Object.values(historyData).flat() as ExerciseRecord[];
-            if (records.length > 0) {
-              // Sort descending to get latest
-              records.sort((a, b) => b.timestamp - a.timestamp);
-              previousRecord = records[0];
-            }
+        if (historyData) {
+          const records = Array.isArray(historyData) ? historyData : Object.values(historyData).flat() as ExerciseRecord[];
+          if (records.length > 0) {
+            // Sort descending to get latest
+            records.sort((a, b) => b.timestamp - a.timestamp);
+            previousRecord = records[0];
           }
-        } catch (histErr) {
         }
+      } catch (histErr) {
       }
 
-      const result = await analyzeVideo(finalFile, aiContextName, previousRecord?.result);
+      const result = await analyzeVideo(filesToSend, aiContextName, previousRecord?.result);
 
       if (!result.isValidContent) {
         setError(result.validationError || "Conteúdo inválido para este exercício.");
@@ -572,32 +609,30 @@ const App: React.FC = () => {
 
       setAnalysisResult(result);
 
-      if (selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) {
+      try {
+        const payload = {
+          userId: currentUser.id,
+          userName: currentUser.name,
+          exercise: backendId,
+          timestamp: Date.now(),
+          result: { ...result, date: new Date().toISOString() }
+        };
+
+        // USE APISERVICE TO SAVE HISTORY (Auto-handles requester logic)
+        await apiService.saveHistory(payload);
+
         try {
-          const payload = {
-            userId: currentUser.id,
-            userName: currentUser.name,
-            exercise: backendId,
-            timestamp: Date.now(),
-            result: { ...result, date: new Date().toISOString() }
-          };
+          // --- CORREÇÃO: Re-busca com apiService para garantir lista atualizada ---
+          const fullHistoryData = await apiService.getUserHistory(currentUser.id, backendId);
 
-          // USE APISERVICE TO SAVE HISTORY (Auto-handles requester logic)
-          await apiService.saveHistory(payload);
-
-          try {
-            // --- CORREÇÃO: Re-busca com apiService para garantir lista atualizada ---
-            const fullHistoryData = await apiService.getUserHistory(currentUser.id, backendId);
-
-            if (fullHistoryData) {
-              const records = Array.isArray(fullHistoryData) ? fullHistoryData : Object.values(fullHistoryData).flat() as ExerciseRecord[];
-              setHistoryRecords(records.sort((a, b) => b.timestamp - a.timestamp));
-            }
-          } catch (e) {
+          if (fullHistoryData) {
+            const records = Array.isArray(fullHistoryData) ? fullHistoryData : Object.values(fullHistoryData).flat() as ExerciseRecord[];
+            setHistoryRecords(records.sort((a, b) => b.timestamp - a.timestamp));
           }
-
-        } catch (saveError) {
+        } catch (e) {
         }
+
+      } catch (saveError) {
       }
 
       setStep(AppStep.RESULTS);
@@ -1004,7 +1039,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="text-center">
                   <h3 className="text-white font-bold text-xl">Análise Livre</h3>
-                  <p className="text-slate-400 text-xs mt-1">Exercício não listado? Envie aqui.</p>
+                  <p className="text-slate-400 text-xs mt-1">Exercício não listado? Envie o vídeo aqui.</p>
                 </div>
               </button>
             </div>
@@ -1161,10 +1196,10 @@ const App: React.FC = () => {
                 )}
 
                 <div className="relative w-full">
-                  <label htmlFor="video-upload" className={`group relative flex flex-col items-center justify-center w-full rounded-2xl cursor-pointer transition-all duration-500 overflow-hidden ${mediaFile ? 'bg-black border-slate-700 h-auto aspect-video shadow-2xl' : 'h-72 border-2 border-dashed border-slate-600 bg-slate-800/30 hover:border-blue-500 hover:bg-slate-800/60'}`}>
+                  <label htmlFor="video-upload" className={`group relative flex flex-col items-center justify-center w-full rounded-2xl cursor-pointer transition-all duration-500 overflow-hidden ${!!mediaFile ? 'bg-black border-slate-700 h-auto aspect-video shadow-2xl' : 'h-72 border-2 border-dashed border-slate-600 bg-slate-800/30 hover:border-blue-500 hover:bg-slate-800/60'}`}>
                     {mediaPreview ? (
                       <>
-                        {mediaFile?.type.startsWith('image/') ? <img src={mediaPreview} className="h-full w-full object-contain" /> : <video src={mediaPreview} className="h-full w-full object-contain" controls={false} autoPlay muted loop playsInline />}
+                        {mediaFile && mediaFile.type && mediaFile.type.startsWith('image/') ? <img src={mediaPreview!} className="h-full w-full object-contain" /> : <video src={mediaPreview!} className="h-full w-full object-contain" controls={false} autoPlay muted loop playsInline />}
 
                         {/* TECH HUD OVERLAY */}
                         <div className="absolute inset-0 pointer-events-none">
@@ -1196,20 +1231,22 @@ const App: React.FC = () => {
                           <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping opacity-0 group-hover:opacity-100"></div>
                           {isSpecialMode ? <ImageIcon className="w-8 h-8 relative z-10" /> : <UploadCloud className="w-8 h-8 relative z-10" />}
                         </div>
-                        <p className="text-slate-200 font-bold text-lg group-hover:text-white transition-colors">Selecionar da Galeria</p>
+                        <p className="text-slate-200 font-bold text-lg group-hover:text-white transition-colors">{(isSpecialMode && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) ? 'Selecionar Foto' : 'Selecionar Vídeo'}</p>
                         <p className="text-slate-500 text-xs mt-2 max-w-[200px] text-center group-hover:text-slate-400">
-                          Certifique-se de que o corpo inteiro esteja visível e iluminado
+                          Certifique-se de que o corpo inteiro esteja visível
                         </p>
-                        <div className="mt-4 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full flex items-center gap-2">
-                          <Timer className="w-3 h-3 text-yellow-500" />
-                          <span className="text-[10px] text-yellow-200 font-medium">Recomendado: vídeos de até 2 min</span>
-                        </div>
+                        {!isSpecialMode && (
+                          <div className="mt-4 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full flex items-center gap-2">
+                            <Timer className="w-3 h-3 text-yellow-500" />
+                            <span className="text-[10px] text-yellow-200 font-medium">Recomendado: vídeos de até 2 min</span>
+                          </div>
+                        )}
                       </div>
                     )}
-                    <input ref={fileInputRef} id="video-upload" type="file" accept={isSpecialMode ? "video/*,image/*" : "video/*"} className="hidden" onChange={handleFileChange} />
+                    <input ref={fileInputRef} id="video-upload" type="file" accept={(isSpecialMode && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) ? "video/*,image/*" : "video/*"} className="hidden" onChange={handleFileChange} />
                   </label>
 
-                  {mediaFile && (
+                  {!!mediaFile && (
                     <button
                       onClick={clearSelectedMedia}
                       className="absolute -top-3 -right-3 p-2 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-500 transition-colors z-10 border-2 border-slate-900"
@@ -1239,13 +1276,13 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {mediaFile && !error && (
+              {!!mediaFile && !error && (
                 <div className="mb-6 flex justify-center">
                   <button
                     onClick={triggerFilePicker}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-700 text-slate-300 rounded-full text-xs font-semibold transition-all border border-slate-700"
                   >
-                    <RefreshCcw className="w-3 h-3" /> Escolher outro arquivo
+                    <RefreshCcw className="w-3 h-3" /> Trocar Arquivo
                   </button>
                 </div>
               )}
@@ -1260,9 +1297,9 @@ const App: React.FC = () => {
                 <button
                   disabled={!mediaFile}
                   onClick={handleAnalysis}
-                  className={`flex-1 px-8 py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-3 text-lg group ${mediaFile ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:scale-[1.02]' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                  className={`flex-1 px-8 py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-3 text-lg group ${!!mediaFile ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:scale-[1.02]' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
                 >
-                  {mediaFile ? (
+                  {!!mediaFile ? (
                     <>
                       <Sparkles className="w-5 h-5 text-yellow-300 group-hover:animate-spin" />
                       <span>Iniciar Análise IA</span>
