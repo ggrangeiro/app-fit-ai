@@ -43,10 +43,28 @@ export const compressVideo = async (file: File): Promise<File> => {
         mimeType = 'video/webm;codecs=vp9';
       }
 
-      const stream = canvas.captureStream(15); // Increased to 15fps for smoother motion analysis
+      const stream = canvas.captureStream(24); // 24fps as requested for better motion tracking
+
+      // --- ADAPTIVE BITRATE LOGIC ---
+      // 1. Define safe ceiling (15MB in Bytes)
+      const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024;
+
+      // 2. Get duration (with safety fallback)
+      const duration = video.duration || 60;
+
+      // 3. Calculate mathematical max bitrate to fit usage
+      // Formula: (Size * 8 bits) / Duration
+      const maxAllowedBitrate = Math.floor((MAX_FILE_SIZE_BYTES * 8) / duration);
+
+      // 4. Apply quality limits (Ceiling: 1.5Mbps, Floor: 250kbps)
+      const targetBitrate = Math.min(1500000, maxAllowedBitrate);
+      const finalBitrate = Math.max(250000, targetBitrate);
+
+      console.log(`[VideoUtils] Optimization: Duration=${duration}s, Calculated Bitrate=${finalBitrate / 1000}kbps`);
+
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType,
-        videoBitsPerSecond: 1500000 // Increased to 1.5Mbps for better clarity
+        videoBitsPerSecond: finalBitrate
       });
 
       const chunks: BlobPart[] = [];
