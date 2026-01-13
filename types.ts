@@ -64,15 +64,15 @@ export interface AnalysisResult {
   isValidContent: boolean; // Indica se passou na validação de humano + categoria
   validationError?: string; // Mensagem explicando por que falhou na validação
   score: number;
-  repetitions: number; 
+  repetitions: number;
   feedback: FeedbackItem[]; // Mantido para compatibilidade, mas usado para scores por parte do corpo
-  
+
   // Novos campos detalhados
   strengths?: string[]; // O que o usuário fez certo
   improvements?: DetailedImprovement[]; // Lista detalhada de correções
-  
+
   gender?: string; // 'masculino' | 'feminino' detectado pela IA
-  
+
   formCorrection: string;
   muscleGroups: string[];
   date?: string;
@@ -91,6 +91,20 @@ export enum AppStep {
 
 export type UserRole = 'admin' | 'user' | 'personal';
 
+export interface Plan {
+  type: 'FREE' | 'STARTER' | 'PRO' | 'STUDIO';
+  status: 'ACTIVE' | 'INACTIVE' | 'CANCELED' | 'PAST_DUE';
+  renewsAt: string;
+}
+
+export interface Usage {
+  credits: number;
+  subscriptionCredits: number;
+  purchasedCredits: number;
+  generations: number;
+  generationsLimit: number;
+}
+
 export interface User {
   id: string; // Frontend usa string, backend pode mandar number. Converteremos.
   name: string;
@@ -102,6 +116,9 @@ export interface User {
   token?: string; // JWT Token para o novo backend
   refreshToken?: string;
   personalId?: string; // ID do personal trainer responsável (se houver)
+  phone?: string; // Telefone do usuário (mapeado do campo 'telefone' do backend)
+  plan?: Plan;
+  usage?: Usage;
 }
 
 export interface ExerciseRecord {
@@ -111,4 +128,22 @@ export interface ExerciseRecord {
   exercise: string; // Alterado de ExerciseType para string
   result: AnalysisResult;
   timestamp: number;
+}
+export interface WorkoutCheckIn {
+  id: string;         // Gerado pelo backend (UUID)
+  userId: string;     // ID do aluno
+  workoutId: number;  // ID do treino/ficha realizado
+  date: string;       // Data da realização (formato YYYY-MM-DD)
+  status: 'completed';// Fixo em 'completed'
+  timestamp: number;  // Unix timestamp (ms) do momento do registro
+  comment?: string;   // Comentário opcional (string)
+}
+
+export interface CreditHistoryItem {
+  id: number;
+  userId: string;
+  amount: number;
+  reason: string;
+  description: string;
+  date: string;
 }

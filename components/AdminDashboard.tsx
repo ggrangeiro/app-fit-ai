@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, AnalysisResult, DietPlan, WorkoutPlan, AppStep } from '../types';
+import { User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, AnalysisResult, DietPlan, WorkoutPlan, AppStep, WorkoutCheckIn } from '../types';
 import { MockDataService } from '../services/mockDataService';
 import { apiService } from '../services/apiService';
-import { generateExerciseThumbnail, analyzeVideo, generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
+import { generateExerciseThumbnail, analyzeVideo, generateDietPlan, generateWorkoutPlan, regenerateWorkoutPlan } from '../services/geminiService';
 import { compressVideo } from '../utils/videoUtils';
+import { shareAsPdf } from '../utils/pdfUtils';
 import { ResultView } from './ResultView';
 import LoadingScreen from './LoadingScreen';
-import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2 } from 'lucide-react';
+import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 
@@ -56,11 +57,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
     const [userHistoryList, setUserHistoryList] = useState<ExerciseRecord[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const [openHistoryGroups, setOpenHistoryGroups] = useState<Record<string, boolean>>({});
 
     // States para exibir planos atuais do usuário
     const [userDiet, setUserDiet] = useState<DietPlan | null>(null);
     const [userWorkout, setUserWorkout] = useState<WorkoutPlan | null>(null);
-    const [viewingPlan, setViewingPlan] = useState<{ type: 'DIET' | 'WORKOUT', content: string, title: string } | null>(null);
+    const [viewingPlan, setViewingPlan] = useState<{ type: 'workout' | 'diet', title: string, content: string, id: string, redoCount?: number, originalFormData?: any } | null>(null);
+    const [pdfLoading, setPdfLoading] = useState(false);
+
+    // Redo Workout States
+    const [showRedoModal, setShowRedoModal] = useState(false);
+    const [redoFeedback, setRedoFeedback] = useState('');
+
+    const [checkIns, setCheckIns] = useState<WorkoutCheckIn[]>([]);
+    const [isCheckInsExpanded, setIsCheckInsExpanded] = useState(false);
+    const [isLoadingCheckIns, setIsLoadingCheckIns] = useState(false);
 
     const [viewingRecord, setViewingRecord] = useState<ExerciseRecord | null>(null);
     const [detailedHistory, setDetailedHistory] = useState<ExerciseRecord[]>([]);
@@ -73,7 +84,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
     const [newName, setNewName] = useState('');
     const [newEmail, setNewEmail] = useState('');
+    const [newPhone, setNewPhone] = useState('');
     const [newRole, setNewRole] = useState('user'); // Novo estado para o papel do usuário
+
+    // Máscara de telefone brasileiro (10 ou 11 dígitos)
+    const formatPhone = (value: string): string => {
+        const digits = value.replace(/\D/g, ''); // Remove tudo que não é número
+        if (digits.length <= 10) {
+            return digits.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
+        } else {
+            return digits.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
+        }
+    };
+
+    const handleNewPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const formatted = formatPhone(e.target.value);
+        setNewPhone(formatted);
+    };
 
     const [editingAssignments, setEditingAssignments] = useState<string[]>([]);
 
@@ -85,7 +112,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     const [actionFormData, setActionFormData] = useState({
         weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino'
     });
+
+    // Novos estados para anexos (Prescrição Planos)
+    const [actionDocument, setActionDocument] = useState<File | null>(null);
+    const [actionPhoto, setActionPhoto] = useState<File | null>(null);
+    const [actionPhotoPreview, setActionPhotoPreview] = useState<string | null>(null);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Password Reset States
+    const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+    const [resetPasswordValue, setResetPasswordValue] = useState('');
+    const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+
+    // Plan Change States
+    const [showPlanChangeModal, setShowPlanChangeModal] = useState(false);
+    const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+    const [planChangeLoading, setPlanChangeLoading] = useState(false);
 
     const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
         message: '', type: 'info', isVisible: false
@@ -144,12 +187,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             // Mantemos apenas a chamada para buscar o histórico e planos
             fetchUserHistory(selectedUser.id);
             fetchUserPlans(selectedUser.id);
+            fetchUserCheckIns(selectedUser.id);
 
         } else {
             setUserHistoryList([]);
             setUserDiet(null);
             setUserWorkout(null);
             setStudentExercises([]);
+            setCheckIns([]);
+            setIsCheckInsExpanded(false);
         }
     }, [selectedUser]);
 
@@ -160,6 +206,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             setAssessmentPreviews([]);
             setAssessmentFiles([]);
             setAssessmentType(''); // Reset selection
+
+            // Limpa anexos de planos
+            if (actionPhotoPreview) URL.revokeObjectURL(actionPhotoPreview);
+            setActionPhotoPreview(null);
+            setActionPhoto(null);
+            setActionDocument(null);
         } else if (showTeacherActionModal === 'ASSESSMENT') {
             // Start empty to allow "Free Analysis/Auto-detect" if user doesn't pick anything
             setAssessmentType('');
@@ -167,7 +219,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     }, [showTeacherActionModal]);
 
     const handleAssessmentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
+        const files = Array.from(e.target.files || []) as File[];
         if (files.length > 0) {
             // Validate: Prevent mixing video with multiple files, or enforce single video
             const isVideo = files.some(f => f.type.startsWith('video/'));
@@ -242,7 +294,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     role: u.role ? String(u.role).toLowerCase() : 'user',
                     credits: u.credits || 0,
                     avatar: u.avatar,
-                    assignedExercises: u.assignedExercises || []
+                    assignedExercises: u.assignedExercises || [],
+                    phone: u.telefone || u.phone,
+                    plan: u.plan,
+                    usage: u.usage
                 }));
                 setUsers(mappedUsers);
                 return;
@@ -291,6 +346,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
         }
     };
 
+    const fetchUserCheckIns = async (userId: string) => {
+        setIsLoadingCheckIns(true);
+        try {
+            const data = await apiService.getCheckIns(userId);
+            if (Array.isArray(data)) {
+                setCheckIns(data.sort((a, b) => b.timestamp - a.timestamp));
+            }
+        } catch (e) {
+            console.error("Erro ao buscar check-ins", e);
+        } finally {
+            setIsLoadingCheckIns(false);
+        }
+    };
+
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
         if (processing) return;
@@ -303,7 +372,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             // Define a role: se for Personal, força 'user'. Se for Admin, usa o que foi selecionado.
             const roleToCreate = isPersonal ? 'user' : newRole;
 
-            await apiService.signup(newName, newEmail, "mudar123", creatorId, roleToCreate);
+            await apiService.signup(newName, newEmail, "mudar123", newPhone, creatorId, roleToCreate);
             await MockDataService.createUser(newName, newEmail, undefined, creatorId, currentUser.role, roleToCreate);
 
             const roleName = roleToCreate === 'user' ? 'Aluno' : (roleToCreate === 'personal' ? 'Personal' : 'Admin');
@@ -311,6 +380,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
             setNewName('');
             setNewEmail('');
+            setNewPhone('');
             setNewRole('user');
 
             // Atualiza a lista antes de mudar a tab
@@ -367,7 +437,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             }
             try {
                 const payload = { nome: selectedUser.name, email: selectedUser.email, assignedExercises: editingAssignments };
-                await fetch(`https://testeai-732767853162.us-west1.run.app/api/usuarios/${selectedUser.id}`, {
+                await fetch(`https://app-back-ia-732767853162.southamerica-east1.run.app/api/usuarios/${selectedUser.id}`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
                 });
             } catch (e) { }
@@ -416,13 +486,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 goal: actionFormData.goal,
                 gender: actionFormData.gender,
                 observations: actionFormData.observations
-            });
+            }, actionDocument, actionPhoto);
 
-            await apiService.createDiet(selectedUser.id, planHtml, actionFormData.goal);
+            const newDiet = await apiService.createDiet(selectedUser.id, planHtml, actionFormData.goal);
             showToast(`Dieta salva para ${selectedUser.name}!`, 'success');
 
+            // Limpa anexos
+            if (actionPhotoPreview) URL.revokeObjectURL(actionPhotoPreview);
+            setActionPhotoPreview(null);
+            setActionPhoto(null);
+            setActionDocument(null);
+
             // Abre preview imediatamente e atualiza lista
-            setViewingPlan({ type: 'DIET', content: planHtml, title: 'Nova Dieta Gerada' });
+            setViewingPlan({ type: 'diet', content: planHtml, title: 'Nova Dieta Gerada', id: newDiet.id });
             fetchUserPlans(selectedUser.id);
             setShowTeacherActionModal('NONE');
 
@@ -448,13 +524,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 frequency: actionFormData.frequency,
                 observations: actionFormData.observations,
                 gender: actionFormData.gender
-            });
+            }, actionDocument, actionPhoto);
 
-            await apiService.createTraining(selectedUser.id, planHtml, actionFormData.goal);
-            showToast(`Treino salvo para ${selectedUser.name}!`, 'success');
+            const newWorkout = await apiService.createTraining(selectedUser.id, planHtml, actionFormData.goal);
+            showToast(`Treino salva para ${selectedUser.name}!`, 'success');
+
+            // Limpa anexos
+            if (actionPhotoPreview) URL.revokeObjectURL(actionPhotoPreview);
+            setActionPhotoPreview(null);
+            setActionPhoto(null);
+            setActionDocument(null);
 
             // Abre preview imediatamente e atualiza lista
-            setViewingPlan({ type: 'WORKOUT', content: planHtml, title: 'Novo Treino Gerado' });
+            const originalData = {
+                weight: actionFormData.weight,
+                height: actionFormData.height,
+                goal: actionFormData.goal,
+                level: actionFormData.level,
+                frequency: actionFormData.frequency,
+                observations: actionFormData.observations,
+                gender: actionFormData.gender
+            };
+            setViewingPlan({ type: 'workout', content: planHtml, title: 'Novo Treino Gerado', id: newWorkout.id, redoCount: 0, originalFormData: originalData });
             fetchUserPlans(selectedUser.id);
             setShowTeacherActionModal('NONE');
 
@@ -588,28 +679,86 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
     const handleSharePlan = async () => {
         if (!viewingPlan) return;
+        setPdfLoading(true);
+        try {
+            await shareAsPdf('printable-plan-container', viewingPlan.title);
+            showToast("PDF gerado com sucesso!", 'success');
+        } catch (error) {
+            showToast("Erro ao compartilhar PDF.", 'error');
+        } finally {
+            setPdfLoading(false);
+        }
+    };
 
-        // Cria uma versão simplificada do texto para compartilhar
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = viewingPlan.content;
-        const textContent = tempDiv.innerText || tempDiv.textContent || "";
+    const handleRedoWorkout = async () => {
+        if (!viewingPlan || !redoFeedback.trim() || viewingPlan.type !== 'workout') return;
 
-        const shareText = `📋 *${viewingPlan.title} - FitAI*\n\n${textContent.substring(0, 1000)}...\n\n(Acesse o app para ver completo)`;
+        setProcessing(true);
+        setProgressMsg("Ajustando treino com IA...");
+        setShowRedoModal(false);
 
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: viewingPlan.title,
-                    text: shareText
-                });
-            } catch (e) { }
-        } else {
-            try {
-                await navigator.clipboard.writeText(shareText);
-                showToast("Resumo copiado para a área de transferência!", 'success');
-            } catch (e) {
-                showToast("Erro ao copiar.", 'error');
-            }
+        try {
+            const newHtml = await regenerateWorkoutPlan(
+                viewingPlan.content,
+                redoFeedback,
+                viewingPlan.originalFormData || {}
+            );
+
+            // Update viewing plan with new content and increment redoCount
+            setViewingPlan({
+                ...viewingPlan,
+                content: newHtml,
+                redoCount: (viewingPlan.redoCount || 0) + 1
+            });
+
+            setRedoFeedback('');
+            showToast("Treino ajustado com sucesso!", 'success');
+        } catch (err: any) {
+            showToast("Erro ao ajustar treino: " + err.message, 'error');
+        } finally {
+            setProcessing(false);
+            setProgressMsg('');
+        }
+    };
+
+    const handleResetPassword = async () => {
+        if (!selectedUser || !resetPasswordValue.trim()) return;
+
+        if (resetPasswordValue.length < 6) {
+            showToast('A senha deve ter no mínimo 6 caracteres.', 'error');
+            return;
+        }
+
+        setResetPasswordLoading(true);
+        try {
+            await apiService.adminResetPassword(selectedUser.id, resetPasswordValue);
+            showToast(`Senha de ${selectedUser.name} alterada com sucesso!`, 'success');
+            setShowResetPasswordModal(false);
+            setResetPasswordValue('');
+        } catch (err: any) {
+            showToast('Erro ao resetar senha: ' + err.message, 'error');
+        } finally {
+            setResetPasswordLoading(false);
+        }
+    };
+
+    const handleChangePlan = async () => {
+        if (!selectedUser || !selectedPlanId) return;
+
+        setPlanChangeLoading(true);
+        try {
+            await apiService.subscribe(selectedUser.id, selectedPlanId);
+            showToast(`Plano de ${selectedUser.name} alterado para ${selectedPlanId}!`, 'success');
+            setShowPlanChangeModal(false);
+            setSelectedPlanId('');
+            // Refresh user data (would ideally call getMe but we'll refetch users list)
+            await fetchBackendUsers();
+            // Re-select the user to show updated data
+            // This is a simplification; a full implementation would update the selected user object directly
+        } catch (err: any) {
+            showToast('Erro ao alterar plano: ' + err.message, 'error');
+        } finally {
+            setPlanChangeLoading(false);
         }
     };
 
@@ -643,6 +792,138 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 isDestructive={confirmModal.isDestructive}
             />
 
+            {/* RESET PASSWORD MODAL */}
+            {showResetPasswordModal && selectedUser && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-md relative shadow-2xl">
+                        <button
+                            onClick={() => { setShowResetPasswordModal(false); setResetPasswordValue(''); }}
+                            className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+
+                        <div className="text-center mb-6">
+                            <div className="flex justify-center mb-3">
+                                <div className="p-3 bg-orange-600/20 rounded-2xl">
+                                    <Key className="w-8 h-8 text-orange-400" />
+                                </div>
+                            </div>
+                            <h3 className="text-xl font-bold text-white mb-1">Resetar Senha</h3>
+                            <p className="text-slate-400 text-sm">
+                                Definir nova senha para <span className="text-white font-semibold">{selectedUser.name}</span>
+                            </p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-sm font-medium text-slate-300 ml-1">Nova Senha Temporária</label>
+                                <div className="relative">
+                                    <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
+                                    <input
+                                        type="password"
+                                        value={resetPasswordValue}
+                                        onChange={(e) => setResetPasswordValue(e.target.value)}
+                                        placeholder="Mínimo 6 caracteres"
+                                        minLength={6}
+                                        className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-slate-500 text-center">
+                                O aluno deverá alterar esta senha no próximo login.
+                            </p>
+
+                            <button
+                                onClick={handleResetPassword}
+                                disabled={resetPasswordLoading || resetPasswordValue.length < 6}
+                                className="w-full py-3.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {resetPasswordLoading ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        Alterando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Key className="w-5 h-5" />
+                                        Confirmar Nova Senha
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PLAN CHANGE MODAL */}
+            {showPlanChangeModal && selectedUser && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-md relative shadow-2xl">
+                        <button
+                            onClick={() => { setShowPlanChangeModal(false); setSelectedPlanId(''); }}
+                            className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+
+                        <div className="text-center mb-6">
+                            <div className="flex justify-center mb-3">
+                                <div className="p-3 bg-purple-600/20 rounded-2xl">
+                                    <Sparkles className="w-8 h-8 text-purple-400" />
+                                </div>
+                            </div>
+                            <h3 className="text-xl font-bold text-white mb-1">Alterar Plano</h3>
+                            <p className="text-slate-400 text-sm">
+                                Alterando plano de <span className="text-white font-semibold">{selectedUser.name}</span>
+                            </p>
+                        </div>
+
+                        <div className="space-y-3 mb-6">
+                            {['FREE', 'STARTER', 'PRO', 'STUDIO'].map((plan) => (
+                                <button
+                                    key={plan}
+                                    onClick={() => setSelectedPlanId(plan)}
+                                    className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedPlanId === plan
+                                        ? 'border-purple-500 bg-purple-500/10'
+                                        : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-white font-bold">{plan}</span>
+                                        {plan === 'PRO' && (
+                                            <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full font-bold">
+                                                POPULAR
+                                            </span>
+                                        )}
+                                    </div>
+                                    {selectedPlanId === plan && <Check className="w-5 h-5 text-purple-400" />}
+                                </button>
+                            ))}
+                        </div>
+
+                        <button
+                            onClick={handleChangePlan}
+                            disabled={planChangeLoading || !selectedPlanId}
+                            className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {planChangeLoading ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Alterando...
+                                </>
+                            ) : (
+                                <>
+                                    <Check className="w-5 h-5" />
+                                    Confirmar Alteração
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* TEACHER ACTION MODAL */}
             {showTeacherActionModal !== 'NONE' && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
@@ -670,6 +951,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     <option value="manutencao">Manutenção</option>
                                 </select>
                                 <textarea placeholder="Restrições alimentares..." className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={actionFormData.observations} onChange={e => setActionFormData({ ...actionFormData, observations: e.target.value })} />
+
+                                <div className="space-y-3">
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Anexos Opcionais</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-all cursor-pointer group">
+                                            <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 mb-1" />
+                                            <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate max-w-full">
+                                                {actionDocument ? actionDocument.name : 'Exame/PDF'}
+                                            </span>
+                                            <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setActionDocument(e.target.files?.[0] || null)} />
+                                        </label>
+
+                                        <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-all cursor-pointer group relative overflow-hidden">
+                                            {actionPhotoPreview ? (
+                                                <img src={actionPhotoPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                                            ) : (
+                                                <ImageIcon className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 mb-1" />
+                                            )}
+                                            <span className="text-[10px] text-slate-400 group-hover:text-slate-200 relative z-10">
+                                                {actionPhoto ? 'Trocar Foto' : 'Foto Paciente'}
+                                            </span>
+                                            <input type="file" accept="image/*" className="hidden" onChange={e => {
+                                                const file = e.target.files?.[0] || null;
+                                                setActionPhoto(file);
+                                                if (actionPhotoPreview) URL.revokeObjectURL(actionPhotoPreview);
+                                                if (file) setActionPhotoPreview(URL.createObjectURL(file));
+                                                else setActionPhotoPreview(null);
+                                            }} />
+                                        </label>
+                                    </div>
+                                </div>
+
                                 <button type="submit" disabled={processing} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all">{processing ? <Loader2 className="animate-spin mx-auto" /> : 'Gerar e Salvar'}</button>
                             </form>
                         )}
@@ -717,6 +1030,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                 </div>
 
                                 <textarea placeholder="Lesões ou observações..." className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.observations} onChange={e => setActionFormData({ ...actionFormData, observations: e.target.value })} />
+
+                                <div className="space-y-3">
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Anexos Opcionais</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 transition-all cursor-pointer group">
+                                            <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-blue-400 mb-1" />
+                                            <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate max-w-full">
+                                                {actionDocument ? actionDocument.name : 'Avaliação/PDF'}
+                                            </span>
+                                            <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setActionDocument(e.target.files?.[0] || null)} />
+                                        </label>
+
+                                        <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 transition-all cursor-pointer group relative overflow-hidden">
+                                            {actionPhotoPreview ? (
+                                                <img src={actionPhotoPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                                            ) : (
+                                                <ImageIcon className="w-5 h-5 text-slate-500 group-hover:text-blue-400 mb-1" />
+                                            )}
+                                            <span className="text-[10px] text-slate-400 group-hover:text-slate-200 relative z-10">
+                                                {actionPhoto ? 'Trocar Foto' : 'Foto Aluno'}
+                                            </span>
+                                            <input type="file" accept="image/*" className="hidden" onChange={e => {
+                                                const file = e.target.files?.[0] || null;
+                                                setActionPhoto(file);
+                                                if (actionPhotoPreview) URL.revokeObjectURL(actionPhotoPreview);
+                                                if (file) setActionPhotoPreview(URL.createObjectURL(file));
+                                                else setActionPhotoPreview(null);
+                                            }} />
+                                        </label>
+                                    </div>
+                                </div>
+
                                 <button type="submit" disabled={processing} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">{processing ? <Loader2 className="animate-spin mx-auto" /> : 'Gerar e Salvar'}</button>
                             </form>
                         )}
@@ -777,11 +1122,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
                                         {studentExercises.length > 0 ? (
                                             studentExercises.map(ex => (
-                                                <option key={ex.id} value={ex.alias}>{ex.name}</option>
+                                                <option key={ex.id} value={ex.name}>{ex.name}</option>
                                             ))
                                         ) : (
                                             allExercises.filter(ex => ex.category !== 'SPECIAL').map(ex => (
-                                                <option key={ex.id} value={ex.alias}>{ex.name}</option>
+                                                <option key={ex.id} value={ex.name}>{ex.name}</option>
                                             ))
                                         )}
                                     </select>
@@ -846,18 +1191,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                 onClick={() => setViewingPlan(null)}
                                 className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
                             >
-                                <X className="w-6 h-6" /> Fechar Visualização
+                                <X className="w-6 h-6" /> <span className="hidden sm:inline">Fechar Visualização</span>
                             </button>
                             <div className="flex gap-3">
-                                <button onClick={handleSharePlan} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold shadow-lg transition-all">
-                                    <Share2 className="w-4 h-4" /> Compartilhar
-                                </button>
-                                <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold shadow-lg transition-all border border-slate-600">
-                                    <Printer className="w-4 h-4" /> Imprimir
+                                {/* Redo Button - Only for workouts and Personal/Admin */}
+                                {viewingPlan.type === 'workout' && (isPersonal || isAdmin) && viewingPlan.originalFormData && (
+                                    <button
+                                        onClick={() => setShowRedoModal(true)}
+                                        disabled={processing || (viewingPlan.redoCount || 0) >= 2}
+                                        title={`Refazer (${viewingPlan.redoCount || 0}/2 usados)`}
+                                        className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg font-bold shadow-lg transition-all ${(viewingPlan.redoCount || 0) >= 2
+                                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                            : 'bg-amber-600 hover:bg-amber-500 text-white'
+                                            }`}
+                                    >
+                                        <RefreshCw className="w-5 h-5" />
+                                        <span className="hidden sm:inline">Refazer ({2 - (viewingPlan.redoCount || 0)} restantes)</span>
+                                        <span className="sm:hidden">{2 - (viewingPlan.redoCount || 0)}</span>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={handleSharePlan}
+                                    disabled={pdfLoading}
+                                    className="flex items-center gap-2 px-4 sm:px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold shadow-lg transition-all disabled:opacity-50"
+                                >
+                                    {pdfLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
+                                    <span className="hidden sm:inline">{pdfLoading ? 'Gerando PDF...' : 'Compartilhar PDF'}</span>
                                 </button>
                             </div>
                         </div>
-                        <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh] printable-content">
+                        <div id="printable-plan-container" className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh] printable-content">
                             <style>{`
                      #admin-plan-view { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
                      @media print {
@@ -881,6 +1244,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                             <div className="mt-8 pt-4 border-t border-slate-200 text-center text-xs text-slate-400">
                                 Documento gerado automaticamente por FitAI Analyzer. Acompanhamento profissional recomendado.
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* REDO WORKOUT FEEDBACK MODAL */}
+            {showRedoModal && viewingPlan && viewingPlan.type === 'workout' && (
+                <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl">
+                        <button onClick={() => { setShowRedoModal(false); setRedoFeedback(''); }} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+                            <X className="w-6 h-6" />
+                        </button>
+
+                        <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                            <RefreshCw className="w-6 h-6 text-amber-400" /> Refazer Treino
+                        </h3>
+                        <p className="text-sm text-slate-400 mb-4">
+                            Descreva as alterações desejadas. A IA ajustará o treino mantendo o restante intacto.
+                        </p>
+
+                        <div className="mb-4">
+                            <span className="text-xs text-slate-500">Refazimentos usados: <span className="text-amber-400 font-bold">{viewingPlan.redoCount || 0}/2</span></span>
+                        </div>
+
+                        <textarea
+                            value={redoFeedback}
+                            onChange={(e) => setRedoFeedback(e.target.value)}
+                            placeholder="Ex: Trocar supino reto por flexão de braço, aumentar séries de agachamento para 4..."
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white focus:border-amber-500 focus:outline-none resize-none h-32 placeholder:text-slate-500"
+                        />
+
+                        <div className="flex gap-3 mt-4">
+                            <button
+                                onClick={() => { setShowRedoModal(false); setRedoFeedback(''); }}
+                                className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleRedoWorkout}
+                                disabled={!redoFeedback.trim() || processing}
+                                className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                            >
+                                {processing ? <Loader2 className="animate-spin w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
+                                {processing ? 'Ajustando...' : 'Refazer Treino'}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1010,6 +1419,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     <label className="block text-sm font-medium text-slate-300 mb-2">E-mail</label>
                                     <input type="email" required value={newEmail} onChange={e => setNewEmail(e.target.value)} className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none" />
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Telefone</label>
+                                    <div className="relative">
+                                        <Phone className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
+                                        <input
+                                            type="tel"
+                                            required
+                                            value={newPhone}
+                                            onChange={handleNewPhoneChange}
+                                            placeholder="(11) 98888-7777"
+                                            maxLength={15}
+                                            className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
 
                                 {/* Role Selector - Apenas para Admins (Personais só criam usuários 'user') */}
                                 {isAdmin && (
@@ -1077,8 +1501,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                 <div key={user.id} onClick={() => setSelectedUser(user)} className="bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 rounded-2xl p-5 cursor-pointer transition-all group">
                                                     <div className="flex justify-between items-start mb-3">
                                                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold">{user.name.charAt(0)}</div>
-                                                        <div className="px-2 py-1 rounded text-xs font-bold text-slate-500 bg-slate-700/30">
-                                                            {user.role === 'personal' ? 'Personal' : 'Aluno'}
+                                                        <div className="flex flex-col items-end gap-1">
+                                                            <div className="px-2 py-1 rounded text-xs font-bold text-slate-500 bg-slate-700/30">
+                                                                {user.role === 'personal' ? 'Personal' : 'Aluno'}
+                                                            </div>
+                                                            {user.plan && (
+                                                                <div className={`px-2 py-0.5 rounded text-[10px] font-bold border
+                                                                    ${user.plan.type === 'PRO' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                                        user.plan.type === 'STUDIO' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                                                                            user.plan.type === 'STARTER' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                                                                'bg-slate-700/50 text-slate-400 border-slate-600'}
+                                                                `}>
+                                                                    {user.plan.type}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     <h3 className="text-white font-bold text-lg truncate">{user.name}</h3>
@@ -1104,8 +1540,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                             <div className="flex flex-col md:flex-row gap-6 h-full overflow-hidden">
                                 <div className="md:w-1/3 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
                                     <div className="bg-slate-800/30 p-5 rounded-2xl border border-slate-700/50">
-                                        <h3 className="text-xl font-bold text-white mb-1">{selectedUser.name}</h3>
-                                        <p className="text-slate-400 text-sm mb-6">{selectedUser.email}</p>
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
+                                                    {selectedUser.name}
+                                                    {selectedUser.plan && (
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider
+                                                            ${selectedUser.plan.type === 'PRO' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                                selectedUser.plan.type === 'STUDIO' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                                                                    selectedUser.plan.type === 'STARTER' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                                                        'bg-slate-700/50 text-slate-400 border-slate-600'}
+                                                        `}>
+                                                            {selectedUser.plan.type}
+                                                        </span>
+                                                    )}
+                                                </h3>
+                                                <p className="text-slate-400 text-sm mb-2">{selectedUser.email}</p>
+                                            </div>
+                                            {selectedUser.usage && (
+                                                <div className="text-right">
+                                                    <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Créditos</div>
+                                                    <div className="text-xl font-bold text-white">{selectedUser.credits || 0}</div>
+                                                    <div className="text-[10px] text-slate-500">
+                                                        <span className="text-slate-400">{selectedUser.usage.subscriptionCredits}</span> Plano + <span className="text-emerald-400">{selectedUser.usage.purchasedCredits}</span> Extras
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {selectedUser.phone && (
+                                            <a
+                                                href={`tel:${selectedUser.phone.replace(/\D/g, '')}`}
+                                                className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors mb-6 group"
+                                            >
+                                                <Phone className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
+                                                <span>{selectedUser.phone}</span>
+                                            </a>
+                                        )}
 
                                         {/* --- PAINEL DE AÇÕES DO PROFESSOR --- */}
                                         {(isPersonal || isAdmin) && (
@@ -1120,6 +1591,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                     </button>
                                                     <button onClick={() => setShowTeacherActionModal('DIET')} className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors">
                                                         <Utensils className="w-4 h-4" /> Prescrever Dieta
+                                                    </button>
+                                                    <button onClick={() => setShowResetPasswordModal(true)} className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium transition-colors">
+                                                        <Key className="w-4 h-4" /> Resetar Senha
+                                                    </button>
+                                                    <button onClick={() => setShowPlanChangeModal(true)} className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium transition-colors">
+                                                        <Sparkles className="w-4 h-4" /> Alterar Plano
                                                     </button>
                                                 </div>
                                             </div>
@@ -1149,6 +1626,67 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                         <span className="text-xs font-bold">{userDiet ? 'Ver Dieta' : 'Sem Dieta'}</span>
                                                     </button>
                                                 </div>
+                                            </div>
+                                        )}
+
+                                        {/* --- CHECK-INS DE TREINO (NOVO) --- */}
+                                        {(isPersonal || isAdmin) && (
+                                            <div className="mb-6 bg-slate-800/30 rounded-xl border border-slate-700/50 overflow-hidden">
+                                                <button
+                                                    onClick={() => setIsCheckInsExpanded(!isCheckInsExpanded)}
+                                                    className="w-full flex items-center justify-between p-4 hover:bg-slate-700/30 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <CheckCircle className="w-5 h-5 text-emerald-400" />
+                                                        <h4 className="text-sm font-bold text-white uppercase tracking-wider">Check-ins de Treino</h4>
+                                                        {checkIns.length > 0 && (
+                                                            <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 leading-tight">
+                                                                {checkIns.length}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {isCheckInsExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                                </button>
+
+                                                {isCheckInsExpanded && (
+                                                    <div className="p-4 pt-0 space-y-3 animate-in fade-in slide-in-from-top-2">
+                                                        {isLoadingCheckIns ? (
+                                                            <div className="flex items-center justify-center py-4">
+                                                                <Loader2 className="w-5 h-5 animate-spin text-emerald-500" />
+                                                            </div>
+                                                        ) : checkIns.length === 0 ? (
+                                                            <p className="text-xs text-slate-500 text-center py-4 italic">Nenhum check-in registrado.</p>
+                                                        ) : (
+                                                            <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                                                                {checkIns.map((checkIn) => (
+                                                                    <div key={checkIn.id} className="bg-slate-900/40 border border-slate-700/50 rounded-xl p-3 flex flex-col gap-2">
+                                                                        <div className="flex justify-between items-start">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                                                                                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <p className="text-[11px] font-bold text-white uppercase tracking-tight">Realizado em:</p>
+                                                                                    <p className="text-xs text-slate-400">{new Date(checkIn.date).toLocaleDateString('pt-BR')}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
+                                                                                {new Date(checkIn.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                                            </span>
+                                                                        </div>
+                                                                        {checkIn.comment && (
+                                                                            <div className="bg-slate-900/60 p-2.5 rounded-lg border-l-2 border-emerald-500/50">
+                                                                                <p className="text-xs text-slate-300 italic leading-relaxed">
+                                                                                    "{checkIn.comment}"
+                                                                                </p>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
@@ -1207,48 +1745,65 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     {Object.entries(groupedRecords).map(([exerciseKey, recordsVal]) => {
                                         const records = recordsVal as ExerciseRecord[];
                                         const friendlyName = allExercises.find(e => e.alias === exerciseKey || e.id === exerciseKey || e.name === exerciseKey)?.name || exerciseKey;
+                                        const isOpen = openHistoryGroups[exerciseKey] || false;
 
                                         return (
-                                            <div key={exerciseKey} className="mb-6 animate-in slide-in-from-bottom-2">
-                                                <h5 className="text-white font-bold text-md mb-3 border-b border-slate-700/50 pb-2 flex items-center gap-2 sticky top-0 bg-slate-900/90 p-2 rounded-lg backdrop-blur-sm z-10">
-                                                    <div className="p-1.5 bg-slate-800 rounded-lg">
-                                                        {getExerciseIcon(exerciseKey)}
+                                            <div key={exerciseKey} className="mb-4 bg-slate-800/20 rounded-xl overflow-hidden animate-in slide-in-from-bottom-2 border border-slate-700/30">
+                                                <button
+                                                    onClick={() => setOpenHistoryGroups(prev => ({ ...prev, [exerciseKey]: !prev[exerciseKey] }))}
+                                                    className={`w-full flex items-center justify-between p-3 transition-colors ${isOpen ? 'bg-slate-700/40 text-white' : 'hover:bg-slate-800/40 text-slate-300'}`}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`p-1.5 rounded-lg ${isOpen ? 'bg-blue-600/20 text-blue-400' : 'bg-slate-800 text-slate-500'}`}>
+                                                            {getExerciseIcon(exerciseKey)}
+                                                        </div>
+                                                        <span className="font-bold text-sm text-left">{friendlyName}</span>
+                                                        <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700 text-slate-400 font-normal">
+                                                            {records.length}
+                                                        </span>
                                                     </div>
-                                                    <span className="truncate">{friendlyName}</span>
-                                                    <span className="text-xs text-slate-500 font-normal ml-auto bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">{records.length} registros</span>
-                                                </h5>
+                                                    {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+                                                </button>
 
-                                                <div className="space-y-3 pl-2 border-l-2 border-slate-800 ml-3">
-                                                    {records.map(record => {
-                                                        const metric = getMetricDisplay(record);
-                                                        return (
-                                                            <div
-                                                                key={record.id}
-                                                                onClick={() => handleViewRecordDetails(record)}
-                                                                className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 transition-all cursor-pointer group relative overflow-hidden ml-2"
-                                                            >
-                                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <ChevronRight className="w-5 h-5 text-blue-400" />
-                                                                </div>
-                                                                <div className="flex justify-between items-start mb-2 pr-8">
-                                                                    <span className="text-xs text-slate-500">{new Date(record.timestamp).toLocaleDateString()} às {new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                                </div>
-                                                                <div className="flex items-center gap-4">
-                                                                    <div className={`text-2xl font-bold ${getScoreColor(record.result.score).split(' ')[0]}`}>{record.result.score}</div>
-                                                                    <div className="flex-1">
-                                                                        <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                                                            <div className={`h-full ${getScoreColor(record.result.score).includes('emerald') ? 'bg-emerald-500' : (record.result.score > 50 ? 'bg-yellow-500' : 'bg-red-500')}`} style={{ width: `${record.result.score}%` }} />
+                                                {isOpen && (
+                                                    <div className="p-3 space-y-3 border-t border-slate-700/30 bg-slate-900/20">
+                                                        {records.map(record => {
+                                                            const metric = getMetricDisplay(record);
+                                                            return (
+                                                                <div
+                                                                    key={record.id}
+                                                                    onClick={() => handleViewRecordDetails(record)}
+                                                                    className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 transition-all cursor-pointer group relative overflow-hidden flex flex-col gap-2"
+                                                                >
+                                                                    <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <ChevronRight className="w-4 h-4 text-blue-400" />
+                                                                    </div>
+
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-xs text-slate-500">{new Date(record.timestamp).toLocaleDateString()} <span className="text-slate-600">|</span> {new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-3">
+                                                                        {/* Score Badge */}
+                                                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg border border-white/5 ${getScoreColor(record.result.score).replace('text-', 'bg-').replace('500', '500/20')} ${getScoreColor(record.result.score)}`}>
+                                                                            {record.result.score}
+                                                                        </div>
+
+                                                                        <div className="flex-1">
+                                                                            <div className="flex justify-between items-end mb-1">
+                                                                                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{metric.label}</span>
+                                                                                <span className="text-sm font-bold text-white">{metric.value}</span>
+                                                                            </div>
+                                                                            <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                                                                <div className={`h-full ${getScoreColor(record.result.score).includes('emerald') ? 'bg-emerald-500' : (record.result.score > 50 ? 'bg-yellow-500' : 'bg-red-500')}`} style={{ width: `${record.result.score}%` }} />
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                    <div className="text-right pr-8 min-w-[80px]">
-                                                                        <span className="block text-white font-bold text-sm">{metric.value}</span>
-                                                                        <span className="text-[10px] text-slate-500 uppercase font-bold">{metric.label}</span>
-                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}

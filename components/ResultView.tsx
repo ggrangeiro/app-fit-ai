@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType, ExerciseRecord, SPECIAL_EXERCISES, User } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User as UserIcon, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download, Lightbulb } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User as UserIcon, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download, Lightbulb, UploadCloud, Image as ImageIcon } from 'lucide-react';
 import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { EvolutionModal } from './EvolutionModal';
 import { ToastType } from './Toast';
 import { apiService } from '../services/apiService';
+import { shareAsPdf } from '../utils/pdfUtils';
 
 interface ResultViewProps {
   result: AnalysisResult;
@@ -40,8 +41,8 @@ export const ResultView: React.FC<ResultViewProps> = ({
   onUpdateUser,
   onBuyCredits,
   isHistoricalView = false,
-  showToast = () => { },
-  triggerConfirm = () => { }
+  showToast = (msg: string, type: ToastType) => { },
+  triggerConfirm = (title: string, message: string, onConfirm: () => void, isDestructive?: boolean) => { }
 }) => {
   const [saved, setSaved] = useState(false);
 
@@ -71,7 +72,24 @@ export const ResultView: React.FC<ResultViewProps> = ({
     gender: 'masculino'
   });
 
+  // Novos estados para anexos (ResultView)
+  const [dietDocument, setDietDocument] = useState<File | null>(null);
+  const [dietPhoto, setDietPhoto] = useState<File | null>(null);
+  const [dietPhotoPreview, setDietPhotoPreview] = useState<string | null>(null);
+
+  const [workoutDocument, setWorkoutDocument] = useState<File | null>(null);
+  const [workoutPhoto, setWorkoutPhoto] = useState<File | null>(null);
+  const [workoutPhotoPreview, setWorkoutPhotoPreview] = useState<string | null>(null);
+
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  // Check-in State
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [checkInDate, setCheckInDate] = useState(new Date().toISOString().split('T')[0]);
+  const [checkInComment, setCheckInComment] = useState('');
+  const [checkInLoading, setCheckInLoading] = useState(false);
+  const [currentWorkoutId, setCurrentWorkoutId] = useState<number | null>(null);
 
   const isHighPerformance = result.score > 80;
   const isPostureAnalysis = exercise === SPECIAL_EXERCISES.POSTURE;
@@ -122,7 +140,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
     setDietLoading(true);
     try {
-      const planHtml = await generateDietPlan(dietFormData, result);
+      const planHtml = await generateDietPlan(dietFormData, dietDocument, dietPhoto);
 
       await apiService.createDiet(userId, planHtml, dietFormData.goal);
       if (onDietSaved) onDietSaved();
@@ -130,7 +148,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
       // --- DEBITAR CRÉDITO ---
       if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
         try {
-          const creditResponse = await apiService.consumeCredit(currentUser.id);
+          const creditResponse = await apiService.consumeCredit(currentUser.id, 'DIETA');
           if (creditResponse && typeof creditResponse.novoSaldo === 'number' && onUpdateUser) {
             onUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
           }
@@ -141,6 +159,12 @@ export const ResultView: React.FC<ResultViewProps> = ({
           }
         }
       }
+
+      // Limpa anexos
+      if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview);
+      setDietPhotoPreview(null);
+      setDietPhoto(null);
+      setDietDocument(null);
 
       setDietPlanHtml(planHtml);
       setShowDietForm(false);
@@ -169,15 +193,19 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
     setWorkoutLoading(true);
     try {
-      const planHtml = await generateWorkoutPlan(workoutFormData, result);
+      const planHtml = await generateWorkoutPlan(workoutFormData, workoutDocument, workoutPhoto);
 
-      await apiService.createTraining(userId, planHtml, workoutFormData.goal);
+      const response = await apiService.createTraining(userId, planHtml, workoutFormData.goal);
+      if (response && response.id) {
+        setCurrentWorkoutId(response.id);
+      }
+
       if (onWorkoutSaved) onWorkoutSaved();
 
       // --- DEBITAR CRÉDITO ---
       if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
         try {
-          const creditResponse = await apiService.consumeCredit(currentUser.id);
+          const creditResponse = await apiService.consumeCredit(currentUser.id, 'TREINO');
           if (creditResponse && typeof creditResponse.novoSaldo === 'number' && onUpdateUser) {
             onUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
           }
@@ -188,6 +216,12 @@ export const ResultView: React.FC<ResultViewProps> = ({
           }
         }
       }
+
+      // Limpa anexos
+      if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
+      setWorkoutPhotoPreview(null);
+      setWorkoutPhoto(null);
+      setWorkoutDocument(null);
 
       setWorkoutPlanHtml(planHtml);
       setShowWorkoutForm(false);
@@ -200,8 +234,35 @@ export const ResultView: React.FC<ResultViewProps> = ({
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleCheckIn = async () => {
+    if (!currentWorkoutId && !isHistoricalView) {
+      showToast('Aguarde o salvamento do treino para fazer check-in.', 'error');
+      return;
+    }
+
+    setCheckInLoading(true);
+    try {
+      await apiService.createCheckIn(userId, currentWorkoutId || 0, checkInDate, checkInComment);
+      showToast('Check-in realizado com sucesso! 💪', 'success');
+      setShowCheckInModal(false);
+      setCheckInComment('');
+    } catch (error) {
+      showToast('Erro ao realizar check-in. Tente novamente.', 'error');
+    } finally {
+      setCheckInLoading(false);
+    }
+  };
+
+  const handleSharePdf = async (elementId: string, title: string) => {
+    setPdfLoading(true);
+    try {
+      await shareAsPdf(elementId, title);
+      showToast('PDF gerado e pronto para compartilhar!', 'success');
+    } catch (error) {
+      showToast('Erro ao gerar PDF. Tente novamente.', 'error');
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const handleShare = async () => {
@@ -321,9 +382,20 @@ ${strengthsText}${improvementsText}
         #generated-plan-container ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         #generated-plan-content { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
         @media print {
+          body { background: white !important; margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden; }
           #generated-plan-container, #generated-plan-container * { visibility: visible; }
-          #generated-plan-container { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: white; box-shadow: none; }
+          #generated-plan-container { 
+            position: relative !important; 
+            display: block !important;
+            width: 100% !important; 
+            margin: 0 !important; 
+            padding: 20px !important; 
+            background: white !important; 
+            box-shadow: none !important;
+            overflow: visible !important;
+            height: auto !important;
+          }
           .no-print { display: none !important; }
         }
       `}</style>
@@ -332,9 +404,24 @@ ${strengthsText}${improvementsText}
         <button onClick={onClose} className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
           <ArrowLeft className="w-5 h-5" /> Voltar aos Resultados
         </button>
-        <button onClick={handlePrint} className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg transition-all">
-          <Printer className="w-5 h-5" /> Imprimir Plano
+        <button
+          onClick={() => handleSharePdf('generated-plan-container', title)}
+          disabled={pdfLoading}
+          className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg transition-all disabled:opacity-50"
+        >
+          {pdfLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
+          {pdfLoading ? 'Gerando PDF...' : 'Compartilhar PDF'}
         </button>
+
+        {!isDiet && (
+          <button
+            onClick={() => setShowCheckInModal(true)}
+            className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold shadow-lg transition-all"
+          >
+            <CheckCircle className="w-5 h-5" />
+            Fazer Check-in
+          </button>
+        )}
       </div>
 
       <div className="bg-slate-50 rounded-3xl p-6 md:p-10 shadow-2xl text-slate-900 min-h-[80vh]" id="generated-plan-container">
@@ -389,9 +476,9 @@ ${strengthsText}${improvementsText}
     <div className="w-full max-w-6xl mx-auto animate-fade-in pb-10">
       <style>{`
         @media print {
-          body { background: white !important; color: black !important; }
-          .glass-panel { background: white !important; border: 1px solid #ddd !important; box-shadow: none !important; color: black !important; }
-          .no-print, button { display: none !important; }
+          body { background: white !important; color: black !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; height: auto !important; }
+          .glass-panel { background: white !important; border: 1px solid #ddd !important; box-shadow: none !important; color: black !important; overflow: visible !important; height: auto !important; }
+          .no-print, button, .no-print * { display: none !important; }
           .text-white { color: black !important; }
           .text-slate-200, .text-slate-300, .text-slate-400 { color: #333 !important; }
           .bg-slate-900, .bg-slate-800, .bg-slate-700 { background: white !important; border: 1px solid #eee !important; }
@@ -431,55 +518,153 @@ ${strengthsText}${improvementsText}
             </div>
 
             <form onSubmit={handleGenerateDiet} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Peso (kg)</label>
-                  <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={dietFormData.weight} onChange={e => setDietFormData({ ...dietFormData, weight: e.target.value })} />
+              <fieldset disabled={dietLoading} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Peso (kg)</label>
+                    <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      value={dietFormData.weight} onChange={e => setDietFormData({ ...dietFormData, weight: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
+                    <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      value={dietFormData.height} onChange={e => setDietFormData({ ...dietFormData, height: e.target.value })} />
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
-                  <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={dietFormData.height} onChange={e => setDietFormData({ ...dietFormData, height: e.target.value })} />
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Sexo Biológico</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    value={dietFormData.gender} onChange={e => setDietFormData({ ...dietFormData, gender: e.target.value })}>
+                    <option value="masculino">Masculino</option>
+                    <option value="feminino">Feminino</option>
+                  </select>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Sexo Biológico</label>
-                <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                  value={dietFormData.gender} onChange={e => setDietFormData({ ...dietFormData, gender: e.target.value })}>
-                  <option value="masculino">Masculino</option>
-                  <option value="feminino">Feminino</option>
-                </select>
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    value={dietFormData.goal} onChange={e => setDietFormData({ ...dietFormData, goal: e.target.value })}>
+                    <option value="emagrecer">Emagrecer (Perder Gordura)</option>
+                    <option value="ganhar_massa">Hipertrofia (Ganhar Massa)</option>
+                    <option value="manutencao">Manutenção</option>
+                    <option value="definicao">Definição Muscular</option>
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
-                <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
-                  value={dietFormData.goal} onChange={e => setDietFormData({ ...dietFormData, goal: e.target.value })}>
-                  <option value="emagrecer">Emagrecer (Perder Gordura)</option>
-                  <option value="ganhar_massa">Hipertrofia (Ganhar Massa)</option>
-                  <option value="manutencao">Manutenção</option>
-                  <option value="definicao">Definição Muscular</option>
-                </select>
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Observações / Restrições</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Ex: Sou vegano, tenho alergia a amendoim, faço jejum intermitente..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none resize-none placeholder-slate-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    value={dietFormData.observations}
+                    onChange={e => setDietFormData({ ...dietFormData, observations: e.target.value })}
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Observações / Restrições</label>
-                <textarea
-                  rows={3}
-                  placeholder="Ex: Sou vegano, tenho alergia a amendoim, faço jejum intermitente..."
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none resize-none placeholder-slate-500 text-sm"
-                  value={dietFormData.observations}
-                  onChange={e => setDietFormData({ ...dietFormData, observations: e.target.value })}
-                />
-              </div>
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Anexos Opcionais</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="relative">
+                      <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-all cursor-pointer group">
+                        <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 mb-1" />
+                        <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate max-w-full">
+                          {dietDocument ? dietDocument.name : 'Exame/PDF'}
+                        </span>
+                        <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setDietDocument(e.target.files?.[0] || null)} />
+                      </label>
+                      {dietDocument && (
+                        <button type="button" onClick={() => setDietDocument(null)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
 
-              <button type="submit" disabled={dietLoading} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                    <div className="relative">
+                      <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-all cursor-pointer group overflow-hidden">
+                        {dietPhotoPreview ? (
+                          <img src={dietPhotoPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                        ) : (
+                          <ImageIcon className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 mb-1" />
+                        )}
+                        <span className="text-[10px] text-slate-400 group-hover:text-slate-200 relative z-10">
+                          {dietPhoto ? 'Trocar Foto' : 'Foto Atual'}
+                        </span>
+                        <input type="file" accept="image/*" className="hidden" onChange={e => {
+                          const file = e.target.files?.[0] || null;
+                          setDietPhoto(file);
+                          if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview);
+                          if (file) setDietPhotoPreview(URL.createObjectURL(file));
+                          else setDietPhotoPreview(null);
+                        }} />
+                      </label>
+                      {dietPhoto && (
+                        <button type="button" onClick={() => { if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview); setDietPhoto(null); setDietPhotoPreview(null); }} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors z-20">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+              </fieldset>
+              <button type="submit" disabled={dietLoading} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                 {dietLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
                 {dietLoading ? "Gerando..." : "Gerar Dieta (1 Crédito)"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Check-in */}
+      {showCheckInModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl">
+            <button onClick={() => setShowCheckInModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="flex flex-col items-center mb-6">
+              <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-full mb-3">
+                <CheckCircle className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-bold text-white">Check-in de Treino</h3>
+              <p className="text-slate-400 text-center text-sm">Registre que você concluiu este treino hoje!</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Data do Treino</label>
+                <input
+                  type="date"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                  value={checkInDate}
+                  onChange={e => setCheckInDate(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Comentário (Opcional)</label>
+                <textarea
+                  rows={3}
+                  placeholder="Como foi o treino? (ex: 'Senti um pouco de cansaço na última série')"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none resize-none placeholder-slate-500 text-sm"
+                  value={checkInComment}
+                  onChange={e => setCheckInComment(e.target.value)}
+                />
+              </div>
+
+              <button
+                onClick={handleCheckIn}
+                disabled={checkInLoading}
+                className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                {checkInLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ThumbsUp className="w-5 h-5" />}
+                {checkInLoading ? "Enviando..." : "Confirmar Check-in"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -501,74 +686,121 @@ ${strengthsText}${improvementsText}
             </div>
 
             <form onSubmit={handleGenerateWorkout} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Peso (kg)</label>
-                  <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={workoutFormData.weight} onChange={e => setWorkoutFormData({ ...workoutFormData, weight: e.target.value })} />
+              <fieldset disabled={workoutLoading} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Peso (kg)</label>
+                    <input type="number" required step="0.1" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      value={workoutFormData.weight} onChange={e => setWorkoutFormData({ ...workoutFormData, weight: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
+                    <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      value={workoutFormData.height} onChange={e => setWorkoutFormData({ ...workoutFormData, height: e.target.value })} />
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Altura (cm)</label>
-                  <input type="number" required className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={workoutFormData.height} onChange={e => setWorkoutFormData({ ...workoutFormData, height: e.target.value })} />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Sexo Biológico</label>
-                <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={workoutFormData.gender} onChange={e => setWorkoutFormData({ ...workoutFormData, gender: e.target.value })}>
-                  <option value="masculino">Masculino</option>
-                  <option value="feminino">Feminino</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
-                <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={workoutFormData.goal} onChange={e => setWorkoutFormData({ ...workoutFormData, goal: e.target.value })}>
-                  <option value="hipertrofia">Hipertrofia</option>
-                  <option value="emagrecimento">Emagrecimento</option>
-                  <option value="definicao">Definição</option>
-                </select>
-              </div>
-
-              {/* NOVA GRID: NÍVEL E FREQUÊNCIA */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400 ml-1">Nível</label>
-                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={workoutFormData.level} onChange={e => setWorkoutFormData({ ...workoutFormData, level: e.target.value })}>
-                    <option value="iniciante">Iniciante</option>
-                    <option value="intermediario">Intermediário</option>
-                    <option value="avancado">Avançado</option>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Sexo Biológico</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    value={workoutFormData.gender} onChange={e => setWorkoutFormData({ ...workoutFormData, gender: e.target.value })}>
+                    <option value="masculino">Masculino</option>
+                    <option value="feminino">Feminino</option>
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400 ml-1">Frequência</label>
-                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white" value={workoutFormData.frequency} onChange={e => setWorkoutFormData({ ...workoutFormData, frequency: e.target.value })}>
-                    <option value="1">1x na Semana</option>
-                    <option value="2">2x na Semana</option>
-                    <option value="3">3x na Semana</option>
-                    <option value="4">4x na Semana</option>
-                    <option value="5">5x na Semana</option>
-                    <option value="6">6x na Semana</option>
-                    <option value="7">Todos os dias</option>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    value={workoutFormData.goal} onChange={e => setWorkoutFormData({ ...workoutFormData, goal: e.target.value })}>
+                    <option value="hipertrofia">Hipertrofia</option>
+                    <option value="emagrecimento">Emagrecimento</option>
+                    <option value="definicao">Definição</option>
                   </select>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Observações / Lesões</label>
-                <textarea
-                  rows={3}
-                  placeholder="Ex: Tenho dor no joelho, quero focar em glúteos..."
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder-slate-500 text-sm"
-                  value={workoutFormData.observations}
-                  onChange={e => setWorkoutFormData({ ...workoutFormData, observations: e.target.value })}
-                />
-              </div>
+                {/* NOVA GRID: NÍVEL E FREQUÊNCIA */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 ml-1">Nível</label>
+                    <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white disabled:opacity-50 disabled:cursor-not-allowed" value={workoutFormData.level} onChange={e => setWorkoutFormData({ ...workoutFormData, level: e.target.value })}>
+                      <option value="iniciante">Iniciante</option>
+                      <option value="intermediario">Intermediário</option>
+                      <option value="avancado">Avançado</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400 ml-1">Frequência</label>
+                    <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white disabled:opacity-50 disabled:cursor-not-allowed" value={workoutFormData.frequency} onChange={e => setWorkoutFormData({ ...workoutFormData, frequency: e.target.value })}>
+                      <option value="1">1x na Semana</option>
+                      <option value="2">2x na Semana</option>
+                      <option value="3">3x na Semana</option>
+                      <option value="4">4x na Semana</option>
+                      <option value="5">5x na Semana</option>
+                      <option value="6">6x na Semana</option>
+                      <option value="7">Todos os dias</option>
+                    </select>
+                  </div>
+                </div>
 
-              <button type="submit" disabled={workoutLoading} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Observações / Lesões</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Ex: Tenho dor no joelho, quero focar em glúteos..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder-slate-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    value={workoutFormData.observations}
+                    onChange={e => setWorkoutFormData({ ...workoutFormData, observations: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Anexos Opcionais</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="relative">
+                      <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 transition-all cursor-pointer group">
+                        <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-blue-400 mb-1" />
+                        <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate max-w-full">
+                          {workoutDocument ? workoutDocument.name : 'Avaliação/PDF'}
+                        </span>
+                        <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setWorkoutDocument(e.target.files?.[0] || null)} />
+                      </label>
+                      {workoutDocument && (
+                        <button type="button" onClick={() => setWorkoutDocument(null)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="relative">
+                      <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 transition-all cursor-pointer group overflow-hidden">
+                        {workoutPhotoPreview ? (
+                          <img src={workoutPhotoPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                        ) : (
+                          <ImageIcon className="w-5 h-5 text-slate-500 group-hover:text-blue-400 mb-1" />
+                        )}
+                        <span className="text-[10px] text-slate-400 group-hover:text-slate-200 relative z-10">
+                          {workoutPhoto ? 'Trocar Foto' : 'Foto Atual'}
+                        </span>
+                        <input type="file" accept="image/*" className="hidden" onChange={e => {
+                          const file = e.target.files?.[0] || null;
+                          setWorkoutPhoto(file);
+                          if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
+                          if (file) setWorkoutPhotoPreview(URL.createObjectURL(file));
+                          else setWorkoutPhotoPreview(null);
+                        }} />
+                      </label>
+                      {workoutPhoto && (
+                        <button type="button" onClick={() => { if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview); setWorkoutPhoto(null); setWorkoutPhotoPreview(null); }} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors z-20">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+
+              <button type="submit" disabled={workoutLoading} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                 {workoutLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
                 {workoutLoading ? "Gerando..." : "Gerar Treino (1 Crédito)"}
               </button>
@@ -704,18 +936,18 @@ ${strengthsText}${improvementsText}
               </>
             )}
 
-            <button onClick={handleShare} className="col-span-2 p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl flex items-center justify-center gap-2 text-slate-300 hover:text-white transition-all">
-              <Share2 className="w-4 h-4" /> Compartilhar Resultado
-            </button>
-
-            <button onClick={handlePrint} className="col-span-2 p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl flex items-center justify-center gap-2 text-slate-300 hover:text-white transition-all">
-              <Printer className="w-4 h-4" /> Imprimir Relatório
+            <button
+              onClick={handleShare}
+              className="col-span-2 p-4 bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-2 text-white shadow-lg shadow-indigo-900/20 transition-all font-bold"
+            >
+              <Share2 className="w-5 h-5" />
+              Compartilhar Resumo
             </button>
           </div>
         </div>
 
         {/* Middle & Right Column: Detailed Feedback */}
-        <div className="lg:col-span-2 space-y-6">
+        <div id="result-content-area" className="lg:col-span-2 space-y-6">
           {/* ... Restante do código inalterado ... */}
 
           {/* Main Correction Card (Dica de Mestre) */}

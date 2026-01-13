@@ -1,19 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, WorkoutPlan, DietPlan } from './types';
+import { App as CapApp } from '@capacitor/app';
 import { analyzeVideo, generateWorkoutPlan, generateDietPlan } from './services/geminiService';
 import { compressVideo } from './utils/videoUtils';
 import { MockDataService } from './services/mockDataService';
 import { apiService } from './services/apiService'; // NEW API SERVICE
+import { shareAsPdf } from './utils/pdfUtils';
 import ExerciseCard from './components/ExerciseCard';
 import { ResultView } from './components/ResultView';
 import Login from './components/Login';
+import ResetPassword from './components/ResetPassword';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check, Share2, CheckCircle, ThumbsUp } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import LoadingScreen from './components/LoadingScreen';
 import Toast, { ToastType } from './components/Toast';
 import ConfirmModal from './components/ConfirmModal';
 import BuyCreditsModal from './components/BuyCreditsModal';
+import PlansModal from './components/PlansModal';
 
 // --- ICON MAPPING SYSTEM ---
 const EXERCISE_ICONS: Record<string, React.ReactNode> = {
@@ -114,7 +118,33 @@ const App: React.FC = () => {
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showBuyCreditsModal, setShowBuyCreditsModal] = useState(false);
+  const [showPlansModal, setShowPlansModal] = useState(false);
   const [isOffline, setIsOffline] = useState(!window.navigator.onLine);
+
+  // Password Reset Token Detection
+  const [resetToken, setResetToken] = useState<string | null>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('token');
+  });
+
+  // Deep Link Listener for real-time URL changes
+  useEffect(() => {
+    const setupDeepLink = async () => {
+      CapApp.addListener('appUrlOpen', (event: any) => {
+        // Ex: http://localhost:5173/?token=xxx
+        const url = new URL(event.url);
+        const token = url.searchParams.get('token');
+        if (token) {
+          setResetToken(token);
+        }
+      });
+    };
+    setupDeepLink();
+
+    return () => {
+      CapApp.removeAllListeners();
+    };
+  }, []);
 
   // Accordion State - INICIA FECHADO (false) PARA MINIMIZAR POLUIÇÃO
   const [showExerciseList, setShowExerciseList] = useState(false);
@@ -137,6 +167,12 @@ const App: React.FC = () => {
   const [generatingDiet, setGeneratingDiet] = useState(false);
   const [viewingDietHtml, setViewingDietHtml] = useState<string | null>(null);
 
+  // Check-in State
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [checkInDate, setCheckInDate] = useState(new Date().toISOString().split('T')[0]);
+  const [checkInComment, setCheckInComment] = useState('');
+  const [checkInLoading, setCheckInLoading] = useState(false);
+
   // Forms
   const [workoutFormData, setWorkoutFormData] = useState({
     weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino'
@@ -144,6 +180,18 @@ const App: React.FC = () => {
   const [dietFormData, setDietFormData] = useState({
     weight: '', height: '', goal: 'emagrecer', gender: 'masculino', observations: ''
   });
+
+  // Workout File States
+  const [workoutDocument, setWorkoutDocument] = useState<File | null>(null);
+  const [workoutPhoto, setWorkoutPhoto] = useState<File | null>(null);
+  const [workoutPhotoPreview, setWorkoutPhotoPreview] = useState<string | null>(null);
+
+  // Diet File States
+  const [dietDocument, setDietDocument] = useState<File | null>(null);
+  const [dietPhoto, setDietPhoto] = useState<File | null>(null);
+  const [dietPhotoPreview, setDietPhotoPreview] = useState<string | null>(null);
+
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
     message: '', type: 'info', isVisible: false
@@ -160,6 +208,14 @@ const App: React.FC = () => {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // User Menu State
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // Change Password Modal State
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [changePasswordForm, setChangePasswordForm] = useState({ senhaAtual: '', novaSenha: '', confirmarSenha: '' });
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
 
   // --- AUTO SCROLL EFFECTS ---
   // Rola para o topo sempre que o passo muda (Ex: Seleção -> Upload)
@@ -256,6 +312,40 @@ const App: React.FC = () => {
       },
       isDestructive
     });
+  };
+
+  const canCreateWorkout = (user: User | null) => {
+    if (!user) return false;
+    if (user.role === 'admin' || user.role === 'personal') return true;
+
+    // Planos Ilimitados
+    if (user.plan?.type === 'PRO' || user.plan?.type === 'STUDIO') return true;
+
+    // Plano Limitado (Starter)
+    if (user.plan?.type === 'STARTER') {
+      const used = user.usage?.generations || 0;
+      const limit = user.usage?.generationsLimit || 10;
+
+      if (used >= limit) {
+        showToast("Você atingiu o limite do plano Starter. Faça upgrade!", 'info');
+        setShowPlansModal(true);
+        return false;
+      }
+      return true;
+    }
+
+    // Plano Free ou sem plano (pode usar créditos se implementado, mas seguindo a spec:)
+    showToast("Assine um plano para gerar treinos e dietas!", 'info');
+    setShowPlansModal(true);
+    return false;
+  };
+
+  const handleSubscribe = async (planId: string, planName: string, price: string) => {
+    // MVP: Abrir WhatsApp
+    const message = `Olá! Gostaria de assinar o plano ${planName} por R$ ${price} no App FitAI.`;
+    const whatsappUrl = `https://wa.me/5511974927080?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+    setShowPlansModal(false);
   };
 
   const handleUpdateUser = (updatedUser: User) => {
@@ -364,6 +454,16 @@ const App: React.FC = () => {
   useEffect(() => {
     const initData = async () => {
       if (currentUser) {
+        // --- ENRICHMENT LOGIC: Fallback se 'plan' estiver ausente ---
+        if (!currentUser.plan) {
+          try {
+            const fullUser = await apiService.getMe(currentUser.id);
+            handleUpdateUser({ ...currentUser, ...fullUser });
+          } catch (e) {
+            // Silently fail, keep current state
+          }
+        }
+
         await loadExercisesList(currentUser);
         await fetchUserWorkouts(currentUser.id);
         await fetchUserDiets(currentUser.id);
@@ -410,6 +510,37 @@ const App: React.FC = () => {
     setStep(AppStep.LOGIN);
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    if (changePasswordForm.novaSenha !== changePasswordForm.confirmarSenha) {
+      showToast('As senhas não coincidem.', 'error');
+      return;
+    }
+
+    if (changePasswordForm.novaSenha.length < 6) {
+      showToast('A nova senha deve ter pelo menos 6 caracteres.', 'error');
+      return;
+    }
+
+    setChangePasswordLoading(true);
+    try {
+      await apiService.changePassword(
+        currentUser.id,
+        changePasswordForm.senhaAtual,
+        changePasswordForm.novaSenha
+      );
+      showToast('Senha alterada com sucesso!', 'success');
+      setShowChangePasswordModal(false);
+      setChangePasswordForm({ senhaAtual: '', novaSenha: '', confirmarSenha: '' });
+    } catch (err: any) {
+      showToast(err.message || 'Erro ao alterar senha.', 'error');
+    } finally {
+      setChangePasswordLoading(false);
+    }
+  };
+
   const resetAnalysis = () => {
     setSelectedExercise(null);
     setMediaFile(null);
@@ -437,7 +568,7 @@ const App: React.FC = () => {
     if (files.length === 0) return;
 
     // Validate Types - simplified for single file
-    const file = files[0];
+    const file = files[0] as File;
     const isVideo = file.type.startsWith('video/');
     const isImage = file.type.startsWith('image/');
 
@@ -592,7 +723,13 @@ const App: React.FC = () => {
       // --- CONSUMIR CRÉDITO (SE FOR ALUNO E SUCESSO) ---
       if (currentUser.role === 'user') {
         try {
-          const creditResponse = await apiService.consumeCredit(currentUser.id);
+          // Determinar Nome Amigável
+          let analysisFriendlyName = backendId;
+          if (backendId === SPECIAL_EXERCISES.FREE_MODE) analysisFriendlyName = "Análise Livre";
+          else if (backendId === SPECIAL_EXERCISES.POSTURE) analysisFriendlyName = "Avaliação Postural";
+          else if (backendId === SPECIAL_EXERCISES.BODY_COMPOSITION) analysisFriendlyName = "Composição Corporal";
+
+          const creditResponse = await apiService.consumeCredit(currentUser.id, 'ANALISE', analysisFriendlyName);
           if (creditResponse && typeof creditResponse.novoSaldo === 'number') {
             handleUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
           }
@@ -649,11 +786,17 @@ const App: React.FC = () => {
 
     setGeneratingWorkout(true);
     try {
-      const planHtml = await generateWorkoutPlan(workoutFormData);
+      const planHtml = await generateWorkoutPlan(workoutFormData, workoutDocument, workoutPhoto);
       // Usa apiService para criar e refresh, sem fallbacks quebrados
       await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal);
       await fetchUserWorkouts(currentUser.id);
       showToast("Treino gerado com sucesso!", 'success');
+
+      // Limpa anexos após sucesso
+      if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
+      setWorkoutPhotoPreview(null);
+      setWorkoutPhoto(null);
+      setWorkoutDocument(null);
 
       setShowGenerateWorkoutForm(false);
       setViewingWorkoutHtml(planHtml);
@@ -672,12 +815,18 @@ const App: React.FC = () => {
 
     setGeneratingDiet(true);
     try {
-      const planHtml = await generateDietPlan(dietFormData);
+      const planHtml = await generateDietPlan(dietFormData, dietDocument, dietPhoto);
 
       // Usa apiService para criar e refresh
       await apiService.createDiet(currentUser.id, planHtml, dietFormData.goal);
       await fetchUserDiets(currentUser.id);
       showToast("Dieta gerada com sucesso!", 'success');
+
+      // Limpa anexos após sucesso
+      if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview);
+      setDietPhotoPreview(null);
+      setDietPhoto(null);
+      setDietDocument(null);
 
       setShowGenerateDietForm(false);
       setViewingDietHtml(planHtml);
@@ -687,6 +836,46 @@ const App: React.FC = () => {
       showToast("Erro ao gerar dieta: " + err.message, 'error');
     } finally {
       setGeneratingDiet(false);
+    }
+  };
+
+  const handleCheckIn = async () => {
+    if (!currentUser) return;
+
+    // Pega o ID do treino atual (assumindo que é o primeiro da lista salva, já que o modal mostra ele)
+    const currentWorkoutId = savedWorkouts[0]?.id;
+    if (!currentWorkoutId) {
+      showToast('Nenhum treino encontrado para check-in.', 'error');
+      return;
+    }
+
+    if (!checkInDate) {
+      showToast('Selecione uma data para o check-in.', 'error');
+      return;
+    }
+
+    setCheckInLoading(true);
+    try {
+      await apiService.createCheckIn(currentUser.id, currentWorkoutId, checkInDate, checkInComment);
+      showToast('Check-in realizado com sucesso! 💪', 'success');
+      setShowCheckInModal(false);
+      setCheckInComment('');
+    } catch (error) {
+      showToast('Erro ao realizar check-in. Tente novamente.', 'error');
+    } finally {
+      setCheckInLoading(false);
+    }
+  };
+
+  const handleSharePdf = async (elementId: string, title: string) => {
+    setPdfLoading(true);
+    try {
+      await shareAsPdf(elementId, title);
+      showToast('PDF gerado com sucesso!', 'success');
+    } catch (error) {
+      showToast('Erro ao gerar PDF.', 'error');
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -739,6 +928,23 @@ const App: React.FC = () => {
     setStep(AppStep.SELECT_EXERCISE);
   };
 
+  // Show ResetPassword if token is present
+  if (resetToken) {
+    return (
+      <>
+        <ResetPassword
+          token={resetToken}
+          onComplete={() => {
+            setResetToken(null);
+            // Clear token from URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }}
+        />
+        <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} onClose={closeToast} />
+      </>
+    );
+  }
+
   if (step === AppStep.LOGIN) return (
     <>
       <Login onLogin={handleLogin} showToast={showToast} />
@@ -754,11 +960,23 @@ const App: React.FC = () => {
             onClick={() => { setShowWorkoutModal(false); setViewingWorkoutHtml(null); }}
             className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" /> Voltar
+            <ArrowLeft className="w-5 h-5" /> <span className="hidden sm:inline">Voltar</span>
           </button>
           <div className="flex gap-3">
-            <button onClick={() => window.print()} className="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white">
-              <Printer className="w-5 h-5" />
+            <button
+              onClick={() => handleSharePdf('workout-view-content', 'Meu Treino FitAI')}
+              disabled={pdfLoading}
+              className="px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white disabled:opacity-50 flex items-center gap-2"
+            >
+              {pdfLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
+              <span className="hidden sm:inline">{pdfLoading ? 'Gerando...' : 'Compartilhar'}</span>
+            </button>
+            <button
+              onClick={() => setShowCheckInModal(true)}
+              className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white transition-colors"
+              title="Fazer Check-in"
+            >
+              <CheckCircle className="w-5 h-5" />
             </button>
             <button onClick={confirmDeleteWorkout} className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white">
               <Trash2 className="w-5 h-5" />
@@ -769,13 +987,132 @@ const App: React.FC = () => {
           <style>{`
                  #workout-view-content { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
                  @media print {
+                   body { background: white !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; height: auto !important; }
                    body * { visibility: hidden; }
                    #workout-view-content, #workout-view-content * { visibility: visible; }
-                   #workout-view-content { position: absolute; left: 0; top: 0; width: 100%; }
+                   #workout-view-content { position: relative !important; display: block !important; width: 100% !important; margin: 0 !important; padding: 20px !important; }
+                   .no-print { display: none !important; }
                  }
              `}</style>
           <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: viewingWorkoutHtml || (savedWorkouts[0]?.content || '') }} />
         </div>
+      </div>
+    </div>
+  );
+
+  const renderCheckInModal = () => (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+      <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl">
+        <button onClick={() => setShowCheckInModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+          <X className="w-6 h-6" />
+        </button>
+
+        <div className="flex flex-col items-center mb-6">
+          <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-full mb-3">
+            <CheckCircle className="w-8 h-8" />
+          </div>
+          <h3 className="text-2xl font-bold text-white">Check-in de Treino</h3>
+          <p className="text-slate-400 text-center text-sm">Registre que você concluiu este treino hoje!</p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Data do Treino</label>
+            <input
+              type="date"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+              value={checkInDate}
+              onChange={e => setCheckInDate(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Comentário (Opcional)</label>
+            <textarea
+              rows={3}
+              placeholder="Como foi o treino? (ex: 'Senti um pouco de cansaço na última série')"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none resize-none placeholder-slate-500 text-sm"
+              value={checkInComment}
+              onChange={e => setCheckInComment(e.target.value)}
+            />
+          </div>
+
+          <button
+            onClick={handleCheckIn}
+            disabled={checkInLoading}
+            className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+          >
+            {checkInLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ThumbsUp className="w-5 h-5" />}
+            {checkInLoading ? "Enviando..." : "Confirmar Check-in"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderChangePasswordModal = () => (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+      <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl">
+        <button onClick={() => { setShowChangePasswordModal(false); setChangePasswordForm({ senhaAtual: '', novaSenha: '', confirmarSenha: '' }); }} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+          <X className="w-6 h-6" />
+        </button>
+
+        <div className="flex flex-col items-center mb-6">
+          <div className="p-3 bg-blue-500/20 text-blue-400 rounded-full mb-3">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h3 className="text-2xl font-bold text-white">Alterar Senha</h3>
+          <p className="text-slate-400 text-center text-sm">Atualize sua senha de acesso</p>
+        </div>
+
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Senha Atual</label>
+            <input
+              type="password"
+              placeholder="Digite sua senha atual"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              value={changePasswordForm.senhaAtual}
+              onChange={e => setChangePasswordForm({ ...changePasswordForm, senhaAtual: e.target.value })}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Nova Senha</label>
+            <input
+              type="password"
+              placeholder="Mínimo 6 caracteres"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              value={changePasswordForm.novaSenha}
+              onChange={e => setChangePasswordForm({ ...changePasswordForm, novaSenha: e.target.value })}
+              required
+              minLength={6}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Confirmar Nova Senha</label>
+            <input
+              type="password"
+              placeholder="Repita a nova senha"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              value={changePasswordForm.confirmarSenha}
+              onChange={e => setChangePasswordForm({ ...changePasswordForm, confirmarSenha: e.target.value })}
+              required
+              minLength={6}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={changePasswordLoading}
+            className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+          >
+            {changePasswordLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
+            {changePasswordLoading ? "Salvando..." : "Alterar Senha"}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -788,11 +1125,16 @@ const App: React.FC = () => {
             onClick={() => { setShowDietModal(false); setViewingDietHtml(null); }}
             className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" /> Voltar
+            <ArrowLeft className="w-5 h-5" /> <span className="hidden sm:inline">Voltar</span>
           </button>
           <div className="flex gap-3">
-            <button onClick={() => window.print()} className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white">
-              <Printer className="w-5 h-5" />
+            <button
+              onClick={() => handleSharePdf('diet-view-content', 'Minha Dieta FitAI')}
+              disabled={pdfLoading}
+              className="px-3 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white disabled:opacity-50 flex items-center gap-2"
+            >
+              {pdfLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
+              <span className="hidden sm:inline">{pdfLoading ? 'Gerando...' : 'Compartilhar'}</span>
             </button>
             <button onClick={confirmDeleteDiet} className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white">
               <Trash2 className="w-5 h-5" />
@@ -803,9 +1145,11 @@ const App: React.FC = () => {
           <style>{`
                  #diet-view-content { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
                  @media print {
+                   body { background: white !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; height: auto !important; }
                    body * { visibility: hidden; }
                    #diet-view-content, #diet-view-content * { visibility: visible; }
-                   #diet-view-content { position: absolute; left: 0; top: 0; width: 100%; }
+                   #diet-view-content { position: relative !important; display: block !important; width: 100% !important; margin: 0 !important; padding: 20px !important; }
+                   .no-print { display: none !important; }
                  }
              `}</style>
           <div id="diet-view-content" dangerouslySetInnerHTML={{ __html: viewingDietHtml || (savedDiets[0]?.content || '') }} />
@@ -853,6 +1197,38 @@ const App: React.FC = () => {
             </select>
           </div>
           <textarea placeholder="Observações (lesões, foco...)" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={workoutFormData.observations} onChange={e => setWorkoutFormData({ ...workoutFormData, observations: e.target.value })} />
+
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Anexos Opcionais</p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 transition-all cursor-pointer group">
+                <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-blue-400 mb-1" />
+                <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate max-w-full">
+                  {workoutDocument ? workoutDocument.name : 'Exame/PDF'}
+                </span>
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setWorkoutDocument(e.target.files?.[0] || null)} />
+              </label>
+
+              <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 transition-all cursor-pointer group relative overflow-hidden">
+                {workoutPhotoPreview ? (
+                  <img src={workoutPhotoPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                ) : (
+                  <ImageIcon className="w-5 h-5 text-slate-500 group-hover:text-blue-400 mb-1" />
+                )}
+                <span className="text-[10px] text-slate-400 group-hover:text-slate-200 relative z-10">
+                  {workoutPhoto ? 'Trocar Foto' : 'Foto Atual'}
+                </span>
+                <input type="file" accept="image/*" className="hidden" onChange={e => {
+                  const file = e.target.files?.[0] || null;
+                  setWorkoutPhoto(file);
+                  if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
+                  if (file) setWorkoutPhotoPreview(URL.createObjectURL(file));
+                  else setWorkoutPhotoPreview(null);
+                }} />
+              </label>
+            </div>
+          </div>
+
           <button type="submit" disabled={generatingWorkout} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">{generatingWorkout ? <Loader2 className="animate-spin mx-auto" /> : 'Gerar Treino com IA'}</button>
         </form>
       </div>
@@ -881,6 +1257,38 @@ const App: React.FC = () => {
             <option value="manutencao">Manutenção</option>
           </select>
           <textarea placeholder="Restrições alimentares..." className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-emerald-500 focus:outline-none" value={dietFormData.observations} onChange={e => setDietFormData({ ...dietFormData, observations: e.target.value })} />
+
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Anexos Opcionais</p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-all cursor-pointer group">
+                <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 mb-1" />
+                <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate max-w-full">
+                  {dietDocument ? dietDocument.name : 'Exame/PDF'}
+                </span>
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setDietDocument(e.target.files?.[0] || null)} />
+              </label>
+
+              <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-all cursor-pointer group relative overflow-hidden">
+                {dietPhotoPreview ? (
+                  <img src={dietPhotoPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                ) : (
+                  <ImageIcon className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 mb-1" />
+                )}
+                <span className="text-[10px] text-slate-400 group-hover:text-slate-200 relative z-10">
+                  {dietPhoto ? 'Trocar Foto' : 'Foto Atual'}
+                </span>
+                <input type="file" accept="image/*" className="hidden" onChange={e => {
+                  const file = e.target.files?.[0] || null;
+                  setDietPhoto(file);
+                  if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview);
+                  if (file) setDietPhotoPreview(URL.createObjectURL(file));
+                  else setDietPhotoPreview(null);
+                }} />
+              </label>
+            </div>
+          </div>
+
           <button type="submit" disabled={generatingDiet} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all">{generatingDiet ? <Loader2 className="animate-spin mx-auto" /> : 'Gerar Dieta com IA'}</button>
         </form>
       </div>
@@ -901,6 +1309,7 @@ const App: React.FC = () => {
       <BuyCreditsModal
         isOpen={showBuyCreditsModal}
         onClose={() => setShowBuyCreditsModal(false)}
+        currentUser={currentUser}
       />
 
       <header className="sticky top-0 z-50 glass-panel border-b-0" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
@@ -909,30 +1318,158 @@ const App: React.FC = () => {
             <div className="p-2 bg-blue-600 rounded-lg group-hover:bg-blue-500 transition-colors shadow-lg">
               <Video className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-white hidden md:block">FitAI <span className="text-blue-400 font-light">Analyzer</span></h1>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold tracking-tight text-white hidden md:block">FitAI <span className="text-blue-400 font-light">Analyzer</span></h1>
+              {currentUser?.plan && (
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded w-fit -mt-1 hidden md:block
+                    ${currentUser.plan.type === 'PRO' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                    currentUser.plan.type === 'STUDIO' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                      currentUser.plan.type === 'STARTER' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+                        'bg-slate-700 text-slate-400 border border-slate-600'}
+                 `}>
+                  {currentUser.plan.type}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-4">
             {currentUser && (currentUser.role === 'user' || currentUser.role === 'personal') && (
-              <button
-                onClick={() => setShowBuyCreditsModal(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-full border border-yellow-500/30 transition-all group"
+              <div
+                className="relative group cursor-help"
               >
-                <Coins className="w-4 h-4 text-yellow-400 group-hover:scale-110 transition-transform" />
-                <span className="text-sm font-bold text-yellow-100">{currentUser.credits ?? 0}</span>
-              </button>
+                <button
+                  onClick={() => setShowBuyCreditsModal(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-full border border-yellow-500/30 transition-all"
+                >
+                  <Coins className="w-4 h-4 text-yellow-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-sm font-bold text-yellow-100">{currentUser.credits ?? 0}</span>
+                </button>
+
+                {/* Desktop Tooltip */}
+                {currentUser.usage && (
+                  <div className="hidden md:block absolute top-full right-0 mt-2 p-3 bg-slate-800 border border-slate-700 rounded-xl shadow-xl w-48 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50">
+                    <p className="text-xs text-slate-400 mb-2 font-bold uppercase tracking-wider border-b border-slate-700 pb-1">Seu Saldo</p>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400">Plano:</span>
+                        <span className="text-white font-medium">{currentUser.usage.subscriptionCredits || 0}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400">Comprados:</span>
+                        <span className="text-emerald-400 font-medium">+{currentUser.usage.purchasedCredits || 0}</span>
+                      </div>
+                      <div className="border-t border-slate-700 my-1 pt-1 flex justify-between text-xs font-bold">
+                        <span className="text-slate-300">Total:</span>
+                        <span className="text-yellow-400">{currentUser.credits || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
-            <div className="flex items-center gap-2">
-              <div className="hidden md:block text-right">
-                <p className="text-sm font-bold text-white">{currentUser?.name}</p>
-                <p className="text-xs text-slate-400 capitalize">
-                  {currentUser?.role === 'admin' ? 'Administrador' : (currentUser?.role === 'personal' ? 'Personal Trainer' : 'Aluno')}
-                </p>
-              </div>
-              <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600">
-                <UserIcon className="w-5 h-5 text-slate-300" />
-              </div>
+            {/* USER DROPDOWN & INTERACTION AREA */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)} // Toggle state
+                className="flex items-center gap-2 group outline-none"
+              >
+                <div className="hidden md:block text-right">
+                  <p className="text-sm font-bold text-white group-hover:text-blue-200 transition-colors">{currentUser?.name}</p>
+                  <div className="flex items-center justify-end gap-1">
+                    <p className="text-xs text-slate-400 capitalize">
+                      {currentUser?.role === 'admin' ? 'Administrador' : (currentUser?.role === 'personal' ? 'Personal Trainer' : 'Aluno')}
+                    </p>
+                    {/* Mobile Badge */}
+                    {currentUser?.plan && (
+                      <span className={`md:hidden w-2 h-2 rounded-full
+                            ${currentUser.plan.type === 'PRO' ? 'bg-emerald-500' :
+                          currentUser.plan.type === 'STUDIO' ? 'bg-purple-500' :
+                            currentUser.plan.type === 'STARTER' ? 'bg-yellow-500' :
+                              'bg-slate-700'}
+                        `} />
+                    )}
+                  </div>
+                </div>
+                <div className={`w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600 relative transition-all ${showUserMenu ? 'ring-2 ring-blue-500 border-blue-400' : 'group-hover:border-slate-500'}`}>
+                  <UserIcon className="w-5 h-5 text-slate-300" />
+                  {currentUser?.plan && (
+                    <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center text-[8px] font-bold text-white
+                        ${currentUser.plan.type === 'PRO' ? 'bg-emerald-500' :
+                        currentUser.plan.type === 'STUDIO' ? 'bg-purple-500' :
+                          currentUser.plan.type === 'STARTER' ? 'bg-yellow-500' :
+                            'bg-slate-500'}
+                     `}>
+                      {currentUser.plan.type[0]}
+                    </div>
+                  )}
+                </div>
+              </button>
+
+              {/* DROPDOWN MENU */}
+              {showUserMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)}></div> {/* Overlay to close */}
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="p-3 border-b border-slate-700/50 md:hidden">
+                      <p className="text-sm font-bold text-white">{currentUser?.name}</p>
+                      <p className="text-xs text-slate-400 capitalize">{currentUser?.role}</p>
+                    </div>
+
+                    <div className="p-2 space-y-1">
+                      {/* Upgrade Option */}
+                      <button
+                        onClick={() => { setShowPlansModal(true); setShowUserMenu(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-700 transition-colors text-left"
+                      >
+                        <div className="p-1.5 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg text-white">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white">Upgrade de Plano</p>
+                          <p className="text-[10px] text-slate-400">Desbloqueie recursos</p>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => { setShowBuyCreditsModal(true); setShowUserMenu(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-700 transition-colors text-left"
+                      >
+                        <div className="p-1.5 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg text-white">
+                          <Coins className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white">Meus Créditos</p>
+                          <p className="text-[10px] text-slate-400">Recarga e Histórico</p>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => { setShowChangePasswordModal(true); setShowUserMenu(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-700 transition-colors text-left"
+                      >
+                        <div className="p-1.5 bg-slate-700 rounded-lg text-slate-300">
+                          <Lock className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white">Alterar Senha</p>
+                          <p className="text-[10px] text-slate-400">Atualizar credenciais</p>
+                        </div>
+                      </button>
+
+                      <div className="h-px bg-slate-700/50 my-1"></div>
+
+                      <button
+                        onClick={() => { handleLogout(); setShowUserMenu(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-500/10 hover:text-red-400 text-slate-300 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span className="text-sm font-medium">Sair da Conta</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-            <button onClick={handleLogout} className="p-2 rounded-lg text-slate-400 hover:text-red-400 transition-colors"><LogOut className="w-5 h-5" /></button>
           </div>
         </div>
       </header>
@@ -941,6 +1478,8 @@ const App: React.FC = () => {
       {showDietModal && renderDietModal()}
       {showGenerateWorkoutForm && renderGenerateWorkoutForm()}
       {showGenerateDietForm && renderGenerateDietForm()}
+      {showCheckInModal && renderCheckInModal()}
+      {showChangePasswordModal && renderChangePasswordModal()}
 
       {/* Evolution Modal Rendering */}
       {showEvolutionModal && selectedExercise && (
@@ -994,7 +1533,7 @@ const App: React.FC = () => {
                   </button>
                 ) : (
                   <button
-                    onClick={() => setShowGenerateWorkoutForm(true)}
+                    onClick={() => canCreateWorkout(currentUser) && setShowGenerateWorkoutForm(true)}
                     className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
                   >
                     <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Dumbbell className="w-8 h-8" /></div>
@@ -1020,7 +1559,7 @@ const App: React.FC = () => {
                   </button>
                 ) : (
                   <button
-                    onClick={() => setShowGenerateDietForm(true)}
+                    onClick={() => canCreateWorkout(currentUser) && setShowGenerateDietForm(true)}
                     className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
                   >
                     <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Utensils className="w-8 h-8" /></div>
@@ -1124,7 +1663,8 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className={`sticky bottom-8 z-40 flex items-center gap-4 transition-all duration-300 justify-center ${selectedExercise ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
+            <div className={`sticky bottom-8 z-40 flex flex-col items-center gap-4 transition-all duration-300 justify-center ${selectedExercise ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
+
               {selectedExercise && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE && (
                 <button
                   onClick={handleViewHistory}
@@ -1334,6 +1874,13 @@ const App: React.FC = () => {
           />
         )}
       </main>
+
+      {/* --- MODALS --- */}
+      <PlansModal
+        isOpen={showPlansModal}
+        onClose={() => setShowPlansModal(false)}
+        onSubscribe={handleSubscribe}
+      />
 
       {/* --- OFFLINE BANNER --- */}
       {isOffline && (

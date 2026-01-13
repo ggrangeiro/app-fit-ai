@@ -123,10 +123,17 @@ export const analyzeVideo = async (files: File | File[], exerciseType: ExerciseT
 };
 
 // --- GERAÇÃO DE DIETA (LAYOUT REFINADO) ---
-export const generateDietPlan = async (userData: any): Promise<string> => {
+export const generateDietPlan = async (userData: any, documentFile?: File | null, photoFile?: File | null): Promise<string> => {
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
+
   const prompt = `
     Atue como um Nutricionista Esportivo. Perfil: ${userData.weight}kg, Objetivo: ${userData.goal}, Sexo: ${userData.gender}.
+    ${userData.observations ? `Observações Adicionais: ${userData.observations}` : ''}
+    
+    INSTRUÇÕES IMPORTANTES:
+    - Se você recebeu fotos ou documentos (exames, prescrições) anexos, ANALISE-OS CUIDADOSAMENTE.
+    - Considere as condições físicas visíveis na foto e os dados clínicos do documento para personalizar a dieta.
+    
     Crie um plano alimentar semanal visualmente incrível.
     REGRAS DE DESIGN:
     1. Use LAYOUT DE CARDS modernos com Tailwind (bg-white, rounded-2xl, shadow-sm). NÃO use tabelas.
@@ -136,9 +143,22 @@ export const generateDietPlan = async (userData: any): Promise<string> => {
   `;
 
   try {
-    const result = await model.generateContent(prompt);
+    const parts: any[] = [{ text: prompt }];
+
+    if (documentFile) {
+      const docPart = await fileToGenerativePart(documentFile);
+      parts.push(docPart);
+    }
+
+    if (photoFile) {
+      const photoPart = await fileToGenerativePart(photoFile);
+      parts.push(photoPart);
+    }
+
+    const result = await model.generateContent(parts);
     return result.response.text().replace(/```html|```/g, "").trim();
   } catch (e) {
+    console.error("Erro ao gerar dieta:", e);
     return "<p>Erro ao gerar dieta.</p>";
   }
 };
@@ -148,7 +168,7 @@ export const generateDietPlan = async (userData: any): Promise<string> => {
  * Gera um plano de treino personalizado baseado nos dados do usuário.
  * userData espera: { weight, height, gender, goal, level, frequency, observations }
  */
-export const generateWorkoutPlan = async (userData: any): Promise<string> => {
+export const generateWorkoutPlan = async (userData: any, documentFile?: File | null, photoFile?: File | null): Promise<string> => {
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
   const prompt = `
     Atue como um Personal Trainer Especialista e Motivador.
@@ -160,6 +180,10 @@ export const generateWorkoutPlan = async (userData: any): Promise<string> => {
     - Nível de Experiência: ${userData.level}
     - Frequência Semanal: ${userData.frequency}x
     - Observações/Restrições: ${userData.observations || 'Nenhuma'}
+
+    INSTRUÇÕES IMPORTANTES:
+    - Se você recebeu fotos ou documentos (avaliações físicas, exames) anexos, ANALISE-OS CUIDADOSAMENTE.
+    - Considere as condições físicas visíveis na foto e as restrições ou dados do documento para personalizar o treino.
 
     Crie um plano de treino semanal em HTML usando um sistema de CARDS modernos com Tailwind CSS.
     
@@ -175,10 +199,75 @@ export const generateWorkoutPlan = async (userData: any): Promise<string> => {
   `;
 
   try {
-    const result = await model.generateContent(prompt);
+    const parts: any[] = [{ text: prompt }];
+
+    if (documentFile) {
+      const docPart = await fileToGenerativePart(documentFile);
+      parts.push(docPart);
+    }
+
+    if (photoFile) {
+      const photoPart = await fileToGenerativePart(photoFile);
+      parts.push(photoPart);
+    }
+
+    const result = await model.generateContent(parts);
     return result.response.text().replace(/```html|```/g, "").trim();
   } catch (e) {
+    console.error("Erro ao gerar treino:", e);
     return "<p>Erro ao gerar treino.</p>";
+  }
+};
+
+// --- REGENERAÇÃO DE TREINO COM FEEDBACK ---
+/**
+ * Regenera um plano de treino existente aplicando o feedback do Personal Trainer.
+ * Não altera partes não mencionadas no feedback.
+ * @param currentWorkoutHtml - O HTML do treino atual
+ * @param feedback - Texto livre com as alterações desejadas
+ * @param userData - Dados originais do aluno (peso, altura, objetivo, etc.)
+ */
+export const regenerateWorkoutPlan = async (
+  currentWorkoutHtml: string,
+  feedback: string,
+  userData: any
+): Promise<string> => {
+  const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
+
+  const prompt = `
+    Atue como um Personal Trainer Especialista.
+    
+    CONTEXTO ORIGINAL DO ALUNO:
+    - Sexo: ${userData.gender || 'não informado'}
+    - Peso: ${userData.weight || 'não informado'}kg
+    - Altura: ${userData.height || 'não informado'}cm
+    - Objetivo: ${userData.goal || 'não informado'}
+    - Nível de Experiência: ${userData.level || 'não informado'}
+    - Frequência Semanal: ${userData.frequency || 'não informado'}x
+    - Observações/Restrições: ${userData.observations || 'Nenhuma'}
+
+    TREINO ATUAL (HTML):
+    ${currentWorkoutHtml}
+
+    FEEDBACK DO PERSONAL TRAINER:
+    "${feedback}"
+
+    INSTRUÇÕES DE REGENERAÇÃO:
+    1. LEIA o HTML do treino atual com atenção.
+    2. APLIQUE APENAS as alterações solicitadas no feedback acima.
+    3. NÃO ALTERE exercícios, dias ou configurações que o Personal NÃO mencionou no feedback.
+    4. MANTENHA RIGOROSAMENTE a mesma estrutura visual (classes Tailwind, cards, cores).
+    5. MANTENHA os botões de YouTube para cada exercício.
+    6. Dias de descanso (OFF) devem continuar com fundo escuro (bg-slate-800).
+    7. Output APENAS o código HTML interno atualizado.
+  `;
+
+  try {
+    const result = await model.generateContent([{ text: prompt }]);
+    return result.response.text().replace(/```html|```/g, "").trim();
+  } catch (e) {
+    console.error("Erro ao regenerar treino:", e);
+    return "<p>Erro ao regenerar treino.</p>";
   }
 };
 

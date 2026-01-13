@@ -49,24 +49,24 @@ export const MockDataService = {
 
   // --- EXERCISES (GLOBAL LIST) ---
   fetchExercises: async (): Promise<ExerciseDTO[]> => {
-      try {
-          // Agora usamos o apiService para evitar CORS
-          const data = await apiService.getAllExercises(1);
-          if (Array.isArray(data) && data.length > 0) {
-               return data.map((item: any) => {
-                  const alias = mapBackendToInternalId(item.exercicio || item.name);
-                  return {
-                      id: item.id ? String(item.id) : (item.exercicio || item.name),
-                      alias: alias,
-                      name: item.exercicio || item.name,
-                      category: (alias === 'POSTURE_ANALYSIS' || alias === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
-                  };
-              });
-          }
-          return FALLBACK_EXERCISES;
-      } catch (e) {
-          return FALLBACK_EXERCISES;
+    try {
+      // Agora usamos o apiService para evitar CORS
+      const data = await apiService.getAllExercises(1);
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((item: any) => {
+          const alias = mapBackendToInternalId(item.exercicio || item.name);
+          return {
+            id: item.id ? String(item.id) : (item.exercicio || item.name),
+            alias: alias,
+            name: item.exercicio || item.name,
+            category: (alias === 'POSTURE_ANALYSIS' || alias === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
+          };
+        });
       }
+      return FALLBACK_EXERCISES;
+    } catch (e) {
+      return FALLBACK_EXERCISES;
+    }
   },
 
   // --- FETCH USER SPECIFIC EXERCISES ---
@@ -76,15 +76,15 @@ export const MockDataService = {
       const data = await apiService.getUserExercises(userId);
 
       if (Array.isArray(data)) {
-          return data.map((item: any) => {
-              const alias = mapBackendToInternalId(item.exercicio);
-              return {
-                  id: item.id ? String(item.id) : item.exercicio,
-                  alias: alias,
-                  name: item.exercicio,
-                  category: (alias === 'POSTURE_ANALYSIS' || alias === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
-              };
-          });
+        return data.map((item: any) => {
+          const alias = mapBackendToInternalId(item.exercicio);
+          return {
+            id: item.id ? String(item.id) : item.exercicio,
+            alias: alias,
+            name: item.exercicio,
+            category: (alias === 'POSTURE_ANALYSIS' || alias === 'BODY_COMPOSITION') ? 'SPECIAL' : 'STANDARD'
+          };
+        });
       }
       return [];
     } catch (error) {
@@ -102,6 +102,35 @@ export const MockDataService = {
       return user;
     }
     return null;
+  },
+
+  getUsers: (currentUser: User): User[] => {
+    const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+    if (currentUser.role === 'admin') return users;
+    // Se for personal, filtra apenas os alunos que ele criou (ou todos por enquanto)
+    return users.filter(u => u.role === 'user');
+  },
+
+  createUser: async (name: string, email: string, avatar?: string, creatorId?: string, creatorRole?: string, role: string = 'user'): Promise<User> => {
+    const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+    const newUser: User = {
+      id: Date.now().toString(),
+      name,
+      email,
+      role: role as any,
+      avatar: avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
+      credits: 10,
+      assignedExercises: []
+    };
+    users.push(newUser);
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    return newUser;
+  },
+
+  updateUserExercises: (userId: string, exercises: string[]) => {
+    const users: User[] = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+    const updated = users.map(u => u.id === userId ? { ...u, assignedExercises: exercises } : u);
+    localStorage.setItem(USERS_KEY, JSON.stringify(updated));
   },
 
   logout: () => {
@@ -131,14 +160,14 @@ export const MockDataService = {
   // Atualizado para usar o backend via apiService se necessário, ou apenas local
   deleteRecord: async (userId: string, recordId: string): Promise<boolean> => {
     try {
-        // Se quiser deletar do backend também, adicione uma rota no apiService
-        // Por enquanto, limpamos o local para a UI atualizar
-        const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
-        const updatedRecords = records.filter(r => r.id !== recordId);
-        localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
-        return true;
+      // Se quiser deletar do backend também, adicione uma rota no apiService
+      // Por enquanto, limpamos o local para a UI atualizar
+      const records: ExerciseRecord[] = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
+      const updatedRecords = records.filter(r => r.id !== recordId);
+      localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
+      return true;
     } catch (e) {
-        return false;
+      return false;
     }
   },
 
@@ -159,7 +188,7 @@ export const MockDataService = {
   saveExerciseImages: (images: Record<string, string>) => {
     try {
       localStorage.setItem(IMAGES_KEY, JSON.stringify(images));
-    } catch (e) {}
+    } catch (e) { }
   }
 };
 
