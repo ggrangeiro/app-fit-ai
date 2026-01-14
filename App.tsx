@@ -193,6 +193,23 @@ const App: React.FC = () => {
 
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // Reset helpers for forms
+  const resetWorkoutForm = () => {
+    setWorkoutFormData({ weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino' });
+    if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
+    setWorkoutDocument(null);
+    setWorkoutPhoto(null);
+    setWorkoutPhotoPreview(null);
+  };
+
+  const resetDietForm = () => {
+    setDietFormData({ weight: '', height: '', goal: 'emagrecer', gender: 'masculino', observations: '' });
+    if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview);
+    setDietDocument(null);
+    setDietPhoto(null);
+    setDietPhotoPreview(null);
+  };
+
   const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
     message: '', type: 'info', isVisible: false
   });
@@ -799,6 +816,7 @@ const App: React.FC = () => {
       setWorkoutDocument(null);
 
       setShowGenerateWorkoutForm(false);
+      resetWorkoutForm();
       setViewingWorkoutHtml(planHtml);
       setShowWorkoutModal(true);
 
@@ -829,6 +847,7 @@ const App: React.FC = () => {
       setDietDocument(null);
 
       setShowGenerateDietForm(false);
+      resetDietForm();
       setViewingDietHtml(planHtml);
       setShowDietModal(true);
 
@@ -957,7 +976,7 @@ const App: React.FC = () => {
       <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
         <div className="flex justify-between items-center max-w-7xl mx-auto mb-6">
           <button
-            onClick={() => { setShowWorkoutModal(false); setViewingWorkoutHtml(null); }}
+            onClick={() => { setShowWorkoutModal(false); setViewingWorkoutHtml(null); resetWorkoutForm(); }}
             className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" /> <span className="hidden sm:inline">Voltar</span>
@@ -1122,7 +1141,7 @@ const App: React.FC = () => {
       <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
         <div className="flex justify-between items-center max-w-7xl mx-auto mb-6">
           <button
-            onClick={() => { setShowDietModal(false); setViewingDietHtml(null); }}
+            onClick={() => { setShowDietModal(false); setViewingDietHtml(null); resetDietForm(); }}
             className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" /> <span className="hidden sm:inline">Voltar</span>
@@ -1162,7 +1181,7 @@ const App: React.FC = () => {
   const renderGenerateWorkoutForm = () => (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
       <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-        <button onClick={() => setShowGenerateWorkoutForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+        <button onClick={() => { setShowGenerateWorkoutForm(false); resetWorkoutForm(); }} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
           <X className="w-6 h-6" />
         </button>
         <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Dumbbell className="w-6 h-6 text-blue-400" /> Gerar Treino Personalizado</h3>
@@ -1238,7 +1257,7 @@ const App: React.FC = () => {
   const renderGenerateDietForm = () => (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
       <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-        <button onClick={() => setShowGenerateDietForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+        <button onClick={() => { setShowGenerateDietForm(false); resetDietForm(); }} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
           <X className="w-6 h-6" />
         </button>
         <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Utensils className="w-6 h-6 text-emerald-400" /> Gerar Dieta Personalizada</h3>
