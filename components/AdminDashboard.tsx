@@ -495,7 +495,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 goal: actionFormData.goal,
                 gender: actionFormData.gender,
                 observations: actionFormData.observations
-            }, actionDocument, actionPhoto);
+            }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
 
             const newDiet = await apiService.createDiet(selectedUser.id, planHtml, actionFormData.goal);
             showToast(`Dieta salva para ${selectedUser.name}!`, 'success');
@@ -534,7 +534,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 frequency: actionFormData.frequency,
                 observations: actionFormData.observations,
                 gender: actionFormData.gender
-            }, actionDocument, actionPhoto);
+            }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
 
             const newWorkout = await apiService.createTraining(selectedUser.id, planHtml, actionFormData.goal);
             showToast(`Treino salva para ${selectedUser.name}!`, 'success');
@@ -596,7 +596,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             // Use assessmentType OR default to FREE_ANALYSIS_MODE if nothing selected
             const finalType = assessmentType || SPECIAL_EXERCISES.FREE_MODE;
             // Agora passamos o array de arquivos
-            const result = await analyzeVideo(finalFiles, finalType);
+            const result = await analyzeVideo(finalFiles, finalType, currentUser.id, currentUser.role);
 
             // --- 1. CONSUMIR CRÉDITO (MOVED TO AFTER SUCCESS) ---
             if (currentUser.role !== 'admin') {
@@ -719,7 +719,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             const newHtml = await regenerateWorkoutPlan(
                 viewingPlan.content,
                 redoFeedback,
-                viewingPlan.originalFormData || {}
+                viewingPlan.originalFormData || {},
+                currentUser.id,
+                currentUser.role
             );
 
             // Update viewing plan with new content and increment redoCount

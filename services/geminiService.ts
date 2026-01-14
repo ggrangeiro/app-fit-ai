@@ -1,13 +1,46 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { AnalysisResult, ExerciseType, SPECIAL_EXERCISES } from "../types";
+import { getGeminiApiKey, clearApiKeyCache } from "./configService";
 
 // --- CONFIGURAÇÃO ---
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
-const genAI = new GoogleGenerativeAI(API_KEY);
-
 // Configuração dos modelos: Pro para tarefas complexas (vídeo) e Flash para suporte
 const ANALYSIS_MODEL = "gemini-3-pro-preview";
 const SUPPORT_MODEL = "gemini-3-flash-preview";
+
+// Cache da instância GoogleGenerativeAI (recriada quando a API key muda)
+let genAIInstance: GoogleGenerativeAI | null = null;
+let currentApiKey: string | null = null;
+
+/**
+ * Obtém ou cria a instância do GoogleGenerativeAI com a API Key dinâmica.
+ * @param userId ID do usuário logado
+ * @param userRole Role do usuário (user, personal, admin)
+ */
+const getGenAI = async (userId: string | number, userRole: string): Promise<GoogleGenerativeAI> => {
+  const apiKey = await getGeminiApiKey(userId, userRole);
+
+  if (!apiKey) {
+    throw new Error("Não foi possível obter a chave de API do Gemini. Verifique sua conexão.");
+  }
+
+  // Se a key mudou, recria a instância
+  if (apiKey !== currentApiKey) {
+    genAIInstance = new GoogleGenerativeAI(apiKey);
+    currentApiKey = apiKey;
+  }
+
+  return genAIInstance!;
+};
+
+/**
+ * Limpa o cache da instância do Gemini.
+ * Chamar junto com clearApiKeyCache() no logout.
+ */
+export const resetGeminiInstance = (): void => {
+  genAIInstance = null;
+  currentApiKey = null;
+  clearApiKeyCache();
+};
 
 // --- UTILITÁRIOS ---
 const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
@@ -24,7 +57,14 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
 };
 
 // --- ANÁLISE DE VÍDEO (PROMPTS REFINADOS) ---
-export const analyzeVideo = async (files: File | File[], exerciseType: ExerciseType, previousAnalysis?: AnalysisResult | null): Promise<AnalysisResult> => {
+export const analyzeVideo = async (
+  files: File | File[],
+  exerciseType: ExerciseType,
+  userId: string | number,
+  userRole: string,
+  previousAnalysis?: AnalysisResult | null
+): Promise<AnalysisResult> => {
+  const genAI = await getGenAI(userId, userRole);
   const fileArray = Array.isArray(files) ? files : [files];
   const mediaParts = await Promise.all(fileArray.map(fileToGenerativePart));
 
@@ -116,14 +156,25 @@ export const analyzeVideo = async (files: File | File[], exerciseType: ExerciseT
 
     const text = result.response.text();
     return JSON.parse(text);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro na análise Gemini:", error);
+    // Se erro de API key, limpa cache para tentar novamente na próxima
+    if (error.message?.includes("API key") || error.message?.includes("401") || error.message?.includes("403")) {
+      resetGeminiInstance();
+    }
     throw new Error("Não consegui analisar o vídeo agora. Tente novamente!");
   }
 };
 
 // --- GERAÇÃO DE DIETA (LAYOUT REFINADO) ---
-export const generateDietPlan = async (userData: any, documentFile?: File | null, photoFile?: File | null): Promise<string> => {
+export const generateDietPlan = async (
+  userData: any,
+  userId: string | number,
+  userRole: string,
+  documentFile?: File | null,
+  photoFile?: File | null
+): Promise<string> => {
+  const genAI = await getGenAI(userId, userRole);
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
 
   const prompt = `
@@ -157,8 +208,11 @@ export const generateDietPlan = async (userData: any, documentFile?: File | null
 
     const result = await model.generateContent(parts);
     return result.response.text().replace(/```html|```/g, "").trim();
-  } catch (e) {
-    console.error("Erro ao gerar dieta:", e);
+  } catch (error: any) {
+    console.error("Erro ao gerar dieta:", error);
+    if (error.message?.includes("API key") || error.message?.includes("401") || error.message?.includes("403")) {
+      resetGeminiInstance();
+    }
     return "<p>Erro ao gerar dieta.</p>";
   }
 };
@@ -168,7 +222,14 @@ export const generateDietPlan = async (userData: any, documentFile?: File | null
  * Gera um plano de treino personalizado baseado nos dados do usuário.
  * userData espera: { weight, height, gender, goal, level, frequency, observations }
  */
-export const generateWorkoutPlan = async (userData: any, documentFile?: File | null, photoFile?: File | null): Promise<string> => {
+export const generateWorkoutPlan = async (
+  userData: any,
+  userId: string | number,
+  userRole: string,
+  documentFile?: File | null,
+  photoFile?: File | null
+): Promise<string> => {
+  const genAI = await getGenAI(userId, userRole);
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
   const prompt = `
     Atue como um Personal Trainer Especialista e Motivador.
@@ -213,8 +274,11 @@ export const generateWorkoutPlan = async (userData: any, documentFile?: File | n
 
     const result = await model.generateContent(parts);
     return result.response.text().replace(/```html|```/g, "").trim();
-  } catch (e) {
-    console.error("Erro ao gerar treino:", e);
+  } catch (error: any) {
+    console.error("Erro ao gerar treino:", error);
+    if (error.message?.includes("API key") || error.message?.includes("401") || error.message?.includes("403")) {
+      resetGeminiInstance();
+    }
     return "<p>Erro ao gerar treino.</p>";
   }
 };
@@ -226,12 +290,17 @@ export const generateWorkoutPlan = async (userData: any, documentFile?: File | n
  * @param currentWorkoutHtml - O HTML do treino atual
  * @param feedback - Texto livre com as alterações desejadas
  * @param userData - Dados originais do aluno (peso, altura, objetivo, etc.)
+ * @param userId - ID do usuário logado
+ * @param userRole - Role do usuário
  */
 export const regenerateWorkoutPlan = async (
   currentWorkoutHtml: string,
   feedback: string,
-  userData: any
+  userData: any,
+  userId: string | number,
+  userRole: string
 ): Promise<string> => {
+  const genAI = await getGenAI(userId, userRole);
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
 
   const prompt = `
@@ -265,14 +334,24 @@ export const regenerateWorkoutPlan = async (
   try {
     const result = await model.generateContent([{ text: prompt }]);
     return result.response.text().replace(/```html|```/g, "").trim();
-  } catch (e) {
-    console.error("Erro ao regenerar treino:", e);
+  } catch (error: any) {
+    console.error("Erro ao regenerar treino:", error);
+    if (error.message?.includes("API key") || error.message?.includes("401") || error.message?.includes("403")) {
+      resetGeminiInstance();
+    }
     return "<p>Erro ao regenerar treino.</p>";
   }
 };
 
 // --- INSIGHT DE PROGRESSO ---
-export const generateProgressInsight = async (current: any, previous: any, type: string): Promise<string> => {
+export const generateProgressInsight = async (
+  current: any,
+  previous: any,
+  type: string,
+  userId: string | number,
+  userRole: string
+): Promise<string> => {
+  const genAI = await getGenAI(userId, userRole);
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
   const prompt = `
     Atue como um Amigo de Treino. Compare hoje (Nota ${current.score}) com a anterior (Nota ${previous.score}) no exercício ${type}.
@@ -282,7 +361,10 @@ export const generateProgressInsight = async (current: any, previous: any, type:
   try {
     const result = await model.generateContent(prompt);
     return result.response.text();
-  } catch (e) {
+  } catch (error: any) {
+    if (error.message?.includes("API key") || error.message?.includes("401") || error.message?.includes("403")) {
+      resetGeminiInstance();
+    }
     return "Continue assim! Cada treino conta para sua evolução. 💪";
   }
 };

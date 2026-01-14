@@ -157,7 +157,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
     setDietLoading(true);
     try {
-      const planHtml = await generateDietPlan(dietFormData, dietDocument, dietPhoto);
+      const planHtml = await generateDietPlan(dietFormData, currentUser?.id || userId, currentUser?.role || 'user', dietDocument, dietPhoto);
 
       await apiService.createDiet(userId, planHtml, dietFormData.goal);
       if (onDietSaved) onDietSaved();
@@ -211,7 +211,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
     setWorkoutLoading(true);
     try {
-      const planHtml = await generateWorkoutPlan(workoutFormData, workoutDocument, workoutPhoto);
+      const planHtml = await generateWorkoutPlan(workoutFormData, currentUser?.id || userId, currentUser?.role || 'user', workoutDocument, workoutPhoto);
 
       const response = await apiService.createTraining(userId, planHtml, workoutFormData.goal);
       if (response && response.id) {

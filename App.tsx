@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, WorkoutPlan, DietPlan } from './types';
 import { App as CapApp } from '@capacitor/app';
-import { analyzeVideo, generateWorkoutPlan, generateDietPlan } from './services/geminiService';
+import { analyzeVideo, generateWorkoutPlan, generateDietPlan, resetGeminiInstance } from './services/geminiService';
 import { compressVideo } from './utils/videoUtils';
 import { MockDataService } from './services/mockDataService';
 import { apiService } from './services/apiService'; // NEW API SERVICE
@@ -519,6 +519,7 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     MockDataService.logout();
+    resetGeminiInstance(); // Limpa cache da API Key do Gemini
     setCurrentUser(null);
     setExercisesList([]);
     setSavedWorkouts([]);
@@ -729,7 +730,7 @@ const App: React.FC = () => {
       } catch (histErr) {
       }
 
-      const result = await analyzeVideo(filesToSend, aiContextName, previousRecord?.result);
+      const result = await analyzeVideo(filesToSend, aiContextName, currentUser.id, currentUser.role, previousRecord?.result);
 
       if (!result.isValidContent) {
         setError(result.validationError || "Conteúdo inválido para este exercício.");
@@ -803,7 +804,7 @@ const App: React.FC = () => {
 
     setGeneratingWorkout(true);
     try {
-      const planHtml = await generateWorkoutPlan(workoutFormData, workoutDocument, workoutPhoto);
+      const planHtml = await generateWorkoutPlan(workoutFormData, currentUser.id, currentUser.role, workoutDocument, workoutPhoto);
       // Usa apiService para criar e refresh, sem fallbacks quebrados
       await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal);
       await fetchUserWorkouts(currentUser.id);
@@ -833,7 +834,7 @@ const App: React.FC = () => {
 
     setGeneratingDiet(true);
     try {
-      const planHtml = await generateDietPlan(dietFormData, dietDocument, dietPhoto);
+      const planHtml = await generateDietPlan(dietFormData, currentUser.id, currentUser.role, dietDocument, dietPhoto);
 
       // Usa apiService para criar e refresh
       await apiService.createDiet(currentUser.id, planHtml, dietFormData.goal);
