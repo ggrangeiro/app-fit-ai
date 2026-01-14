@@ -84,6 +84,23 @@ export const ResultView: React.FC<ResultViewProps> = ({
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // Reset helpers
+  const resetDietForm = () => {
+    setDietFormData({ weight: '', height: '', goal: 'emagrecer', gender: 'masculino', observations: '' });
+    if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview);
+    setDietDocument(null);
+    setDietPhoto(null);
+    setDietPhotoPreview(null);
+  };
+
+  const resetWorkoutForm = () => {
+    setWorkoutFormData({ weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino' });
+    if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
+    setWorkoutDocument(null);
+    setWorkoutPhoto(null);
+    setWorkoutPhotoPreview(null);
+  };
+
   // Check-in State
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [checkInDate, setCheckInDate] = useState(new Date().toISOString().split('T')[0]);
@@ -168,6 +185,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
       setDietPlanHtml(planHtml);
       setShowDietForm(false);
+      resetDietForm();
       showToast("Dieta gerada com sucesso!", 'success');
     } catch (error) {
       showToast("Erro ao gerar dieta. Tente novamente.", 'error');
@@ -225,6 +243,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
       setWorkoutPlanHtml(planHtml);
       setShowWorkoutForm(false);
+      resetWorkoutForm();
       showToast("Treino gerado com sucesso!", 'success');
 
     } catch (error) {
@@ -505,7 +524,7 @@ ${strengthsText}${improvementsText}
       {showDietForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <button onClick={() => setShowDietForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+            <button onClick={() => { setShowDietForm(false); resetDietForm(); }} className="absolute top-4 right-4 text-slate-400 hover:text-white">
               <X className="w-6 h-6" />
             </button>
 
@@ -673,7 +692,7 @@ ${strengthsText}${improvementsText}
       {showWorkoutForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <button onClick={() => setShowWorkoutForm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+            <button onClick={() => { setShowWorkoutForm(false); resetWorkoutForm(); }} className="absolute top-4 right-4 text-slate-400 hover:text-white">
               <X className="w-6 h-6" />
             </button>
 

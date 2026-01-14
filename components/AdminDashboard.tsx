@@ -120,6 +120,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Reset helper for action forms
+    const resetActionForm = () => {
+        setActionFormData({ weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino' });
+        if (actionPhotoPreview) URL.revokeObjectURL(actionPhotoPreview);
+        setActionDocument(null);
+        setActionPhoto(null);
+        setActionPhotoPreview(null);
+    };
+
     // Password Reset States
     const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
     const [resetPasswordValue, setResetPasswordValue] = useState('');
@@ -501,6 +510,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             setViewingPlan({ type: 'diet', content: planHtml, title: 'Nova Dieta Gerada', id: newDiet.id });
             fetchUserPlans(selectedUser.id);
             setShowTeacherActionModal('NONE');
+            resetActionForm();
 
         } catch (err: any) {
             showToast("Erro: " + err.message, 'error');
@@ -548,6 +558,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             setViewingPlan({ type: 'workout', content: planHtml, title: 'Novo Treino Gerado', id: newWorkout.id, redoCount: 0, originalFormData: originalData });
             fetchUserPlans(selectedUser.id);
             setShowTeacherActionModal('NONE');
+            resetActionForm();
 
         } catch (err: any) {
             showToast("Erro: " + err.message, 'error');
@@ -642,6 +653,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             setDetailedHistory([newRecord]);
             setViewingRecord(newRecord); // Abre o modal ResultView imediatamente
             setShowTeacherActionModal('NONE');
+            resetActionForm();
             setAssessmentFiles([]);
             setAssessmentPreviews([]);
             setAssessmentType(''); // Reset type
@@ -934,7 +946,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             {showTeacherActionModal !== 'NONE' && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
                     <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
-                        <button onClick={() => { setShowTeacherActionModal('NONE'); setAssessmentFiles([]); }} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+                        <button onClick={() => { setShowTeacherActionModal('NONE'); resetActionForm(); setAssessmentFiles([]); }} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
                             <X className="w-6 h-6" />
                         </button>
 
