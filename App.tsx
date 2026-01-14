@@ -1220,31 +1220,45 @@ const App: React.FC = () => {
           <div className="space-y-3">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Anexos Opcionais</p>
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 transition-all cursor-pointer group">
-                <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-blue-400 mb-1" />
-                <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate max-w-full">
-                  {workoutDocument ? workoutDocument.name : 'Exame/PDF'}
-                </span>
-                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setWorkoutDocument(e.target.files?.[0] || null)} />
-              </label>
-
-              <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 transition-all cursor-pointer group relative overflow-hidden">
-                {workoutPhotoPreview ? (
-                  <img src={workoutPhotoPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
-                ) : (
-                  <ImageIcon className="w-5 h-5 text-slate-500 group-hover:text-blue-400 mb-1" />
+              <div className="relative">
+                <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 transition-all cursor-pointer group">
+                  <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-blue-400 mb-1" />
+                  <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate max-w-full">
+                    {workoutDocument ? workoutDocument.name : 'Exame/PDF'}
+                  </span>
+                  <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setWorkoutDocument(e.target.files?.[0] || null)} />
+                </label>
+                {workoutDocument && (
+                  <button type="button" onClick={() => setWorkoutDocument(null)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
                 )}
-                <span className="text-[10px] text-slate-400 group-hover:text-slate-200 relative z-10">
-                  {workoutPhoto ? 'Trocar Foto' : 'Foto Atual'}
-                </span>
-                <input type="file" accept="image/*" className="hidden" onChange={e => {
-                  const file = e.target.files?.[0] || null;
-                  setWorkoutPhoto(file);
-                  if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
-                  if (file) setWorkoutPhotoPreview(URL.createObjectURL(file));
-                  else setWorkoutPhotoPreview(null);
-                }} />
-              </label>
+              </div>
+
+              <div className="relative">
+                <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 transition-all cursor-pointer group overflow-hidden">
+                  {workoutPhotoPreview ? (
+                    <img src={workoutPhotoPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                  ) : (
+                    <ImageIcon className="w-5 h-5 text-slate-500 group-hover:text-blue-400 mb-1" />
+                  )}
+                  <span className="text-[10px] text-slate-400 group-hover:text-slate-200 relative z-10">
+                    {workoutPhoto ? 'Trocar Foto' : 'Foto Atual'}
+                  </span>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => {
+                    const file = e.target.files?.[0] || null;
+                    setWorkoutPhoto(file);
+                    if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
+                    if (file) setWorkoutPhotoPreview(URL.createObjectURL(file));
+                    else setWorkoutPhotoPreview(null);
+                  }} />
+                </label>
+                {workoutPhoto && (
+                  <button type="button" onClick={() => { if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview); setWorkoutPhoto(null); setWorkoutPhotoPreview(null); }} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors z-20">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1280,31 +1294,45 @@ const App: React.FC = () => {
           <div className="space-y-3">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Anexos Opcionais</p>
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-all cursor-pointer group">
-                <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 mb-1" />
-                <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate max-w-full">
-                  {dietDocument ? dietDocument.name : 'Exame/PDF'}
-                </span>
-                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setDietDocument(e.target.files?.[0] || null)} />
-              </label>
-
-              <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-all cursor-pointer group relative overflow-hidden">
-                {dietPhotoPreview ? (
-                  <img src={dietPhotoPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
-                ) : (
-                  <ImageIcon className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 mb-1" />
+              <div className="relative">
+                <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-all cursor-pointer group">
+                  <UploadCloud className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 mb-1" />
+                  <span className="text-[10px] text-slate-400 group-hover:text-slate-200 truncate max-w-full">
+                    {dietDocument ? dietDocument.name : 'Exame/PDF'}
+                  </span>
+                  <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => setDietDocument(e.target.files?.[0] || null)} />
+                </label>
+                {dietDocument && (
+                  <button type="button" onClick={() => setDietDocument(null)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
                 )}
-                <span className="text-[10px] text-slate-400 group-hover:text-slate-200 relative z-10">
-                  {dietPhoto ? 'Trocar Foto' : 'Foto Atual'}
-                </span>
-                <input type="file" accept="image/*" className="hidden" onChange={e => {
-                  const file = e.target.files?.[0] || null;
-                  setDietPhoto(file);
-                  if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview);
-                  if (file) setDietPhotoPreview(URL.createObjectURL(file));
-                  else setDietPhotoPreview(null);
-                }} />
-              </label>
+              </div>
+
+              <div className="relative">
+                <label className="flex flex-col items-center justify-center p-3 bg-slate-800 border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-all cursor-pointer group overflow-hidden">
+                  {dietPhotoPreview ? (
+                    <img src={dietPhotoPreview} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                  ) : (
+                    <ImageIcon className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 mb-1" />
+                  )}
+                  <span className="text-[10px] text-slate-400 group-hover:text-slate-200 relative z-10">
+                    {dietPhoto ? 'Trocar Foto' : 'Foto Atual'}
+                  </span>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => {
+                    const file = e.target.files?.[0] || null;
+                    setDietPhoto(file);
+                    if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview);
+                    if (file) setDietPhotoPreview(URL.createObjectURL(file));
+                    else setDietPhotoPreview(null);
+                  }} />
+                </label>
+                {dietPhoto && (
+                  <button type="button" onClick={() => { if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview); setDietPhoto(null); setDietPhotoPreview(null); }} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors z-20">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
