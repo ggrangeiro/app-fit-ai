@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { apiService } from '../services/apiService';
+import { secureStorage } from '../utils/secureStorage';
 import { Dumbbell, ArrowRight, Lock, Mail, User as UserIcon, Phone, X, CheckCircle, Loader2 } from 'lucide-react';
 import { ToastType } from './Toast';
 
@@ -70,8 +71,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
         // Usa o novo serviço de login V2 que lida com Token JWT e Roles
         const appUser = await apiService.login(email, password);
 
-        // Armazena sessão (geralmente feito no App ou Context, mas aqui mantendo padrão do projeto)
-        localStorage.setItem('fitai_current_session', JSON.stringify(appUser));
+        // Armazena sessão via secureStorage
+        secureStorage.setItem('fitai_current_session', appUser);
 
         onLogin(appUser);
       }
@@ -253,6 +254,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
             >
               {isRegistering ? 'Já tenho uma conta? Fazer Login' : 'Não tem conta? Criar nova conta'}
             </button>
+
+            <a
+              href="https://analisa-exercicio.web.app/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 text-xs text-slate-500 hover:text-blue-400 transition-colors border-b border-transparent hover:border-blue-400"
+            >
+              Política de Privacidade
+            </a>
           </div>
         </div>
       </div>

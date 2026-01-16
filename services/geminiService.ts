@@ -189,17 +189,31 @@ export const generateDietPlan = async (
   const prompt = `
     Atue como um Nutricionista Esportivo. Perfil: ${userData.weight}kg, Objetivo: ${userData.goal}, Sexo: ${userData.gender}.
     ${userData.observations ? `Observações Adicionais: ${userData.observations}` : ''}
+
+    ${userData.workoutPlan ? `
+    CONTEXTO DE TREINO DO USUÁRIO (IMPORTANTE):
+    O usuário possui o seguinte treino ativo. Leve isso em consideração para ajustar macros e horários (ex: pré/pós treino):
+    """
+    ${userData.workoutPlan}
+    """
+    ` : ''}
     
     INSTRUÇÕES IMPORTANTES:
     - Se você recebeu fotos ou documentos (exames, prescrições) anexos, ANALISE-OS CUIDADOSAMENTE.
     - Considere as condições físicas visíveis na foto e os dados clínicos do documento para personalizar a dieta.
     
     Crie um plano alimentar semanal visualmente incrível.
-    REGRAS DE DESIGN:
+    
+    REGRAS DE LAYOUT E DESIGN (IMPORTANTE):
     1. Use LAYOUT DE CARDS modernos com Tailwind (bg-white, rounded-2xl, shadow-sm). NÃO use tabelas.
     2. CORES: Texto principal OBRIGATORIAMENTE ESCURO (text-slate-900). Títulos em 'text-emerald-800'.
-    3. Badge vibrante para cada refeição. Domingo com card 'bg-slate-800' e texto branco.
-    4. O output deve ser APENAS o código HTML interno.
+    3. Badge vibrante para cada refeição.
+    4. DOMINGO (Special Day): O card de Domingo deve ter fundo ESCURO ('bg-slate-800') e o texto deve ser BRANCO ('text-white').
+    5. O output deve ser APENAS o código HTML interno.
+
+    REGRAS DE CONTEÚDO (CRUCIAL):
+    - O cardápio deve ser **COMPLETO e VARIADO** para cada dia. NÃO repita apenas "o mesmo de ontem" ou "repetir almoço". Escreva a refeição completa.
+    - **NÃO especifique horários exatos** (ex: "12:00", "08:00"). Use períodos flexíveis como "Manhã", "Almoço", "Lanche da Tarde", "Jantar". A rotina de cada um é flexível.
   `;
 
   try {
@@ -580,11 +594,23 @@ export const generateDietPlanV2 = async (
     - Objetivo: ${userData.goal}
     - Observações: ${userData.observations || 'Nenhuma'}
 
+    ${userData.workoutPlan ? `
+    CONTEXTO DE TREINO DO USUÁRIO (IMPORTANTE):
+    O usuário possui o seguinte treino ativo. Leve isso em consideração para ajustar macros e horários (ex: pré/pós treino):
+    """
+    ${userData.workoutPlan}
+    """
+    ` : ''}
+
     ${SAFETY_PROMPT_BLOCK}
 
     INSTRUÇÃO DE SEGURANÇA (CRÍTICO):
     - Se houver alergias ou condições médicas, você DEVE preencher o campo 'securityAdjustment'.
     - 'securityAdjustment.alert' (ex: "Intolerância à Lactose").
+
+    DIRETRIZES DE QUALIDADE (CRUCIAL):
+    1. Organize o conteúdo de forma variada. EVITE repetições preguiçosas (ex: "Mesmo do almoço").
+    2. Para "time", NÃO use horários exatos (ex: 08:00). Use períodos flexíveis como "Manhã", "Almoço", "Tarde", "Noite".
     
     ESTRUTURA DO JSON (Responda APENAS o JSON puro, sem markdown):
     {
@@ -603,7 +629,7 @@ export const generateDietPlanV2 = async (
         {
           "dayOfWeek": "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday",
           "dayLabel": "string",
-          "isRestDay": boolean,
+          "isRestDay": boolean, // DOMINGO deve ser o dia de descanso principal ou diferenciado
           "note": "string",
           "meals": [
             {

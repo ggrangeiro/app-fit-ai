@@ -1,5 +1,6 @@
 import { CapacitorHttp, HttpResponse } from '@capacitor/core';
 import { DietGoalEntity, User, UserRole, AnalysisResult } from "../types";
+import { secureStorage } from "../utils/secureStorage";
 
 
 const API_BASE_URL = "https://app-back-ia-732767853162.southamerica-east1.run.app";
@@ -7,18 +8,13 @@ const API_BASE_URL = "https://app-back-ia-732767853162.southamerica-east1.run.ap
 // --- HELPERS PARA CREDENCIAIS E AUTH ---
 
 const getRequesterCredentials = () => {
-    const userStr = localStorage.getItem('fitai_current_session');
-    if (!userStr) return null;
+    const user = secureStorage.getItem<any>('fitai_current_session');
+    if (!user) return null;
 
-    try {
-        const user = JSON.parse(userStr);
-        return {
-            id: user.id,
-            role: user.role ? String(user.role).toUpperCase() : 'USER'
-        };
-    } catch (e) {
-        return null;
-    }
+    return {
+        id: user.id,
+        role: user.role ? String(user.role).toUpperCase() : 'USER'
+    };
 };
 
 const getAuthQueryParams = () => {
@@ -434,6 +430,14 @@ export const apiService = {
             url: `${API_BASE_URL}/api/usuarios/admin/reset-password/${targetUserId}`,
             params: getAuthQueryParams(),
             data: { novaSenha }
+        });
+    },
+
+    deleteUser: async (userId: string | number) => {
+        return await nativeFetch({
+            method: 'DELETE',
+            url: `${API_BASE_URL}/api/usuarios/${userId}`,
+            params: getAuthQueryParams()
         });
     },
 

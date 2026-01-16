@@ -14,11 +14,13 @@ import ResetPassword from './components/ResetPassword';
 import AdminDashboard from './components/AdminDashboard';
 import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check, Share2, CheckCircle, ThumbsUp, RefreshCw } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
-import LoadingScreen from './components/LoadingScreen';
+import { OnboardingGuide } from './components/OnboardingGuide';
 import Toast, { ToastType } from './components/Toast';
 import ConfirmModal from './components/ConfirmModal';
 import BuyCreditsModal from './components/BuyCreditsModal';
-import PlansModal from './components/PlansModal';
+import LoadingScreen from './components/LoadingScreen';
+import { SubscriptionModal } from './components/SubscriptionModal';
+import { PaymentCallback } from './components/PaymentCallback';
 
 // --- ICON MAPPING SYSTEM ---
 const EXERCISE_ICONS: Record<string, React.ReactNode> = {
@@ -78,24 +80,33 @@ const EXERCISE_TIPS: Record<string, string[]> = {
   'DEFAULT': ["Mantenha a postura correta.", "Respire de forma controlada.", "Concentre-se na execução."]
 };
 
+import { secureStorage } from './utils/secureStorage'; // Import secureStorage
+
+// ... (imports)
+
 const App: React.FC = () => {
   // --- INICIALIZAÇÃO ROBUSTA DE ESTADO (CORREÇÃO F5) ---
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    // Lê DIRETAMENTE do localStorage na inicialização para evitar delay/logout
-    try {
-      const stored = localStorage.getItem('fitai_current_session');
-      return stored ? JSON.parse(stored) : null;
-    } catch (e) {
-      return null;
-    }
+    // Lê via secureStorage na inicialização
+    return secureStorage.getItem<User>('fitai_current_session');
   });
 
   const [step, setStep] = useState<AppStep>(() => {
     try {
-      // Determina o passo inicial baseado no localStorage também
-      const stored = localStorage.getItem('fitai_current_session');
-      if (stored) {
-        const user = JSON.parse(stored);
+      // Check for Payment Callback URL params first
+      if (window.location.search.includes('collection_status') || window.location.search.includes('status=')) {
+        return AppStep.PAYMENT_CALLBACK;
+      }
+
+      // Determina o passo inicial baseada no secureStorage
+      const user = secureStorage.getItem<User>('fitai_current_session');
+      if (user) {
+        // CORREÇÃO CRÍTICA: Checar se já viu o onboarding ANTES de definir o dashboard
+        const hasSeenOnboarding = secureStorage.getItem<string>('hasSeenOnboarding_v6');
+        if (!hasSeenOnboarding) {
+          return AppStep.ONBOARDING;
+        }
+
         // Se for admin OU personal, vai para dashboard
         if (user.role === 'admin' || user.role === 'personal') {
           return AppStep.ADMIN_DASHBOARD;
@@ -108,6 +119,39 @@ const App: React.FC = () => {
     }
   });
 
+
+  // --- INITIALIZATION CHECK ---
+  useEffect(() => {
+    // Check if user is already logged in on mount and redirect if needed
+    if (currentUser && step === AppStep.LOGIN) {
+      // Priority to Payment Callback
+      if (window.location.search.includes('collection_status') || window.location.search.includes('status=')) {
+        setStep(AppStep.PAYMENT_CALLBACK);
+        return;
+      }
+
+      const hasSeen = secureStorage.getItem<string>('hasSeenOnboarding_v6');
+      if (!hasSeen) {
+        setStep(AppStep.ONBOARDING);
+      } else if (currentUser.role === 'admin' || currentUser.role === 'personal') {
+        setStep(AppStep.ADMIN_DASHBOARD);
+      } else {
+        setStep(AppStep.SELECT_EXERCISE);
+      }
+    }
+  }, []);
+
+  const handleOnboardingComplete = () => {
+    secureStorage.setItem('hasSeenOnboarding_v6', 'true');
+    if (currentUser?.role === 'admin' || currentUser?.role === 'personal') {
+      setStep(AppStep.ADMIN_DASHBOARD);
+    } else {
+      setStep(AppStep.SELECT_EXERCISE);
+    }
+  };
+
+
+  // --- ARQUIVO SELECIONADO (PARA UPLOAD) ---
   // UI States
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
@@ -315,6 +359,11 @@ const App: React.FC = () => {
         const token = url.searchParams.get('token');
         if (token) {
           setResetToken(token);
+        }
+
+        // Handle deep link callback for payment
+        if (url.searchParams.has('collection_status') || url.searchParams.has('status')) {
+          setStep(AppStep.PAYMENT_CALLBACK);
         }
       });
     };
@@ -565,7 +614,7 @@ const App: React.FC = () => {
 
   const handleUpdateUser = (updatedUser: User) => {
     setCurrentUser(updatedUser);
-    localStorage.setItem('fitai_current_session', JSON.stringify(updatedUser));
+    secureStorage.setItem('fitai_current_session', updatedUser);
   };
 
   const handleRefreshUser = async () => {
@@ -579,6 +628,29 @@ const App: React.FC = () => {
       console.error("Erro ao atualizar usuário:", error);
       showToast("Erro ao atualizar dados.", 'error');
     }
+  };
+
+  // --- DELETE ACCOUNT ---
+  const handleDeleteAccount = async () => {
+    if (!currentUser) return;
+
+    // Confirmação dupla
+    triggerConfirm(
+      "Excluir Conta Permanentemente?",
+      "ATENÇÃO: Sua conta e todos os dados serão apagados para sempre. Esta ação não pode ser desfeita.",
+      async () => {
+        try {
+          showToast("Processando exclusão...", 'info');
+          await apiService.deleteUser(currentUser.id);
+          showToast("Conta excluída com sucesso.", 'success');
+          handleLogout();
+        } catch (e: any) {
+          console.error("Erro ao excluir conta:", e);
+          showToast("Erro ao excluir conta: " + (e.message || "Tente novamente."), 'error');
+        }
+      },
+      true // isDestructive
+    );
   };
 
   const loadExercisesList = async (user: User) => {
@@ -720,7 +792,12 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    if (user.role === 'admin' || user.role === 'personal') {
+    secureStorage.setItem('fitai_current_session', user); // Ensure session is saved
+
+    const hasSeen = secureStorage.getItem<string>('hasSeenOnboarding_v6');
+    if (!hasSeen) {
+      setStep(AppStep.ONBOARDING);
+    } else if (user.role === 'admin' || user.role === 'personal') {
       setStep(AppStep.ADMIN_DASHBOARD);
     } else {
       setStep(AppStep.SELECT_EXERCISE);
@@ -1045,7 +1122,36 @@ const App: React.FC = () => {
 
     setGeneratingDiet(true);
     try {
-      const planHtml = await generateDietPlan(dietFormData, currentUser.id, currentUser.role, dietDocument, dietPhoto);
+      // 1. Buscar treino ativo para dar contexto
+      let workoutContext = "";
+      try {
+        const trainings = await apiService.getTrainings(currentUser.id);
+        if (trainings && trainings.length > 0) {
+          // Pega o último (mais recente)
+          const lastWorkout = trainings[0]; // backend já retorna ordenado ou o app assume lista[0] como atual
+
+          if (lastWorkout.daysData) {
+            // V2 (JSON) -> Resumir
+            try {
+              const workoutJson = JSON.parse(lastWorkout.daysData);
+              const summary = workoutJson.summary;
+              workoutContext = `Estilo: ${summary.trainingStyle}, Foco: ${summary.focus?.join(', ')}, Frequência: ${workoutFormData.frequency || 'N/A'}x. Detalhes: ${summary.considerations || ''}`;
+            } catch (e) {
+              workoutContext = "Treino V2 (sem resumo legível)";
+            }
+          } else {
+            // V1 (HTML) -> Mandar direto
+            workoutContext = lastWorkout.content;
+          }
+        }
+      } catch (e) {
+        console.warn("Não foi possível buscar treino para contexto:", e);
+      }
+
+      const planHtml = await generateDietPlan({
+        ...dietFormData,
+        workoutPlan: workoutContext // INJEÇÃO DO CONTEXTO
+      }, currentUser.id, currentUser.role, dietDocument, dietPhoto);
 
       // Usa apiService para criar e refresh
       await apiService.createDiet(currentUser.id, planHtml, dietFormData.goal);
@@ -1181,6 +1287,37 @@ const App: React.FC = () => {
       <Login onLogin={handleLogin} showToast={showToast} />
       <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} onClose={closeToast} />
     </>
+  );
+
+  if (step === AppStep.ONBOARDING) return (
+    <OnboardingGuide onClose={handleOnboardingComplete} />
+  );
+
+  const getPaymentStatus = (): 'success' | 'failure' | 'pending' => {
+    const params = new URLSearchParams(window.location.search);
+    // Mercado Pago returns 'collection_status' or 'status'
+    const status = params.get('collection_status') || params.get('status');
+
+    if (status === 'approved' || status === 'success') return 'success';
+    if (status === 'pending' || status === 'in_process') return 'pending';
+    return 'failure';
+  };
+
+  if (step === AppStep.PAYMENT_CALLBACK) return (
+    <PaymentCallback
+      status={getPaymentStatus()}
+      currentUser={currentUser}
+      refreshUser={handleRefreshUser}
+      onContinue={() => {
+        // Limpa a URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        if (currentUser) {
+          setStep(AppStep.SELECT_EXERCISE);
+        } else {
+          setStep(AppStep.LOGIN);
+        }
+      }}
+    />
   );
 
   const renderWorkoutModal = () => (
@@ -1803,12 +1940,36 @@ const App: React.FC = () => {
 
                       <div className="h-px bg-slate-700/50 my-1"></div>
 
+                      <div className="h-px bg-slate-700/50 my-1"></div>
+
+                      <button
+                        onClick={() => {
+                          secureStorage.removeItem('hasSeenOnboarding_v6'); // Reset for re-viewing
+                          setStep(AppStep.ONBOARDING);
+                          setShowUserMenu(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-blue-500/10 hover:text-blue-400 text-slate-300 transition-colors"
+                      >
+                        <HelpCircle className="w-4 h-4" />
+                        <span className="text-sm font-medium">Ver Tutorial</span>
+                      </button>
+
                       <button
                         onClick={() => { handleLogout(); setShowUserMenu(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-500/10 hover:text-red-400 text-slate-300 transition-colors"
                       >
                         <LogOut className="w-4 h-4" />
                         <span className="text-sm font-medium">Sair da Conta</span>
+                      </button>
+
+                      <div className="h-px bg-slate-700/50 my-1"></div>
+
+                      <button
+                        onClick={() => { handleDeleteAccount(); setShowUserMenu(false); }}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 mt-2 rounded-xl text-slate-600 hover:text-red-400 hover:bg-slate-700/30 transition-all group/delete"
+                      >
+                        <Trash2 className="w-3 h-3 group-hover/delete:scale-110 transition-transform" />
+                        <span className="text-[10px] font-medium uppercase tracking-wider">Excluir Conta</span>
                       </button>
                     </div>
                   </div>
@@ -2221,10 +2382,10 @@ const App: React.FC = () => {
       </main>
 
       {/* --- MODALS --- */}
-      <PlansModal
+      <SubscriptionModal
         isOpen={showPlansModal}
         onClose={() => setShowPlansModal(false)}
-        onSubscribe={handleSubscribe}
+        currentUser={currentUser}
       />
 
       {/* --- OFFLINE BANNER --- */}

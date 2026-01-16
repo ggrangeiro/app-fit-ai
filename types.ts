@@ -88,7 +88,9 @@ export enum AppStep {
   UPLOAD_VIDEO = 'UPLOAD_VIDEO',
   COMPRESSING = 'COMPRESSING',
   ANALYZING = 'ANALYZING',
-  RESULTS = 'RESULTS'
+  RESULTS = 'RESULTS',
+  ONBOARDING = 'ONBOARDING',
+  PAYMENT_CALLBACK = 'PAYMENT_CALLBACK'
 }
 
 export type UserRole = 'admin' | 'user' | 'personal';

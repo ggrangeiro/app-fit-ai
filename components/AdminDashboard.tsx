@@ -493,24 +493,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
         setProcessing(true);
         setProgressMsg(useV2 ? "Gerando Dieta V2 (Estruturada)..." : "Gerando Dieta com IA...");
         try {
+            // 1. Buscar treino ativo do ALUNO para dar contexto
+            let workoutContext = "";
+            try {
+                if (userWorkout) {
+                    if (userWorkout.daysData) {
+                        try {
+                            const workoutJson = JSON.parse(userWorkout.daysData);
+                            const summary = workoutJson.summary;
+                            workoutContext = `Estilo: ${summary.trainingStyle}, Foco: ${summary?.focus?.join(', ')}, Freq: ${userWorkout.frequency || 'N/A'}. Obs: ${summary.considerations}`;
+                        } catch (e) { }
+                    } else {
+                        workoutContext = userWorkout.content;
+                    }
+                }
+            } catch (e) {
+                console.warn("Erro ao preparar contexto de treino:", e);
+            }
+
             if (useV2) {
                 const planV2 = await generateDietPlanV2({
                     weight: actionFormData.weight,
                     height: actionFormData.height,
                     goal: actionFormData.goal,
                     gender: actionFormData.gender,
-                    observations: actionFormData.observations
+                    observations: actionFormData.observations,
+                    workoutPlan: workoutContext // Contexto
                 }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
 
                 const planJson = JSON.stringify(planV2);
                 const newDiet = await apiService.createDietV2(selectedUser.id, planJson, actionFormData.goal);
 
                 showToast(`Dieta V2 salva para ${selectedUser.name}!`, 'success');
-                // V2 Preview might need a different handler, but for now showing the JSON string or summary
-                // If the frontend doesn't support rendering V2 yet, we might want to just show a success message
-                // For this task, we assume "viewingPlan.content" can handle it or we update viewing logic.
-                // Assuming AdminDashboard just shows HTML in dangerouslySetInnerHTML, showing JSON string there is messy.
-                // Let's pretty print it if it's V2.
                 setViewingPlan({ type: 'diet', content: `<pre class="whitespace-pre-wrap text-xs bg-slate-900 text-green-400 p-4 rounded-lg overflow-auto">${JSON.stringify(planV2, null, 2)}</pre>`, title: 'Nova Dieta V2 (JSON)', id: newDiet.id });
             } else {
                 const planHtml = await generateDietPlan({
@@ -518,7 +532,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     height: actionFormData.height,
                     goal: actionFormData.goal,
                     gender: actionFormData.gender,
-                    observations: actionFormData.observations
+                    observations: actionFormData.observations,
+                    workoutPlan: workoutContext // Contexto
                 }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
 
                 const newDiet = await apiService.createDiet(selectedUser.id, planHtml, actionFormData.goal);
