@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, CreditCard, Sparkles, MessageCircle, Star, History, Calendar, ArrowUpRight, ArrowDownLeft, Coins, Loader2 } from 'lucide-react';
+import { Browser } from '@capacitor/browser';
 import { apiService } from '../services/apiService';
 import { CreditHistoryItem, User } from '../types';
 
@@ -30,6 +31,7 @@ export const CreditsModal: React.FC<BuyCreditsModalProps> = ({ isOpen, onClose, 
     const [selectedPlanId, setSelectedPlanId] = useState<number>(1);
     const [history, setHistory] = useState<CreditHistoryItem[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const [processingPayment, setProcessingPayment] = useState(false);
 
     useEffect(() => {
         if (isOpen && activeTab === 'HISTORY' && currentUser) {
@@ -54,10 +56,24 @@ export const CreditsModal: React.FC<BuyCreditsModalProps> = ({ isOpen, onClose, 
 
     const selectedPlan = PLANS.find(p => p.id === selectedPlanId) || PLANS[1];
 
-    const handleWhatsAppContact = () => {
-        const message = `Olá! Gostaria de comprar o pacote de ${selectedPlan.credits} créditos por R$ ${selectedPlan.price},00 no App FitAI.`;
-        const encodedMessage = encodeURIComponent(message);
-        window.open(`https://wa.me/5511974927080?text=${encodedMessage}`, '_blank');
+
+
+    const handleCheckout = async () => {
+        if (!currentUser) return;
+        setProcessingPayment(true);
+        try {
+            const initPointUrl = await apiService.checkoutCredits(currentUser.id, selectedPlan.credits);
+
+            if (initPointUrl) {
+                await Browser.open({ url: initPointUrl });
+                onClose();
+            }
+        } catch (error: any) {
+            console.error("Erro no checkout:", error);
+            alert("Erro ao iniciar pagamento: " + (error.message || "Tente novamente."));
+        } finally {
+            setProcessingPayment(false);
+        }
     };
 
     const formatDate = (dateString: string) => {
@@ -179,11 +195,21 @@ export const CreditsModal: React.FC<BuyCreditsModalProps> = ({ isOpen, onClose, 
                             </div>
 
                             <button
-                                onClick={handleWhatsAppContact}
-                                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98] mt-4"
+                                onClick={handleCheckout}
+                                disabled={processingPayment}
+                                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98] mt-4"
                             >
-                                <MessageCircle className="w-5 h-5" />
-                                Comprar por R$ {selectedPlan.price},00
+                                {processingPayment ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        Processando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CreditCard className="w-5 h-5" />
+                                        Pagar R$ {selectedPlan.price},00
+                                    </>
+                                )}
                             </button>
                         </div>
                     ) : (

@@ -210,7 +210,7 @@ const PlansModal: React.FC<PlansModalProps> = ({ isOpen, onClose, onSubscribe })
                     </button>
 
                     <p className="mt-4 text-center text-[11px] text-slate-400 flex items-center justify-center gap-1">
-                        <Info className="w-3 h-3" /> Pagamento seguro via WhatsApp
+                        <Info className="w-3 h-3" /> Pagamento seguro via Mercado Pago
                     </p>
                 </div>
             </div>

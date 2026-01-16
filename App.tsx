@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, WorkoutPlan, DietPlan } from './types';
 import { App as CapApp } from '@capacitor/app';
-import { analyzeVideo, generateWorkoutPlan, generateDietPlan, resetGeminiInstance } from './services/geminiService';
+import { Browser } from '@capacitor/browser';
+import { analyzeVideo, generateWorkoutPlan, generateDietPlan, resetGeminiInstance, regenerateWorkoutPlan, regenerateDietPlan, regenerateWorkoutPlanV2, regenerateDietPlanV2 } from './services/geminiService';
 import { compressVideo } from './utils/videoUtils';
 import { MockDataService } from './services/mockDataService';
 import { apiService } from './services/apiService'; // NEW API SERVICE
@@ -11,7 +12,7 @@ import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import ResetPassword from './components/ResetPassword';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check, Share2, CheckCircle, ThumbsUp } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check, Share2, CheckCircle, ThumbsUp, RefreshCw } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import LoadingScreen from './components/LoadingScreen';
 import Toast, { ToastType } from './components/Toast';
@@ -116,6 +117,184 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
+  const [showRedoModal, setShowRedoModal] = useState(false);
+  const [redoFeedback, setRedoFeedback] = useState('');
+  const [redoCount, setRedoCount] = useState(0);
+
+  const handleRedoWorkout = async () => {
+    // Validation
+    if (!currentUser) {
+      showToast('Usuário não autenticado.', 'error');
+      return;
+    }
+    if (!redoFeedback.trim()) {
+      showToast('Por favor, descreva o que deseja alterar no treino.', 'error');
+      return;
+    }
+
+    // Get workout content - either from savedWorkouts or from the currently viewing HTML
+    const currentWorkout = savedWorkouts.length > 0 ? savedWorkouts[0] : null;
+    const workoutContent = currentWorkout?.content || viewingWorkoutHtml;
+    const workoutDaysData = currentWorkout?.daysData || null;
+
+    // If no workout content available, exit
+    if (!workoutContent && !workoutDaysData) {
+      showToast('Nenhum treino disponível para refazer.', 'error');
+      return;
+    }
+
+    setGeneratingWorkout(true);
+    try {
+      let newHtml = '';
+
+      if (workoutDaysData) {
+        // V2 Workout (JSON)
+        const updatedV2 = await regenerateWorkoutPlanV2(
+          workoutDaysData,
+          redoFeedback,
+          currentUser,
+          currentUser.id,
+          currentUser.role
+        );
+        newHtml = `<pre class="bg-slate-900 p-4 rounded-lg overflow-x-auto text-xs text-emerald-400 font-mono">${JSON.stringify(updatedV2, null, 2)}</pre>`;
+      } else {
+        // V1 Workout (HTML) - use workoutContent which could be from savedWorkouts or viewingWorkoutHtml
+        newHtml = await regenerateWorkoutPlan(
+          workoutContent!,
+          redoFeedback,
+          currentUser,
+          currentUser.id,
+          currentUser.role
+        );
+      }
+
+      setViewingWorkoutHtml(newHtml);
+
+      // Update savedWorkouts array to persist the regenerated content locally
+      if (savedWorkouts.length > 0 && currentUser) {
+        const workoutId = savedWorkouts[0].id;
+        const workoutGoal = savedWorkouts[0].goal || currentUser.goal || 'fitness';
+
+        // Save to backend using DELETE + POST pattern
+        try {
+          // Delete old workout
+          await apiService.deleteTraining(currentUser.id, Number(workoutId));
+          // Create new workout with regenerated content
+          const newWorkout = await apiService.createTraining(currentUser.id, newHtml, workoutGoal);
+
+          // Update local state with new workout data (including new ID)
+          setSavedWorkouts(prevWorkouts => {
+            const updated = [...prevWorkouts];
+            updated[0] = { ...updated[0], id: newWorkout.id, content: newHtml };
+            return updated;
+          });
+        } catch (saveError) {
+          console.warn('Failed to save to backend:', saveError);
+          // Still update locally even if backend fails
+          setSavedWorkouts(prevWorkouts => {
+            const updated = [...prevWorkouts];
+            updated[0] = { ...updated[0], content: newHtml };
+            return updated;
+          });
+        }
+      }
+
+      setShowRedoModal(false);
+      setRedoFeedback('');
+      setRedoCount(prev => prev + 1);
+
+      showToast('Treino ajustado com sucesso!', 'success');
+
+    } catch (error: any) {
+      showToast('Erro ao ajustar treino: ' + error.message, 'error');
+    } finally {
+      setGeneratingWorkout(false);
+    }
+  };
+
+  const handleRedoDiet = async () => {
+    // Check for basic requirements
+    if (!currentUser || !redoFeedback.trim()) return;
+
+    // Get diet content - either from savedDiets or from the currently viewing HTML
+    const currentDiet = savedDiets.length > 0 ? savedDiets[0] : null;
+    const dietContent = currentDiet?.content || viewingDietHtml;
+    const dietDaysData = currentDiet?.daysData || null;
+
+    // If no diet content available, exit
+    if (!dietContent && !dietDaysData) {
+      showToast('Nenhuma dieta disponível para refazer.', 'error');
+      return;
+    }
+
+    setGeneratingDiet(true);
+    try {
+      let newHtml = '';
+
+      if (dietDaysData) {
+        // V2 Diet (JSON) - use V2 regeneration
+        const updatedV2 = await regenerateDietPlanV2(
+          dietDaysData,
+          redoFeedback,
+          currentUser,
+          currentUser.id,
+          currentUser.role
+        );
+        newHtml = `<pre class="bg-slate-900 p-4 rounded-lg overflow-x-auto text-xs text-emerald-400 font-mono">${JSON.stringify(updatedV2, null, 2)}</pre>`;
+      } else {
+        // V1 Diet (HTML) - use dietContent which could be from savedDiets or viewingDietHtml
+        newHtml = await regenerateDietPlan(
+          dietContent!,
+          redoFeedback,
+          currentUser,
+          currentUser.id,
+          currentUser.role
+        );
+      }
+
+      setViewingDietHtml(newHtml);
+
+      // Update savedDiets array to persist the regenerated content locally
+      if (savedDiets.length > 0 && currentUser) {
+        const dietId = savedDiets[0].id;
+        const dietGoal = savedDiets[0].goal || currentUser.goal || 'emagrecer';
+
+        // Save to backend using DELETE + POST pattern
+        try {
+          // Delete old diet
+          await apiService.deleteDiet(currentUser.id, Number(dietId));
+          // Create new diet with regenerated content
+          const newDiet = await apiService.createDiet(currentUser.id, newHtml, dietGoal);
+
+          // Update local state with new diet data (including new ID)
+          setSavedDiets(prevDiets => {
+            const updated = [...prevDiets];
+            updated[0] = { ...updated[0], id: newDiet.id, content: newHtml };
+            return updated;
+          });
+        } catch (saveError) {
+          console.warn('Failed to save diet to backend:', saveError);
+          // Still update locally even if backend fails
+          setSavedDiets(prevDiets => {
+            const updated = [...prevDiets];
+            updated[0] = { ...updated[0], content: newHtml };
+            return updated;
+          });
+        }
+      }
+
+      setShowRedoModal(false);
+      setRedoFeedback('');
+      setRedoCount(prev => prev + 1);
+
+      showToast('Dieta ajustada com sucesso!', 'success');
+
+    } catch (error: any) {
+      showToast('Erro ao ajustar dieta: ' + error.message, 'error');
+    } finally {
+      setGeneratingDiet(false);
+    }
+  };
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showBuyCreditsModal, setShowBuyCreditsModal] = useState(false);
   const [showPlansModal, setShowPlansModal] = useState(false);
@@ -175,7 +354,7 @@ const App: React.FC = () => {
 
   // Forms
   const [workoutFormData, setWorkoutFormData] = useState({
-    weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino'
+    weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino', duration: 'MEDIUM'
   });
   const [dietFormData, setDietFormData] = useState({
     weight: '', height: '', goal: 'emagrecer', gender: 'masculino', observations: ''
@@ -195,7 +374,7 @@ const App: React.FC = () => {
 
   // Reset helpers for forms
   const resetWorkoutForm = () => {
-    setWorkoutFormData({ weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino' });
+    setWorkoutFormData({ weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino', duration: 'MEDIUM' });
     if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
     setWorkoutDocument(null);
     setWorkoutPhoto(null);
@@ -358,16 +537,48 @@ const App: React.FC = () => {
   };
 
   const handleSubscribe = async (planId: string, planName: string, price: string) => {
-    // MVP: Abrir WhatsApp
-    const message = `Olá! Gostaria de assinar o plano ${planName} por R$ ${price} no App FitAI.`;
-    const whatsappUrl = `https://wa.me/5511974927080?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-    setShowPlansModal(false);
+    if (!currentUser) return;
+
+    // Check for valid Plan ID
+    const validPlans = ['STARTER', 'PRO', 'STUDIO'];
+    if (!validPlans.includes(planId)) {
+      showToast("Plano inválido.", 'error');
+      return;
+    }
+
+    try {
+      showToast("Iniciando pagamento...", 'info');
+      const initPointUrl = await apiService.checkoutSubscription(
+        currentUser.id,
+        planId as 'STARTER' | 'PRO' | 'STUDIO'
+      );
+
+      if (initPointUrl) {
+        await Browser.open({ url: initPointUrl });
+        setShowPlansModal(false);
+      }
+    } catch (error: any) {
+      console.error("Erro na assinatura:", error);
+      showToast("Erro ao iniciar assinatura: " + error.message, 'error');
+    }
   };
 
   const handleUpdateUser = (updatedUser: User) => {
     setCurrentUser(updatedUser);
     localStorage.setItem('fitai_current_session', JSON.stringify(updatedUser));
+  };
+
+  const handleRefreshUser = async () => {
+    if (!currentUser) return;
+    try {
+      showToast("Atualizando dados...", 'info');
+      const updatedUser = await apiService.getMe(currentUser.id);
+      handleUpdateUser(updatedUser);
+      showToast("Dados atualizados!", 'success');
+    } catch (error) {
+      console.error("Erro ao atualizar usuário:", error);
+      showToast("Erro ao atualizar dados.", 'error');
+    }
   };
 
   const loadExercisesList = async (user: User) => {
@@ -998,8 +1209,16 @@ const App: React.FC = () => {
             >
               <CheckCircle className="w-5 h-5" />
             </button>
-            <button onClick={confirmDeleteWorkout} className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white">
-              <Trash2 className="w-5 h-5" />
+            <button
+              onClick={() => setShowRedoModal(true)}
+              disabled={redoCount >= 2}
+              className={`p-2 rounded-lg text-white transition-colors ${redoCount >= 2 ? 'bg-slate-700 text-slate-500' : 'bg-amber-600 hover:bg-amber-500'}`}
+              title="Refazer com IA"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+            <button onClick={confirmDeleteWorkout} className="flex items-center gap-2 p-2 px-3 bg-red-600 hover:bg-red-500 rounded-lg text-white">
+              <Trash2 className="w-5 h-5" /> <span className="hidden sm:inline font-bold">Excluir</span>
             </button>
           </div>
         </div>
@@ -1017,6 +1236,34 @@ const App: React.FC = () => {
           <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: viewingWorkoutHtml || (savedWorkouts[0]?.content || '') }} />
         </div>
       </div>
+      {showRedoModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl">
+            <button onClick={() => setShowRedoModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+              <X className="w-6 h-6" />
+            </button>
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <RefreshCw className="w-6 h-6 text-amber-400" /> Refazer Treino com IA
+            </h3>
+            <p className="text-sm text-slate-400 mb-4">O que deve ser mudado?</p>
+            <textarea
+              className={`w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white focus:border-amber-500 outline-none h-32 resize-none ${(generatingWorkout || generatingDiet) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              placeholder="Ex: Quero um treino mais intenso, troque agachamento por leg press..."
+              value={redoFeedback}
+              onChange={e => setRedoFeedback(e.target.value)}
+              disabled={generatingWorkout || generatingDiet}
+            />
+            <button
+              onClick={handleRedoWorkout}
+              disabled={generatingWorkout}
+              className="w-full mt-4 bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition-all flex justify-center items-center gap-2"
+            >
+              {generatingWorkout ? <Loader2 className="animate-spin w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
+              Refazer Agora
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -1156,8 +1403,16 @@ const App: React.FC = () => {
               {pdfLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
               <span className="hidden sm:inline">{pdfLoading ? 'Gerando...' : 'Compartilhar'}</span>
             </button>
-            <button onClick={confirmDeleteDiet} className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white">
-              <Trash2 className="w-5 h-5" />
+            <button
+              onClick={() => setShowRedoModal(true)}
+              disabled={redoCount >= 2}
+              className={`p-2 rounded-lg text-white transition-colors ${redoCount >= 2 ? 'bg-slate-700 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+              title="Refazer com IA"
+            >
+              <RefreshCw className="w-5 h-5" />
+            </button>
+            <button onClick={confirmDeleteDiet} className="flex items-center gap-2 p-2 px-3 bg-red-600 hover:bg-red-500 rounded-lg text-white">
+              <Trash2 className="w-5 h-5" /> <span className="hidden sm:inline font-bold">Excluir</span>
             </button>
           </div>
         </div>
@@ -1175,6 +1430,34 @@ const App: React.FC = () => {
           <div id="diet-view-content" dangerouslySetInnerHTML={{ __html: viewingDietHtml || (savedDiets[0]?.content || '') }} />
         </div>
       </div>
+      {showRedoModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl">
+            <button onClick={() => setShowRedoModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+              <X className="w-6 h-6" />
+            </button>
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <RefreshCw className="w-6 h-6 text-emerald-400" /> Refazer Dieta com IA
+            </h3>
+            <p className="text-sm text-slate-400 mb-4">O que deve ser mudado?</p>
+            <textarea
+              className={`w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white focus:border-emerald-500 outline-none h-32 resize-none ${generatingDiet ? 'opacity-50 cursor-not-allowed' : ''}`}
+              placeholder="Ex: Quero menos carboidratos, incluir mais frutas..."
+              value={redoFeedback}
+              onChange={e => setRedoFeedback(e.target.value)}
+              disabled={generatingDiet}
+            />
+            <button
+              onClick={handleRedoDiet}
+              disabled={generatingDiet}
+              className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all flex justify-center items-center gap-2"
+            >
+              {generatingDiet ? <Loader2 className="animate-spin w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
+              Refazer Agora
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -1216,6 +1499,11 @@ const App: React.FC = () => {
               <option value="7">Todos dias</option>
             </select>
           </div>
+          <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={workoutFormData.duration} onChange={e => setWorkoutFormData({ ...workoutFormData, duration: e.target.value })}>
+            <option value="short">Curto (30min)</option>
+            <option value="medium">Médio (60min)</option>
+            <option value="long">Longo (90min+)</option>
+          </select>
           <textarea placeholder="Observações (lesões, foco...)" className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={workoutFormData.observations} onChange={e => setWorkoutFormData({ ...workoutFormData, observations: e.target.value })} />
 
           <div className="space-y-3">
@@ -1381,6 +1669,15 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {currentUser && (
+              <button
+                onClick={handleRefreshUser}
+                className="p-2 bg-slate-800/80 hover:bg-slate-700 rounded-full border border-slate-700 text-slate-400 hover:text-white transition-all"
+                title="Atualizar dados"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            )}
             {currentUser && (currentUser.role === 'user' || currentUser.role === 'personal') && (
               <div
                 className="relative group cursor-help"

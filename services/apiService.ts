@@ -1,5 +1,6 @@
-import { DietGoalEntity, User, UserRole, AnalysisResult } from "../types";
 import { CapacitorHttp, HttpResponse } from '@capacitor/core';
+import { DietGoalEntity, User, UserRole, AnalysisResult } from "../types";
+
 
 const API_BASE_URL = "https://app-back-ia-732767853162.southamerica-east1.run.app";
 
@@ -239,6 +240,20 @@ export const apiService = {
         });
     },
 
+    createTrainingV2: async (userId: string | number, daysData: string, goal: string) => {
+        return await nativeFetch({
+            method: 'POST',
+            url: `${API_BASE_URL}/api/treinos/v2`,
+            params: getAuthQueryParams(),
+            data: {
+                userId: String(userId),
+                goal: goal,
+                data: new Date().toISOString().split('T')[0],
+                daysData: daysData // JSON string containing adherence to contract
+            }
+        });
+    },
+
     getTrainings: async (userId: string | number) => {
         const data = await nativeFetch({
             method: 'GET',
@@ -275,6 +290,27 @@ export const apiService = {
                 goal: goalMap[goal] || DietGoalEntity.WEIGHT_LOSS,
                 content: content,
                 data: new Date().toISOString().split('T')[0]
+            }
+        });
+    },
+
+    createDietV2: async (userId: string | number, daysData: string, goal: string) => {
+        const goalMap: Record<string, DietGoalEntity> = {
+            'emagrecer': DietGoalEntity.WEIGHT_LOSS,
+            'ganhar_massa': DietGoalEntity.HYPERTROPHY,
+            'manutencao': DietGoalEntity.MAINTENANCE,
+            'definicao': DietGoalEntity.DEFINITION
+        };
+
+        return await nativeFetch({
+            method: 'POST',
+            url: `${API_BASE_URL}/api/dietas/v2`,
+            params: getAuthQueryParams(),
+            data: {
+                userId: String(userId),
+                goal: goalMap[goal] || DietGoalEntity.WEIGHT_LOSS,
+                data: new Date().toISOString().split('T')[0],
+                daysData: daysData // JSON string
             }
         });
     },
@@ -399,6 +435,36 @@ export const apiService = {
             params: getAuthQueryParams(),
             data: { novaSenha }
         });
+    },
+
+    // --- Integração Mercado Pago (Web Checkout) ---
+    checkoutCredits: async (userId: string | number, creditsAmount: number) => {
+        const response = await nativeFetch({
+            method: 'POST',
+            url: `${API_BASE_URL}/api/checkout/create-preference/credits`,
+            params: { userId: String(userId) },
+            data: { amount: creditsAmount }
+        });
+
+        // Retorna a URL de pagamento (initPoint ou sandboxInitPoint)
+        const initPoint = response.initPoint || response.sandboxInitPoint;
+        if (!initPoint) throw new Error("URL de pagamento não recebida do servidor.");
+
+        return initPoint;
+    },
+
+    checkoutSubscription: async (userId: string | number, planId: 'STARTER' | 'PRO' | 'STUDIO') => {
+        const response = await nativeFetch({
+            method: 'POST',
+            url: `${API_BASE_URL}/api/checkout/create-preference`,
+            params: { userId: String(userId) },
+            data: { planId }
+        });
+
+        const initPoint = response.initPoint || response.sandboxInitPoint;
+        if (!initPoint) throw new Error("URL de pagamento não recebida do servidor.");
+
+        return initPoint;
     },
 
     getPlans: async () => {

@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, AnalysisResult, DietPlan, WorkoutPlan, AppStep, WorkoutCheckIn } from '../types';
 import { MockDataService } from '../services/mockDataService';
 import { apiService } from '../services/apiService';
-import { generateExerciseThumbnail, analyzeVideo, generateDietPlan, generateWorkoutPlan, regenerateWorkoutPlan } from '../services/geminiService';
+import { generateExerciseThumbnail, analyzeVideo, generateDietPlan, generateWorkoutPlan, regenerateWorkoutPlan, regenerateDietPlan, generateDietPlanV2, generateWorkoutPlanV2, regenerateWorkoutPlanV2, regenerateDietPlanV2 } from '../services/geminiService';
 import { compressVideo } from '../utils/videoUtils';
 import { shareAsPdf } from '../utils/pdfUtils';
 import { ResultView } from './ResultView';
 import LoadingScreen from './LoadingScreen';
-import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock } from 'lucide-react';
+import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock, Trash2 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 
@@ -62,7 +62,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     // States para exibir planos atuais do usuário
     const [userDiet, setUserDiet] = useState<DietPlan | null>(null);
     const [userWorkout, setUserWorkout] = useState<WorkoutPlan | null>(null);
-    const [viewingPlan, setViewingPlan] = useState<{ type: 'workout' | 'diet', title: string, content: string, id: string, redoCount?: number, originalFormData?: any } | null>(null);
+    const [viewingPlan, setViewingPlan] = useState<{ type: 'workout' | 'diet', title: string, content: string, daysData?: string, id: string, redoCount?: number, originalFormData?: any } | null>(null);
     const [pdfLoading, setPdfLoading] = useState(false);
 
     // Redo Workout States
@@ -87,6 +87,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     const [newPhone, setNewPhone] = useState('');
     const [newRole, setNewRole] = useState('user'); // Novo estado para o papel do usuário
 
+    // --- V2 GENERATION STATE ---
+    const [useV2, setUseV2] = useState(false);
+
+
     // Máscara de telefone brasileiro (10 ou 11 dígitos)
     const formatPhone = (value: string): string => {
         const digits = value.replace(/\D/g, ''); // Remove tudo que não é número
@@ -110,7 +114,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     const [assessmentFiles, setAssessmentFiles] = useState<File[]>([]);
     const [assessmentPreviews, setAssessmentPreviews] = useState<string[]>([]);
     const [actionFormData, setActionFormData] = useState({
-        weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino'
+        weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', duration: 'medium', observations: '', gender: 'masculino'
     });
 
     // Novos estados para anexos (Prescrição Planos)
@@ -122,7 +126,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
     // Reset helper for action forms
     const resetActionForm = () => {
-        setActionFormData({ weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', observations: '', gender: 'masculino' });
+        setActionFormData({ weight: '', height: '', goal: 'hipertrofia', level: 'iniciante', frequency: '4', duration: 'medium', observations: '', gender: 'masculino' });
         if (actionPhotoPreview) URL.revokeObjectURL(actionPhotoPreview);
         setActionDocument(null);
         setActionPhoto(null);
@@ -487,18 +491,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
         e.preventDefault();
         if (!selectedUser) return;
         setProcessing(true);
-        setProgressMsg("Gerando Dieta com IA...");
+        setProgressMsg(useV2 ? "Gerando Dieta V2 (Estruturada)..." : "Gerando Dieta com IA...");
         try {
-            const planHtml = await generateDietPlan({
-                weight: actionFormData.weight,
-                height: actionFormData.height,
-                goal: actionFormData.goal,
-                gender: actionFormData.gender,
-                observations: actionFormData.observations
-            }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
+            if (useV2) {
+                const planV2 = await generateDietPlanV2({
+                    weight: actionFormData.weight,
+                    height: actionFormData.height,
+                    goal: actionFormData.goal,
+                    gender: actionFormData.gender,
+                    observations: actionFormData.observations
+                }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
 
-            const newDiet = await apiService.createDiet(selectedUser.id, planHtml, actionFormData.goal);
-            showToast(`Dieta salva para ${selectedUser.name}!`, 'success');
+                const planJson = JSON.stringify(planV2);
+                const newDiet = await apiService.createDietV2(selectedUser.id, planJson, actionFormData.goal);
+
+                showToast(`Dieta V2 salva para ${selectedUser.name}!`, 'success');
+                // V2 Preview might need a different handler, but for now showing the JSON string or summary
+                // If the frontend doesn't support rendering V2 yet, we might want to just show a success message
+                // For this task, we assume "viewingPlan.content" can handle it or we update viewing logic.
+                // Assuming AdminDashboard just shows HTML in dangerouslySetInnerHTML, showing JSON string there is messy.
+                // Let's pretty print it if it's V2.
+                setViewingPlan({ type: 'diet', content: `<pre class="whitespace-pre-wrap text-xs bg-slate-900 text-green-400 p-4 rounded-lg overflow-auto">${JSON.stringify(planV2, null, 2)}</pre>`, title: 'Nova Dieta V2 (JSON)', id: newDiet.id });
+            } else {
+                const planHtml = await generateDietPlan({
+                    weight: actionFormData.weight,
+                    height: actionFormData.height,
+                    goal: actionFormData.goal,
+                    gender: actionFormData.gender,
+                    observations: actionFormData.observations
+                }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
+
+                const newDiet = await apiService.createDiet(selectedUser.id, planHtml, actionFormData.goal);
+                showToast(`Dieta salva para ${selectedUser.name}!`, 'success');
+                setViewingPlan({ type: 'diet', content: planHtml, title: 'Nova Dieta Gerada', id: newDiet.id });
+            }
 
             // Limpa anexos
             if (actionPhotoPreview) URL.revokeObjectURL(actionPhotoPreview);
@@ -506,8 +532,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             setActionPhoto(null);
             setActionDocument(null);
 
-            // Abre preview imediatamente e atualiza lista
-            setViewingPlan({ type: 'diet', content: planHtml, title: 'Nova Dieta Gerada', id: newDiet.id });
             fetchUserPlans(selectedUser.id);
             setShowTeacherActionModal('NONE');
             resetActionForm();
@@ -524,28 +548,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
         e.preventDefault();
         if (!selectedUser) return;
         setProcessing(true);
-        setProgressMsg("Gerando Treino com IA...");
+        setProgressMsg(useV2 ? "Gerando Treino V2 (Estruturado)..." : "Gerando Treino com IA...");
         try {
-            const planHtml = await generateWorkoutPlan({
-                weight: actionFormData.weight,
-                height: actionFormData.height,
-                goal: actionFormData.goal,
-                level: actionFormData.level,
-                frequency: actionFormData.frequency,
-                observations: actionFormData.observations,
-                gender: actionFormData.gender
-            }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
-
-            const newWorkout = await apiService.createTraining(selectedUser.id, planHtml, actionFormData.goal);
-            showToast(`Treino salva para ${selectedUser.name}!`, 'success');
-
-            // Limpa anexos
-            if (actionPhotoPreview) URL.revokeObjectURL(actionPhotoPreview);
-            setActionPhotoPreview(null);
-            setActionPhoto(null);
-            setActionDocument(null);
-
-            // Abre preview imediatamente e atualiza lista
             const originalData = {
                 weight: actionFormData.weight,
                 height: actionFormData.height,
@@ -555,7 +559,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 observations: actionFormData.observations,
                 gender: actionFormData.gender
             };
-            setViewingPlan({ type: 'workout', content: planHtml, title: 'Novo Treino Gerado', id: newWorkout.id, redoCount: 0, originalFormData: originalData });
+
+            if (useV2) {
+                const planV2 = await generateWorkoutPlanV2(originalData, currentUser.id, currentUser.role, actionDocument, actionPhoto);
+                const planJson = JSON.stringify(planV2);
+                const newWorkout = await apiService.createTrainingV2(selectedUser.id, planJson, actionFormData.goal);
+
+                showToast(`Treino V2 salvo para ${selectedUser.name}!`, 'success');
+
+                setViewingPlan({ type: 'workout', content: `<pre class="whitespace-pre-wrap text-xs bg-slate-900 text-blue-400 p-4 rounded-lg overflow-auto">${JSON.stringify(planV2, null, 2)}</pre>`, title: 'Novo Treino V2 (JSON)', id: newWorkout.id, redoCount: 0, originalFormData: originalData });
+            } else {
+                const planHtml = await generateWorkoutPlan(originalData, currentUser.id, currentUser.role, actionDocument, actionPhoto);
+                const newWorkout = await apiService.createTraining(selectedUser.id, planHtml, actionFormData.goal);
+
+                showToast(`Treino salva para ${selectedUser.name}!`, 'success');
+
+                setViewingPlan({ type: 'workout', content: planHtml, title: 'Novo Treino Gerado', id: newWorkout.id, redoCount: 0, originalFormData: originalData });
+            }
+
+            // Limpa anexos
+            if (actionPhotoPreview) URL.revokeObjectURL(actionPhotoPreview);
+            setActionPhotoPreview(null);
+            setActionPhoto(null);
+            setActionDocument(null);
+
             fetchUserPlans(selectedUser.id);
             setShowTeacherActionModal('NONE');
             resetActionForm();
@@ -708,33 +735,106 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
         }
     };
 
+    const handleDeletePlan = async () => {
+        if (!viewingPlan || !selectedUser) return;
+
+        triggerConfirm(
+            `Excluir ${viewingPlan.type === 'workout' ? 'Treino' : 'Dieta'}`,
+            "Tem certeza que deseja apagar este plano permanentemente?",
+            async () => {
+                setProcessing(true);
+                try {
+                    if (viewingPlan.type === 'workout') {
+                        await apiService.deleteTraining(selectedUser.id, viewingPlan.id);
+                        showToast("Treino removido com sucesso.", 'success');
+                    } else {
+                        await apiService.deleteDiet(selectedUser.id, viewingPlan.id);
+                        showToast("Dieta removida com sucesso.", 'success');
+                    }
+                    setViewingPlan(null);
+                    // Refresh user data to update list
+                    await fetchBackendUsers();
+                    setSelectedUser(null); // Force re-selection to avoid stale data
+                } catch (e) {
+                    showToast("Erro ao remover plano.", 'error');
+                } finally {
+                    setProcessing(false);
+                }
+            },
+            true
+        );
+    };
+
     const handleRedoWorkout = async () => {
-        if (!viewingPlan || !redoFeedback.trim() || viewingPlan.type !== 'workout') return;
+        if (!viewingPlan || !redoFeedback.trim()) return;
 
         setProcessing(true);
-        setProgressMsg("Ajustando treino com IA...");
-        setShowRedoModal(false);
+        setProgressMsg(viewingPlan.type === 'workout' ? "Ajustando treino..." : "Ajustando dieta...");
+        // NOTE: Keeping modal open so user sees the loading state
 
         try {
-            const newHtml = await regenerateWorkoutPlan(
-                viewingPlan.content,
-                redoFeedback,
-                viewingPlan.originalFormData || {},
-                currentUser.id,
-                currentUser.role
-            );
+            let newHtml = '';
+            let newDaysData = '';
+
+            if (viewingPlan.type === 'workout') {
+                if (viewingPlan.daysData) {
+                    // --- TREINO V2 (JSON) ---
+                    const updatedV2 = await regenerateWorkoutPlanV2(
+                        viewingPlan.daysData,
+                        redoFeedback,
+                        viewingPlan.originalFormData || selectedUser || {},
+                        currentUser.id,
+                        currentUser.role
+                    );
+                    newDaysData = JSON.stringify(updatedV2);
+                    newHtml = `<pre class="bg-slate-900 p-4 rounded-lg overflow-x-auto text-xs text-emerald-400 font-mono">${JSON.stringify(updatedV2, null, 2)}</pre>`;
+                } else {
+                    // --- TREINO V1 (HTML) ---
+                    newHtml = await regenerateWorkoutPlan(
+                        viewingPlan.content,
+                        redoFeedback,
+                        viewingPlan.originalFormData || selectedUser || {},
+                        currentUser.id,
+                        currentUser.role
+                    );
+                }
+            } else if (viewingPlan.type === 'diet') {
+                if (viewingPlan.daysData) {
+                    // --- DIETA V2 (JSON) ---
+                    const updatedV2 = await regenerateDietPlanV2(
+                        viewingPlan.daysData,
+                        redoFeedback,
+                        viewingPlan.originalFormData || selectedUser || {},
+                        currentUser.id,
+                        currentUser.role
+                    );
+                    newDaysData = JSON.stringify(updatedV2);
+                    newHtml = `<pre class="bg-slate-900 p-4 rounded-lg overflow-x-auto text-xs text-emerald-400 font-mono">${JSON.stringify(updatedV2, null, 2)}</pre>`;
+                } else {
+                    // --- DIETA V1 (HTML) ---
+                    newHtml = await regenerateDietPlan(
+                        viewingPlan.content,
+                        redoFeedback,
+                        viewingPlan.originalFormData || selectedUser || {},
+                        currentUser.id,
+                        currentUser.role
+                    );
+                }
+            }
 
             // Update viewing plan with new content and increment redoCount
             setViewingPlan({
                 ...viewingPlan,
                 content: newHtml,
+                daysData: newDaysData || viewingPlan.daysData,
                 redoCount: (viewingPlan.redoCount || 0) + 1
             });
 
+            setShowRedoModal(false);
             setRedoFeedback('');
-            showToast("Treino ajustado com sucesso!", 'success');
+            showToast("Plano ajustado com sucesso!", 'success');
         } catch (err: any) {
-            showToast("Erro ao ajustar treino: " + err.message, 'error');
+            showToast("Erro ao ajustar plano: " + err.message, 'error');
         } finally {
             setProcessing(false);
             setProgressMsg('');
@@ -954,7 +1054,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
                         {showTeacherActionModal === 'DIET' && (
                             <form onSubmit={handleTeacherGenerateDiet} className="space-y-4">
-                                <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Utensils className="w-6 h-6 text-emerald-400" /> Prescrever Dieta IA</h3>
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-2"><Utensils className="w-6 h-6 text-emerald-400" /> Prescrever Dieta IA</h3>
+                                    <div className="flex items-center gap-2 bg-slate-800 p-1.5 rounded-lg border border-slate-700">
+                                        <span className={`text-xs font-bold ${!useV2 ? 'text-white' : 'text-slate-500'}`}>Web (HTML)</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setUseV2(!useV2)}
+                                            className={`w-10 h-5 rounded-full relative transition-colors ${useV2 ? 'bg-emerald-500' : 'bg-slate-600'}`}
+                                        >
+                                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-transform ${useV2 ? 'left-6' : 'left-1'}`} />
+                                        </button>
+                                        <span className={`text-xs font-bold ${useV2 ? 'text-emerald-400' : 'text-slate-500'}`}>App V2 (JSON)</span>
+                                    </div>
+                                </div>
                                 <p className="text-sm text-slate-400 mb-4">Gerando dieta para: <span className="text-white font-bold">{selectedUser?.name}</span></p>
                                 {/* Reuse logic from App.tsx forms */}
                                 <div className="grid grid-cols-2 gap-4">
@@ -1023,7 +1136,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
                         {showTeacherActionModal === 'WORKOUT' && (
                             <form onSubmit={handleTeacherGenerateWorkout} className="space-y-4">
-                                <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Dumbbell className="w-6 h-6 text-blue-400" /> Prescrever Treino IA</h3>
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-2"><Dumbbell className="w-6 h-6 text-blue-400" /> Prescrever Treino IA</h3>
+                                    <div className="flex items-center gap-2 bg-slate-800 p-1.5 rounded-lg border border-slate-700">
+                                        <span className={`text-xs font-bold ${!useV2 ? 'text-white' : 'text-slate-500'}`}>Web (HTML)</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setUseV2(!useV2)}
+                                            className={`w-10 h-5 rounded-full relative transition-colors ${useV2 ? 'bg-blue-500' : 'bg-slate-600'}`}
+                                        >
+                                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-transform ${useV2 ? 'left-6' : 'left-1'}`} />
+                                        </button>
+                                        <span className={`text-xs font-bold ${useV2 ? 'text-blue-400' : 'text-slate-500'}`}>App V2 (JSON)</span>
+                                    </div>
+                                </div>
                                 <p className="text-sm text-slate-400 mb-4">Gerando treino para: <span className="text-white font-bold">{selectedUser?.name}</span></p>
                                 <div className="grid grid-cols-2 gap-4">
                                     <input type="number" placeholder="Peso (kg)" required className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.weight} onChange={e => setActionFormData({ ...actionFormData, weight: e.target.value })} />
@@ -1039,8 +1165,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     <option value="definicao">Definição</option>
                                 </select>
 
-                                {/* NOVA GRID: NÍVEL E FREQUÊNCIA */}
-                                <div className="grid grid-cols-2 gap-4">
+                                {/* NOVA GRID: LEVEL, FREQUENCY, DURATION */}
+                                <div className="grid grid-cols-3 gap-3">
                                     <div className="space-y-1">
                                         <label className="text-xs text-slate-400 ml-1">Nível</label>
                                         <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.level} onChange={e => setActionFormData({ ...actionFormData, level: e.target.value })}>
@@ -1052,13 +1178,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     <div className="space-y-1">
                                         <label className="text-xs text-slate-400 ml-1">Frequência</label>
                                         <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.frequency} onChange={e => setActionFormData({ ...actionFormData, frequency: e.target.value })}>
-                                            <option value="1">1x na Semana</option>
-                                            <option value="2">2x na Semana</option>
-                                            <option value="3">3x na Semana</option>
-                                            <option value="4">4x na Semana</option>
-                                            <option value="5">5x na Semana</option>
-                                            <option value="6">6x na Semana</option>
-                                            <option value="7">Todos os dias</option>
+                                            <option value="1">1x/sem</option>
+                                            <option value="2">2x/sem</option>
+                                            <option value="3">3x/sem</option>
+                                            <option value="4">4x/sem</option>
+                                            <option value="5">5x/sem</option>
+                                            <option value="6">6x/sem</option>
+                                            <option value="7">Todos</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 ml-1">Duração</label>
+                                        <select className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-blue-500 focus:outline-none" value={actionFormData.duration} onChange={e => setActionFormData({ ...actionFormData, duration: e.target.value })}>
+                                            <option value="short">Curto (30min)</option>
+                                            <option value="medium">Médio (60min)</option>
+                                            <option value="long">Longo (90min+)</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1228,48 +1362,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                         )}
                     </div>
                 </div>
-            )}
+            )
+            }
 
             {/* PLAN PREVIEW MODAL */}
-            {viewingPlan && (
-                <div className="fixed inset-0 z-[120] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
-                    <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
-                        <div className="flex justify-between items-center max-w-6xl mx-auto mb-6 no-print">
-                            <button
-                                onClick={() => setViewingPlan(null)}
-                                className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
-                            >
-                                <X className="w-6 h-6" /> <span className="hidden sm:inline">Fechar Visualização</span>
-                            </button>
-                            <div className="flex gap-3">
-                                {/* Redo Button - Only for workouts and Personal/Admin */}
-                                {viewingPlan.type === 'workout' && (isPersonal || isAdmin) && viewingPlan.originalFormData && (
-                                    <button
-                                        onClick={() => setShowRedoModal(true)}
-                                        disabled={processing || (viewingPlan.redoCount || 0) >= 2}
-                                        title={`Refazer (${viewingPlan.redoCount || 0}/2 usados)`}
-                                        className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg font-bold shadow-lg transition-all ${(viewingPlan.redoCount || 0) >= 2
-                                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                            : 'bg-amber-600 hover:bg-amber-500 text-white'
-                                            }`}
-                                    >
-                                        <RefreshCw className="w-5 h-5" />
-                                        <span className="hidden sm:inline">Refazer ({2 - (viewingPlan.redoCount || 0)} restantes)</span>
-                                        <span className="sm:hidden">{2 - (viewingPlan.redoCount || 0)}</span>
-                                    </button>
-                                )}
+            {
+                viewingPlan && (
+                    <div className="fixed inset-0 z-[120] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
+                        <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
+                            <div className="flex justify-between items-center max-w-6xl mx-auto mb-6 no-print">
                                 <button
-                                    onClick={handleSharePlan}
-                                    disabled={pdfLoading}
-                                    className="flex items-center gap-2 px-4 sm:px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold shadow-lg transition-all disabled:opacity-50"
+                                    onClick={() => setViewingPlan(null)}
+                                    className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
                                 >
-                                    {pdfLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
-                                    <span className="hidden sm:inline">{pdfLoading ? 'Gerando PDF...' : 'Compartilhar PDF'}</span>
+                                    <X className="w-6 h-6" /> <span className="hidden sm:inline">Fechar Visualização</span>
                                 </button>
+                                <div className="flex gap-3">
+                                    {/* Redo Button - For Workouts and Diets (Personal/Admin) */}
+                                    {(isPersonal || isAdmin) && (
+                                        <button
+                                            onClick={() => setShowRedoModal(true)}
+                                            disabled={processing || (viewingPlan.redoCount || 0) >= 2}
+                                            title={`Refazer (${viewingPlan.redoCount || 0}/2 usados)`}
+                                            className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg font-bold shadow-lg transition-all ${(viewingPlan.redoCount || 0) >= 2
+                                                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                                : 'bg-amber-600 hover:bg-amber-500 text-white'
+                                                }`}
+                                        >
+                                            <RefreshCw className="w-5 h-5" />
+                                            <span className="hidden sm:inline">Refazer ({2 - (viewingPlan.redoCount || 0)} restantes)</span>
+                                            <span className="sm:hidden">{2 - (viewingPlan.redoCount || 0)}</span>
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={handleDeletePlan}
+                                        disabled={processing}
+                                        className="p-2 bg-red-600 hover:bg-red-500 rounded-lg text-white shadow-lg transition-colors"
+                                        title="Excluir Plano"
+                                    >
+                                        <Trash2 className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                        onClick={handleSharePlan}
+                                        disabled={pdfLoading}
+                                        className="flex items-center gap-2 px-4 sm:px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold shadow-lg transition-all disabled:opacity-50"
+                                    >
+                                        {pdfLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
+                                        <span className="hidden sm:inline">{pdfLoading ? 'Gerando PDF...' : 'Compartilhar PDF'}</span>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                        <div id="printable-plan-container" className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh] printable-content">
-                            <style>{`
+                            <div id="printable-plan-container" className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh] printable-content">
+                                <style>{`
                      #admin-plan-view { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
                      @media print {
                        body * { visibility: hidden; }
@@ -1278,99 +1422,105 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                        .no-print { display: none !important; }
                      }
                  `}</style>
-                            {/* Title Header inside Printable Area */}
-                            <div className="mb-6 border-b border-slate-200 pb-4">
-                                <div className="bg-slate-800 text-white inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
-                                    FitAI Pro
+                                {/* Title Header inside Printable Area */}
+                                <div className="mb-6 border-b border-slate-200 pb-4">
+                                    <div className="bg-slate-800 text-white inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
+                                        FitAI Pro
+                                    </div>
+                                    <h2 className="text-2xl font-bold text-slate-900">{viewingPlan.title}</h2>
+                                    <p className="text-sm text-slate-500">Plano gerado para: {selectedUser?.name}</p>
                                 </div>
-                                <h2 className="text-2xl font-bold text-slate-900">{viewingPlan.title}</h2>
-                                <p className="text-sm text-slate-500">Plano gerado para: {selectedUser?.name}</p>
-                            </div>
 
-                            <div id="admin-plan-view" dangerouslySetInnerHTML={{ __html: viewingPlan.content }} />
+                                <div id="admin-plan-view" dangerouslySetInnerHTML={{ __html: viewingPlan.content }} />
 
-                            <div className="mt-8 pt-4 border-t border-slate-200 text-center text-xs text-slate-400">
-                                Documento gerado automaticamente por FitAI Analyzer. Acompanhamento profissional recomendado.
+                                <div className="mt-8 pt-4 border-t border-slate-200 text-center text-xs text-slate-400">
+                                    Documento gerado automaticamente por FitAI Analyzer. Acompanhamento profissional recomendado.
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
-            {/* REDO WORKOUT FEEDBACK MODAL */}
-            {showRedoModal && viewingPlan && viewingPlan.type === 'workout' && (
-                <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl">
-                        <button onClick={() => { setShowRedoModal(false); setRedoFeedback(''); }} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
-                            <X className="w-6 h-6" />
-                        </button>
-
-                        <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                            <RefreshCw className="w-6 h-6 text-amber-400" /> Refazer Treino
-                        </h3>
-                        <p className="text-sm text-slate-400 mb-4">
-                            Descreva as alterações desejadas. A IA ajustará o treino mantendo o restante intacto.
-                        </p>
-
-                        <div className="mb-4">
-                            <span className="text-xs text-slate-500">Refazimentos usados: <span className="text-amber-400 font-bold">{viewingPlan.redoCount || 0}/2</span></span>
-                        </div>
-
-                        <textarea
-                            value={redoFeedback}
-                            onChange={(e) => setRedoFeedback(e.target.value)}
-                            placeholder="Ex: Trocar supino reto por flexão de braço, aumentar séries de agachamento para 4..."
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white focus:border-amber-500 focus:outline-none resize-none h-32 placeholder:text-slate-500"
-                        />
-
-                        <div className="flex gap-3 mt-4">
-                            <button
-                                onClick={() => { setShowRedoModal(false); setRedoFeedback(''); }}
-                                className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-all"
-                            >
-                                Cancelar
+            {/* REDO WORKOUT/DIET FEEDBACK MODAL */}
+            {
+                showRedoModal && viewingPlan && (viewingPlan.type === 'workout' || viewingPlan.type === 'diet') && (
+                    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                        <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-lg relative shadow-2xl">
+                            <button onClick={() => { setShowRedoModal(false); setRedoFeedback(''); }} className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+                                <X className="w-6 h-6" />
                             </button>
-                            <button
-                                onClick={handleRedoWorkout}
-                                disabled={!redoFeedback.trim() || processing}
-                                className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-                            >
-                                {processing ? <Loader2 className="animate-spin w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
-                                {processing ? 'Ajustando...' : 'Refazer Treino'}
-                            </button>
+
+                            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                                <RefreshCw className="w-6 h-6 text-amber-400" /> Refazer {viewingPlan.type === 'workout' ? 'Treino' : 'Dieta'}
+                            </h3>
+                            <p className="text-sm text-slate-400 mb-4">
+                                Descreva as alterações desejadas. A IA ajustará o plano mantendo o restante intacto.
+                            </p>
+
+                            <div className="mb-4">
+                                <span className="text-xs text-slate-500">Refazimentos usados: <span className="text-amber-400 font-bold">{viewingPlan.redoCount || 0}/2</span></span>
+                            </div>
+
+                            <textarea
+                                value={redoFeedback}
+                                onChange={(e) => setRedoFeedback(e.target.value)}
+                                disabled={processing}
+                                placeholder="Ex: Trocar supino reto por flexão de braço, aumentar séries de agachamento para 4..."
+                                className={`w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white focus:border-amber-500 focus:outline-none resize-none h-32 placeholder:text-slate-500 ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            />
+
+                            <div className="flex gap-3 mt-4">
+                                <button
+                                    onClick={() => { setShowRedoModal(false); setRedoFeedback(''); }}
+                                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleRedoWorkout}
+                                    disabled={!redoFeedback.trim() || processing}
+                                    className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                                >
+                                    {processing ? <Loader2 className="animate-spin w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
+                                    {processing ? 'Ajustando...' : `Refazer ${viewingPlan.type === 'workout' ? 'Treino' : 'Dieta'}`}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* DETAILED VIEW MODAL */}
-            {viewingRecord && selectedUser && (
-                <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
-                    <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
-                        <button
-                            onClick={() => setViewingRecord(null)}
-                            className="fixed right-4 z-[110] p-2 bg-slate-800 rounded-full text-white hover:bg-slate-700 hover:text-red-400 transition-colors shadow-lg border border-slate-700 no-print"
-                            style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
-                        >
-                            <X className="w-6 h-6" />
-                        </button>
+            {
+                viewingRecord && selectedUser && (
+                    <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
+                        <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
+                            <button
+                                onClick={() => setViewingRecord(null)}
+                                className="fixed right-4 z-[110] p-2 bg-slate-800 rounded-full text-white hover:bg-slate-700 hover:text-red-400 transition-colors shadow-lg border border-slate-700 no-print"
+                                style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
 
-                        <div className="max-w-6xl mx-auto pt-8">
-                            <ResultView
-                                result={viewingRecord.result}
-                                exercise={viewingRecord.exercise}
-                                history={detailedHistory}
-                                userId={selectedUser.id}
-                                onReset={() => setViewingRecord(null)}
-                                onDeleteRecord={handleDeleteRecord}
-                                isHistoricalView={true}
-                                showToast={showToast}
-                                triggerConfirm={triggerConfirm}
-                            />
+                            <div className="max-w-6xl mx-auto pt-8">
+                                <ResultView
+                                    result={viewingRecord.result}
+                                    exercise={viewingRecord.exercise}
+                                    history={detailedHistory}
+                                    userId={selectedUser.id}
+                                    onReset={() => setViewingRecord(null)}
+                                    onDeleteRecord={handleDeleteRecord}
+                                    isHistoricalView={true}
+                                    showToast={showToast}
+                                    triggerConfirm={triggerConfirm}
+                                />
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             <div className="flex flex-col md:flex-row gap-6 h-full min-h-[600px]">
                 {/* Sidebar */}
@@ -1539,7 +1689,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                         <p className="text-slate-400 text-sm">Sincronizando com o banco de dados</p>
                                     </div>
                                 ) : (
-                                    <>
+                                    <div>
                                         {users.length === 0 && <div className="text-slate-500 col-span-full text-center py-10">
                                             {isPersonal ? 'Você ainda não tem alunos cadastrados.' : 'Nenhum usuário encontrado no backend.'}
                                         </div>}
@@ -1576,7 +1726,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                 </div>
                                             );
                                         })}
-                                    </>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -1659,19 +1809,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <button
                                                         disabled={!userWorkout}
-                                                        onClick={() => userWorkout && setViewingPlan({ type: 'WORKOUT', content: userWorkout.content, title: 'Treino Atual' })}
+                                                        onClick={() => {
+                                                            if (!userWorkout) return;
+                                                            if (!userWorkout.content && userWorkout.daysData) {
+                                                                // V2 Plan Fallback View
+                                                                setViewingPlan({
+                                                                    type: 'workout',
+                                                                    content: `<pre class="whitespace-pre-wrap text-xs bg-slate-900 text-blue-400 p-4 rounded-lg overflow-auto">${JSON.stringify(JSON.parse(userWorkout.daysData), null, 2)}</pre>`,
+                                                                    title: 'Treino V2 (JSON)'
+                                                                });
+                                                            } else {
+                                                                setViewingPlan({ type: 'workout', content: userWorkout.content, title: 'Treino Atual' });
+                                                            }
+                                                        }}
                                                         className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${userWorkout ? 'bg-blue-600/10 border-blue-500/30 text-blue-300 hover:bg-blue-600/20' : 'bg-slate-800/30 border-slate-700 text-slate-500 cursor-not-allowed'}`}
                                                     >
                                                         <Calendar className="w-5 h-5" />
-                                                        <span className="text-xs font-bold">{userWorkout ? 'Ver Treino' : 'Sem Treino'}</span>
+                                                        <span className="text-xs font-bold">{userWorkout ? (userWorkout.daysData && !userWorkout.content ? 'Ver Treino V2' : 'Ver Treino') : 'Sem Treino'}</span>
                                                     </button>
                                                     <button
                                                         disabled={!userDiet}
-                                                        onClick={() => userDiet && setViewingPlan({ type: 'DIET', content: userDiet.content, title: 'Dieta Atual' })}
+                                                        onClick={() => {
+                                                            if (!userDiet) return;
+                                                            if (!userDiet.content && userDiet.daysData) {
+                                                                // V2 Plan Fallback View
+                                                                setViewingPlan({
+                                                                    type: 'diet',
+                                                                    content: `<pre class="whitespace-pre-wrap text-xs bg-slate-900 text-emerald-400 p-4 rounded-lg overflow-auto">${JSON.stringify(JSON.parse(userDiet.daysData), null, 2)}</pre>`,
+                                                                    title: 'Dieta V2 (JSON)'
+                                                                });
+                                                            } else {
+                                                                setViewingPlan({ type: 'diet', content: userDiet.content, title: 'Dieta Atual' });
+                                                            }
+                                                        }}
                                                         className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${userDiet ? 'bg-emerald-600/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/20' : 'bg-slate-800/30 border-slate-700 text-slate-500 cursor-not-allowed'}`}
                                                     >
                                                         <Utensils className="w-5 h-5" />
-                                                        <span className="text-xs font-bold">{userDiet ? 'Ver Dieta' : 'Sem Dieta'}</span>
+                                                        <span className="text-xs font-bold">{userDiet ? (userDiet.daysData && !userDiet.content ? 'Ver Dieta V2' : 'Ver Dieta') : 'Sem Dieta'}</span>
                                                     </button>
                                                 </div>
                                             </div>
@@ -1716,11 +1890,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                                                 <div>
                                                                                     <p className="text-[11px] font-bold text-white uppercase tracking-tight">Realizado em:</p>
                                                                                     <p className="text-xs text-slate-400">{new Date(checkIn.date).toLocaleDateString('pt-BR')}</p>
+                                                                                    <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
+                                                                                        {new Date(checkIn.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                                                    </span>
                                                                                 </div>
                                                                             </div>
-                                                                            <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
-                                                                                {new Date(checkIn.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                                            </span>
                                                                         </div>
                                                                         {checkIn.comment && (
                                                                             <div className="bg-slate-900/60 p-2.5 rounded-lg border-l-2 border-emerald-500/50">
@@ -1739,7 +1913,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                         )}
 
                                         {/* --- EXERCÍCIOS ATRIBUÍDOS REMOVIDOS --- */}
-                                        {/* 
+                                        {/*
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-sm font-bold text-white flex items-center gap-2"><Dumbbell className="w-4 h-4" /> Exercícios Atribuídos</h4>
                         <div className="flex gap-2 text-xs">
@@ -1861,7 +2035,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

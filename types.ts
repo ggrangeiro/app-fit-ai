@@ -34,6 +34,7 @@ export interface WorkoutPlan {
   goal: string; // Frontend usa string, mapeamos para Enum no envio
   content: string; // HTML content
   createdAt?: string;
+  daysData?: string; // JSON V2 structure
 }
 
 export interface DietPlan {
@@ -42,6 +43,7 @@ export interface DietPlan {
   goal: string; // Frontend usa string, mapeamos para Enum no envio
   content: string; // HTML content
   createdAt?: string;
+  daysData?: string; // JSON V2 structure
 }
 
 export const SPECIAL_EXERCISES = {
@@ -146,4 +148,92 @@ export interface CreditHistoryItem {
   reason: string;
   description: string;
   date: string;
+}
+
+// --- V2 STRUCTURED DATA TYPES ---
+
+export interface SecurityAdjustment {
+  alert: string;
+  details: string;
+}
+
+export interface Motivation {
+  quote: string;
+  context: string;
+}
+
+export interface ExerciseV2 {
+  order: number;
+  name: string;
+  muscleGroup: string;
+  sets: number;
+  reps: string;
+  rest: string;
+  technique?: string;
+  videoQuery: string;
+}
+
+export interface WorkoutDayV2 {
+  dayOfWeek: string;
+  dayLabel: string;
+  trainingType: string;
+  isRestDay: boolean;
+  note?: string;
+  exercises: ExerciseV2[];
+}
+
+export interface WorkoutSummaryV2 {
+  trainingStyle: string;
+  estimatedDuration: string;
+  focus: string[];
+  considerations?: string;
+  securityAdjustment?: SecurityAdjustment;
+  motivation?: Motivation;
+  technicalTip?: string;
+}
+
+export interface WorkoutPlanV2 {
+  summary: WorkoutSummaryV2;
+  days: WorkoutDayV2[];
+}
+
+export interface MealItemV2 {
+  name: string;
+  quantity: string;
+  calories?: number;
+  protein?: number;
+  notes?: string;
+}
+
+export interface MealV2 {
+  type: string;
+  label: string;
+  icon: string;
+  time: string;
+  items: MealItemV2[];
+}
+
+export interface DietDayV2 {
+  dayOfWeek: string;
+  dayLabel: string;
+  isRestDay: boolean;
+  note?: string;
+  meals: MealV2[];
+}
+
+export interface DietSummaryV2 {
+  totalCalories: number;
+  protein: number;
+  carbohydrates: number;
+  fats: number;
+  fiber?: number;
+  water: string;
+  considerations: string;
+  securityAdjustment?: SecurityAdjustment;
+  motivation?: Motivation;
+}
+
+export interface DietPlanV2 {
+  summary: DietSummaryV2;
+  days: DietDayV2[];
 }
