@@ -86,6 +86,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     const [newEmail, setNewEmail] = useState('');
     const [newPhone, setNewPhone] = useState('');
     const [newRole, setNewRole] = useState('user'); // Novo estado para o papel do usuário
+    const [newAccessLevel, setNewAccessLevel] = useState<'FULL' | 'READONLY'>('FULL'); // Initial state for access level
 
     // --- V2 GENERATION STATE ---
     const [useV2, setUseV2] = useState(false);
@@ -385,7 +386,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             // Define a role: se for Personal, força 'user'. Se for Admin, usa o que foi selecionado.
             const roleToCreate = isPersonal ? 'user' : newRole;
 
-            await apiService.signup(newName, newEmail, "mudar123", newPhone, creatorId, roleToCreate);
+            await apiService.signup(newName, newEmail, "mudar123", newPhone, creatorId, roleToCreate, newAccessLevel);
             await MockDataService.createUser(newName, newEmail, undefined, creatorId, currentUser.role, roleToCreate);
 
             const roleName = roleToCreate === 'user' ? 'Aluno' : (roleToCreate === 'personal' ? 'Personal' : 'Admin');
@@ -395,6 +396,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             setNewEmail('');
             setNewPhone('');
             setNewRole('user');
+            setNewAccessLevel('FULL');
 
             // Atualiza a lista antes de mudar a tab
             await fetchBackendUsers();
@@ -1075,12 +1077,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                         <span className={`text-xs font-bold ${!useV2 ? 'text-white' : 'text-slate-500'}`}>Web (HTML)</span>
                                         <button
                                             type="button"
-                                            onClick={() => setUseV2(!useV2)}
-                                            className={`w-10 h-5 rounded-full relative transition-colors ${useV2 ? 'bg-emerald-500' : 'bg-slate-600'}`}
+                                            onClick={() => { if (isAdmin) setUseV2(!useV2); }}
+                                            className={`w-10 h-5 rounded-full relative transition-colors ${useV2 ? 'bg-emerald-500' : 'bg-slate-600'} ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         >
                                             <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-transform ${useV2 ? 'left-6' : 'left-1'}`} />
                                         </button>
-                                        <span className={`text-xs font-bold ${useV2 ? 'text-emerald-400' : 'text-slate-500'}`}>App V2 (JSON)</span>
+                                        <span className={`text-xs font-bold ${useV2 ? 'text-emerald-400' : 'text-slate-500'}`}>App V2 (JSON) {isAdmin ? '' : '(Admin)'}</span>
                                     </div>
                                 </div>
                                 <p className="text-sm text-slate-400 mb-4">Gerando dieta para: <span className="text-white font-bold">{selectedUser?.name}</span></p>
@@ -1157,12 +1159,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                         <span className={`text-xs font-bold ${!useV2 ? 'text-white' : 'text-slate-500'}`}>Web (HTML)</span>
                                         <button
                                             type="button"
-                                            onClick={() => setUseV2(!useV2)}
-                                            className={`w-10 h-5 rounded-full relative transition-colors ${useV2 ? 'bg-blue-500' : 'bg-slate-600'}`}
+                                            onClick={() => { if (isAdmin) setUseV2(!useV2); }}
+                                            className={`w-10 h-5 rounded-full relative transition-colors ${useV2 ? 'bg-blue-500' : 'bg-slate-600'} ${!isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         >
                                             <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-transform ${useV2 ? 'left-6' : 'left-1'}`} />
                                         </button>
-                                        <span className={`text-xs font-bold ${useV2 ? 'text-blue-400' : 'text-slate-500'}`}>App V2 (JSON)</span>
+                                        <span className={`text-xs font-bold ${useV2 ? 'text-blue-400' : 'text-slate-500'}`}>App V2 (JSON) {isAdmin ? '' : '(Admin)'}</span>
                                     </div>
                                 </div>
                                 <p className="text-sm text-slate-400 mb-4">Gerando treino para: <span className="text-white font-bold">{selectedUser?.name}</span></p>
@@ -1673,6 +1675,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     </div>
                                 )}
 
+                                {/* Access Level Selector */}
+                                <div className="animate-in fade-in slide-in-from-top-2">
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Nível de Permissão</label>
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewAccessLevel('FULL')}
+                                            className={`flex-1 p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${newAccessLevel === 'FULL' ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'}`}
+                                        >
+                                            <CheckCircle className="w-5 h-5" />
+                                            <span className="text-sm font-bold">Total (Full)</span>
+                                            <span className="text-[10px] opacity-70">Gera treinos e dietas</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewAccessLevel('READONLY')}
+                                            className={`flex-1 p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${newAccessLevel === 'READONLY' ? 'bg-slate-500/20 border-slate-500 text-slate-300' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'}`}
+                                        >
+                                            <Lock className="w-5 h-5" />
+                                            <span className="text-sm font-bold">Leitura (ReadOnly)</span>
+                                            <span className="text-[10px] opacity-70">Apenas visualiza</span>
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-2 ml-1">
+                                        {newAccessLevel === 'FULL' ? 'ℹ️ O aluno pode gerar treinos, dietas e fazer análises.' : '🔒 O aluno vê apenas o que o professor criar.'}
+                                    </p>
+                                </div>
+
                                 <button type="submit" disabled={processing} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all disabled:opacity-70 disabled:cursor-not-allowed">
                                     {processing ? (
                                         <span className="flex items-center justify-center gap-2">
@@ -1790,6 +1821,50 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                 <span>{selectedUser.phone}</span>
                                             </a>
                                         )}
+
+                                        {/* PERMISSIONS CARD */}
+                                        <div className="mb-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+                                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                                                Permissões de Acesso
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${selectedUser.accessLevel === 'READONLY' ? 'bg-slate-700 text-slate-300' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                                    {selectedUser.accessLevel === 'READONLY' ? 'BLOQUEADO' : 'TOTAL'}
+                                                </span>
+                                            </h4>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            showToast("Atualizando permissão...", 'info');
+                                                            await apiService.updateUser(selectedUser.id, { accessLevel: 'FULL' });
+                                                            // Update local state
+                                                            const updated = { ...selectedUser, accessLevel: 'FULL' } as User;
+                                                            setSelectedUser(updated);
+                                                            setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+                                                            showToast("Acesso alterado para TOTAL", 'success');
+                                                        } catch (e) { showToast("Erro ao atualizar", 'error'); }
+                                                    }}
+                                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all border ${selectedUser.accessLevel !== 'READONLY' ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-900/20' : 'text-slate-400 border-slate-700 hover:bg-slate-800'}`}
+                                                >
+                                                    Total (Full)
+                                                </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            showToast("Atualizando permissão...", 'info');
+                                                            await apiService.updateUser(selectedUser.id, { accessLevel: 'READONLY' });
+                                                            // Update local state
+                                                            const updated = { ...selectedUser, accessLevel: 'READONLY' } as User;
+                                                            setSelectedUser(updated);
+                                                            setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+                                                            showToast("Acesso alterado para LEITURA", 'success');
+                                                        } catch (e) { showToast("Erro ao atualizar", 'error'); }
+                                                    }}
+                                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all border ${selectedUser.accessLevel === 'READONLY' ? 'bg-slate-600 text-white border-slate-500 shadow-lg' : 'text-slate-400 border-slate-700 hover:bg-slate-800'}`}
+                                                >
+                                                    Leitura
+                                                </button>
+                                            </div>
+                                        </div>
 
                                         {/* --- PAINEL DE AÇÕES DO PROFESSOR --- */}
                                         {(isPersonal || isAdmin) && (

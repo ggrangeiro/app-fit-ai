@@ -123,6 +123,7 @@ export interface User {
   phone?: string; // Telefone do usuário (mapeado do campo 'telefone' do backend)
   plan?: Plan;
   usage?: Usage;
+  accessLevel?: 'FULL' | 'READONLY'; // Novo campo para controle de permissões
 }
 
 export interface ExerciseRecord {

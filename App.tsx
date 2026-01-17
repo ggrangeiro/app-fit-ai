@@ -754,23 +754,25 @@ const App: React.FC = () => {
   useEffect(() => {
     const initData = async () => {
       if (currentUser) {
-        // --- ENRICHMENT LOGIC: Fallback se 'plan' estiver ausente ---
-        if (!currentUser.plan) {
-          try {
-            const fullUser = await apiService.getMe(currentUser.id);
-            handleUpdateUser({ ...currentUser, ...fullUser });
-          } catch (e) {
-            // Silently fail, keep current state
-          }
+        // --- ALWAYS REFRESH USER DATA ON MOUNT ---
+        // Ensuring permissions (accessLevel) and credits are up-to-date
+        try {
+          const fullUser = await apiService.getMe(currentUser.id);
+          // Preserve token if exists, update everything else
+          handleUpdateUser({ ...currentUser, ...fullUser });
+          await loadExercisesList(fullUser); // Load exercises based on fresh role
+        } catch (e) {
+          console.error("Background sync failed", e);
+          // Fallback: load with cached user
+          await loadExercisesList(currentUser);
         }
 
-        await loadExercisesList(currentUser);
         await fetchUserWorkouts(currentUser.id);
         await fetchUserDiets(currentUser.id);
       }
     };
     initData();
-  }, [currentUser]);
+  }, [currentUser?.id]); // Only re-run if ID changes (login/logout), not on every user update to avoid loops
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -1346,17 +1348,21 @@ const App: React.FC = () => {
             >
               <CheckCircle className="w-5 h-5" />
             </button>
-            <button
-              onClick={() => setShowRedoModal(true)}
-              disabled={redoCount >= 2}
-              className={`p-2 rounded-lg text-white transition-colors ${redoCount >= 2 ? 'bg-slate-700 text-slate-500' : 'bg-amber-600 hover:bg-amber-500'}`}
-              title="Refazer com IA"
-            >
-              <RefreshCw className="w-5 h-5" />
-            </button>
-            <button onClick={confirmDeleteWorkout} className="flex items-center gap-2 p-2 px-3 bg-red-600 hover:bg-red-500 rounded-lg text-white">
-              <Trash2 className="w-5 h-5" /> <span className="hidden sm:inline font-bold">Excluir</span>
-            </button>
+            {currentUser?.accessLevel !== 'READONLY' && (
+              <button
+                onClick={() => setShowRedoModal(true)}
+                disabled={redoCount >= 2}
+                className={`p-2 rounded-lg text-white transition-colors ${redoCount >= 2 ? 'bg-slate-700 text-slate-500' : 'bg-amber-600 hover:bg-amber-500'}`}
+                title="Refazer com IA"
+              >
+                <RefreshCw className="w-5 h-5" />
+              </button>
+            )}
+            {currentUser?.accessLevel !== 'READONLY' && (
+              <button onClick={confirmDeleteWorkout} className="flex items-center gap-2 p-2 px-3 bg-red-600 hover:bg-red-500 rounded-lg text-white">
+                <Trash2 className="w-5 h-5" /> <span className="hidden sm:inline font-bold">Excluir</span>
+              </button>
+            )}
           </div>
         </div>
         <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
@@ -1540,17 +1546,21 @@ const App: React.FC = () => {
               {pdfLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
               <span className="hidden sm:inline">{pdfLoading ? 'Gerando...' : 'Compartilhar'}</span>
             </button>
-            <button
-              onClick={() => setShowRedoModal(true)}
-              disabled={redoCount >= 2}
-              className={`p-2 rounded-lg text-white transition-colors ${redoCount >= 2 ? 'bg-slate-700 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
-              title="Refazer com IA"
-            >
-              <RefreshCw className="w-5 h-5" />
-            </button>
-            <button onClick={confirmDeleteDiet} className="flex items-center gap-2 p-2 px-3 bg-red-600 hover:bg-red-500 rounded-lg text-white">
-              <Trash2 className="w-5 h-5" /> <span className="hidden sm:inline font-bold">Excluir</span>
-            </button>
+            {currentUser?.accessLevel !== 'READONLY' && (
+              <button
+                onClick={() => setShowRedoModal(true)}
+                disabled={redoCount >= 2}
+                className={`p-2 rounded-lg text-white transition-colors ${redoCount >= 2 ? 'bg-slate-700 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+                title="Refazer com IA"
+              >
+                <RefreshCw className="w-5 h-5" />
+              </button>
+            )}
+            {currentUser?.accessLevel !== 'READONLY' && (
+              <button onClick={confirmDeleteDiet} className="flex items-center gap-2 p-2 px-3 bg-red-600 hover:bg-red-500 rounded-lg text-white">
+                <Trash2 className="w-5 h-5" /> <span className="hidden sm:inline font-bold">Excluir</span>
+              </button>
+            )}
           </div>
         </div>
         <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
@@ -2038,13 +2048,20 @@ const App: React.FC = () => {
                     <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Ver Meu Treino</h3><p className="text-slate-400 text-xs mt-1">Ficha ativa disponível</p></div>
                   </button>
                 ) : (
-                  <button
-                    onClick={() => canCreateWorkout(currentUser) && setShowGenerateWorkoutForm(true)}
-                    className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
-                  >
-                    <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Dumbbell className="w-8 h-8" /></div>
-                    <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Gerar Treino IA</h3><p className="text-slate-400 text-xs mt-1">Crie sua ficha personalizada</p></div>
-                  </button>
+                  currentUser?.accessLevel === 'READONLY' ? (
+                    <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-2 border-slate-700 bg-slate-800/50 h-full min-h-[160px] cursor-not-allowed opacity-70">
+                      <div className="p-4 bg-slate-700 rounded-full text-slate-400 shadow-lg"><Lock className="w-8 h-8" /></div>
+                      <div className="text-center"><h3 className="text-slate-400 font-bold text-xl">Gerar Treino</h3><p className="text-slate-500 text-xs mt-1">Consulte seu Professor</p></div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => canCreateWorkout(currentUser) && setShowGenerateWorkoutForm(true)}
+                      className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
+                    >
+                      <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Dumbbell className="w-8 h-8" /></div>
+                      <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Gerar Treino IA</h3><p className="text-slate-400 text-xs mt-1">Crie sua ficha personalizada</p></div>
+                    </button>
+                  )
                 )
               )}
 
@@ -2064,18 +2081,26 @@ const App: React.FC = () => {
                     <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">Ver Minha Dieta</h3><p className="text-slate-400 text-xs mt-1">Plano nutricional ativo</p></div>
                   </button>
                 ) : (
-                  <button
-                    onClick={() => canCreateWorkout(currentUser) && setShowGenerateDietForm(true)}
-                    className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
-                  >
-                    <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Utensils className="w-8 h-8" /></div>
-                    <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">Gerar Dieta IA</h3><p className="text-slate-400 text-xs mt-1">Crie seu cardápio ideal</p></div>
-                  </button>
+                  currentUser?.accessLevel === 'READONLY' ? (
+                    <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-2 border-slate-700 bg-slate-800/50 h-full min-h-[160px] cursor-not-allowed opacity-70">
+                      <div className="p-4 bg-slate-700 rounded-full text-slate-400 shadow-lg"><Lock className="w-8 h-8" /></div>
+                      <div className="text-center"><h3 className="text-slate-400 font-bold text-xl">Gerar Dieta</h3><p className="text-slate-500 text-xs mt-1">Consulte seu Professor</p></div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => canCreateWorkout(currentUser) && setShowGenerateDietForm(true)}
+                      className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
+                    >
+                      <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Utensils className="w-8 h-8" /></div>
+                      <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">Gerar Dieta IA</h3><p className="text-slate-400 text-xs mt-1">Crie seu cardápio ideal</p></div>
+                    </button>
+                  )
                 )
               )}
 
               {/* Card de Análise Livre */}
               <button
+                disabled={currentUser?.accessLevel === 'READONLY'}
                 onClick={() => handleExerciseToggle(SPECIAL_EXERCISES.FREE_MODE)}
                 className={`glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 h-full min-h-[160px] group ${selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? 'border-yellow-500 bg-yellow-600/10' : 'border-yellow-500/30 hover:bg-yellow-600/10'}`}
               >
@@ -2093,7 +2118,8 @@ const App: React.FC = () => {
               {/* Posture Analysis Card */}
               {postureExercise && (
                 <button
-                  className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${selectedExercise === postureExercise.id ? 'border-emerald-500 bg-emerald-600/20' : 'border-emerald-500/30 hover:bg-emerald-600/20'}`}
+                  disabled={currentUser?.accessLevel === 'READONLY'}
+                  className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${currentUser?.accessLevel === 'READONLY' ? 'opacity-50 cursor-not-allowed border-slate-700' : (selectedExercise === postureExercise.id ? 'border-emerald-500 bg-emerald-600/20' : 'border-emerald-500/30 hover:bg-emerald-600/20')}`}
                   onClick={() => handleExerciseToggle(postureExercise.id)}
                 >
                   <div className={`p-3 rounded-full text-white shadow-lg transition-transform ${hasPostureAccess ? 'bg-emerald-600 group-hover:scale-110' : 'bg-slate-700'}`}><ScanLine className="w-5 h-5" /></div>
@@ -2104,7 +2130,8 @@ const App: React.FC = () => {
               {/* Body Composition Card */}
               {bodyCompExercise && (
                 <button
-                  className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${selectedExercise === bodyCompExercise.id ? 'border-violet-500 bg-violet-600/20' : 'border-violet-500/30 hover:bg-violet-600/20'}`}
+                  disabled={currentUser?.accessLevel === 'READONLY'}
+                  className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${currentUser?.accessLevel === 'READONLY' ? 'opacity-50 cursor-not-allowed border-slate-700' : (selectedExercise === bodyCompExercise.id ? 'border-violet-500 bg-violet-600/20' : 'border-violet-500/30 hover:bg-violet-600/20')}`}
                   onClick={() => handleExerciseToggle(bodyCompExercise.id)}
                 >
                   <div className={`p-3 rounded-full text-white shadow-lg transition-transform ${hasBodyCompAccess ? 'bg-violet-600 group-hover:scale-110' : 'bg-slate-700'}`}><Scale className="w-5 h-5" /></div>
@@ -2114,60 +2141,62 @@ const App: React.FC = () => {
             </div>
 
             {/* --- ACCORDION CONTAINER FOR EXERCISE LIST --- */}
-            <div className="w-full max-w-5xl mb-12">
-              <button
-                onClick={() => setShowExerciseList(!showExerciseList)}
-                className={`w-full glass-panel p-4 md:p-6 rounded-2xl flex items-center justify-between group hover:bg-slate-800/60 transition-all border ${isSelectedInStandard ? 'border-blue-500/40 bg-blue-900/10' : 'border-slate-700/50'}`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-full transition-colors ${isSelectedInStandard ? 'bg-blue-600 text-white' : 'bg-blue-600/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white'}`}>
-                    {isSelectedInStandard ? <CheckCircle2 className="w-6 h-6" /> : <Dumbbell className="w-6 h-6" />}
+            {currentUser?.accessLevel !== 'READONLY' && (
+              <div className="w-full max-w-5xl mb-12">
+                <button
+                  onClick={() => setShowExerciseList(!showExerciseList)}
+                  className={`w-full glass-panel p-4 md:p-6 rounded-2xl flex items-center justify-between group hover:bg-slate-800/60 transition-all border ${isSelectedInStandard ? 'border-blue-500/40 bg-blue-900/10' : 'border-slate-700/50'}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-full transition-colors ${isSelectedInStandard ? 'bg-blue-600 text-white' : 'bg-blue-600/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white'}`}>
+                      {isSelectedInStandard ? <CheckCircle2 className="w-6 h-6" /> : <Dumbbell className="w-6 h-6" />}
+                    </div>
+                    <div className="text-left">
+                      <h3 className={`font-bold text-lg ${isSelectedInStandard ? 'text-blue-400' : 'text-white'}`}>
+                        {isSelectedInStandard ? 'Exercício Selecionado' : 'Exercícios de Força'}
+                      </h3>
+                      <p className="text-slate-400 text-xs">
+                        {isSelectedInStandard ? 'Toque para alterar' : `${standardExercises.length} disponíveis`}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-left">
-                    <h3 className={`font-bold text-lg ${isSelectedInStandard ? 'text-blue-400' : 'text-white'}`}>
-                      {isSelectedInStandard ? 'Exercício Selecionado' : 'Exercícios de Força'}
-                    </h3>
-                    <p className="text-slate-400 text-xs">
-                      {isSelectedInStandard ? 'Toque para alterar' : `${standardExercises.length} disponíveis`}
-                    </p>
+                  <div className={`p-2 rounded-full bg-slate-800 text-slate-400 transition-transform duration-300 ${showExerciseList ? 'rotate-180' : ''}`}>
+                    <ChevronDown className="w-5 h-5" />
                   </div>
-                </div>
-                <div className={`p-2 rounded-full bg-slate-800 text-slate-400 transition-transform duration-300 ${showExerciseList ? 'rotate-180' : ''}`}>
-                  <ChevronDown className="w-5 h-5" />
-                </div>
-              </button>
+                </button>
 
-              <div className={`grid transition-all duration-500 ease-in-out overflow-hidden ${showExerciseList ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0 mt-0'}`}>
-                {/* MODIFICAÇÃO: Removido overflow-hidden interno e adicionado padding para permitir scale sem corte */}
-                <div className="overflow-visible p-4">
-                  <div id="exercise-grid" className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 w-full min-h-[10px]">
-                    {loadingExercises ? (
-                      <div className="col-span-full flex flex-col items-center justify-center py-12 bg-slate-800/30 rounded-3xl border border-slate-700/50 backdrop-blur-sm animate-pulse">
-                        <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-3" />
-                        <p className="text-slate-300 font-medium">Sincronizando catálogo de exercícios...</p>
-                      </div>
-                    ) : (
-                      standardExercises.length > 0 ? (
-                        standardExercises.map((ex) => (
-                          <ExerciseCard
-                            key={ex.id} // Usa ID único
-                            type={ex.name}
-                            // USA O ÍCONE MAPEADO OU UM FALLBACK
-                            icon={EXERCISE_ICONS[ex.alias] || <Dumbbell />}
-                            selected={selectedExercise === ex.id}
-                            onClick={() => handleExerciseToggle(ex.id)}
-                          />
-                        ))
-                      ) : (
-                        <div className="col-span-full text-center py-10 text-slate-400">
-                          <p>Nenhum exercício de força atribuído para você.</p>
+                <div className={`grid transition-all duration-500 ease-in-out overflow-hidden ${showExerciseList ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0 mt-0'}`}>
+                  {/* MODIFICAÇÃO: Removido overflow-hidden interno e adicionado padding para permitir scale sem corte */}
+                  <div className="overflow-visible p-4">
+                    <div id="exercise-grid" className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 w-full min-h-[10px]">
+                      {loadingExercises ? (
+                        <div className="col-span-full flex flex-col items-center justify-center py-12 bg-slate-800/30 rounded-3xl border border-slate-700/50 backdrop-blur-sm animate-pulse">
+                          <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-3" />
+                          <p className="text-slate-300 font-medium">Sincronizando catálogo de exercícios...</p>
                         </div>
-                      )
-                    )}
+                      ) : (
+                        standardExercises.length > 0 ? (
+                          standardExercises.map((ex) => (
+                            <ExerciseCard
+                              key={ex.id} // Usa ID único
+                              type={ex.name}
+                              // USA O ÍCONE MAPEADO OU UM FALLBACK
+                              icon={EXERCISE_ICONS[ex.alias] || <Dumbbell />}
+                              selected={selectedExercise === ex.id}
+                              onClick={() => handleExerciseToggle(ex.id)}
+                            />
+                          ))
+                        ) : (
+                          <div className="col-span-full text-center py-10 text-slate-400">
+                            <p>Nenhum exercício de força atribuído para você.</p>
+                          </div>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className={`sticky bottom-8 z-40 flex flex-col items-center gap-4 transition-all duration-300 justify-center ${selectedExercise ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
 
@@ -2191,212 +2220,221 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
-        )}
+        )
+        }
 
         {/* ... (Step UPLOAD_VIDEO mantido) ... */}
-        {step === AppStep.UPLOAD_VIDEO && selectedExercise && (
-          <div className="w-full max-w-4xl animate-fade-in relative">
+        {
+          step === AppStep.UPLOAD_VIDEO && selectedExercise && (
+            <div className="w-full max-w-4xl animate-fade-in relative">
 
-            {/* Background Glow Effect for Depth */}
-            <div className="absolute inset-0 bg-blue-600/10 blur-[100px] rounded-full pointer-events-none -z-10 transform scale-150 opacity-50"></div>
+              {/* Background Glow Effect for Depth */}
+              <div className="absolute inset-0 bg-blue-600/10 blur-[100px] rounded-full pointer-events-none -z-10 transform scale-150 opacity-50"></div>
 
-            <div className="glass-panel rounded-3xl p-6 md:p-12 shadow-2xl border border-slate-700/50 backdrop-blur-xl relative overflow-hidden">
+              <div className="glass-panel rounded-3xl p-6 md:p-12 shadow-2xl border border-slate-700/50 backdrop-blur-xl relative overflow-hidden">
 
-              {/* Decorative Header Bar */}
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-70"></div>
+                {/* Decorative Header Bar */}
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-70"></div>
 
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center p-3 bg-blue-500/20 text-blue-400 rounded-full mb-4 shadow-inner ring-1 ring-blue-500/30">
-                  {selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? <Sparkles className="w-8 h-8" /> : (selectedExerciseObj ? EXERCISE_ICONS[selectedExerciseObj.alias] || <Dumbbell className="w-8 h-8" /> : <Dumbbell className="w-8 h-8" />)}
-                </div>
-                <h2 className="text-2xl md:text-4xl font-bold text-white mb-2 tracking-tight">Envio de Mídia</h2>
-                <p className="text-slate-400 text-lg">Analise seu <span className="text-white font-bold">{selectedExerciseName}</span></p>
-
-                {/* AI Features Badge Grid */}
-                <div className="grid grid-cols-3 gap-2 max-w-md mx-auto mt-6">
-                  <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                    <ScanLine className="w-4 h-4 text-emerald-400 mb-1" />
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Biomecânica</span>
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center justify-center p-3 bg-blue-500/20 text-blue-400 rounded-full mb-4 shadow-inner ring-1 ring-blue-500/30">
+                    {selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? <Sparkles className="w-8 h-8" /> : (selectedExerciseObj ? EXERCISE_ICONS[selectedExerciseObj.alias] || <Dumbbell className="w-8 h-8" /> : <Dumbbell className="w-8 h-8" />)}
                   </div>
-                  <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                    <ShieldCheck className="w-4 h-4 text-blue-400 mb-1" />
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Segurança</span>
-                  </div>
-                  <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                    <Activity className="w-4 h-4 text-purple-400 mb-1" />
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Performance</span>
-                  </div>
-                </div>
-              </div>
+                  <h2 className="text-2xl md:text-4xl font-bold text-white mb-2 tracking-tight">Envio de Mídia</h2>
+                  <p className="text-slate-400 text-lg">Analise seu <span className="text-white font-bold">{selectedExerciseName}</span></p>
 
-              <div className="flex flex-col gap-6 mb-8">
-                {/* Pre-Upload Tip Context */}
-                {!mediaFile && (
-                  <div className="bg-blue-900/20 border border-blue-500/20 p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-bottom-2">
-                    <Lightbulb className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-blue-100 text-sm font-medium">Dica de Ouro:</p>
-                      <p className="text-slate-400 text-xs italic">"{getExerciseTip()}"</p>
+                  {/* AI Features Badge Grid */}
+                  <div className="grid grid-cols-3 gap-2 max-w-md mx-auto mt-6">
+                    <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                      <ScanLine className="w-4 h-4 text-emerald-400 mb-1" />
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Biomecânica</span>
                     </div>
+                    <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                      <ShieldCheck className="w-4 h-4 text-blue-400 mb-1" />
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Segurança</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                      <Activity className="w-4 h-4 text-purple-400 mb-1" />
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Performance</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-6 mb-8">
+                  {/* Pre-Upload Tip Context */}
+                  {!mediaFile && (
+                    <div className="bg-blue-900/20 border border-blue-500/20 p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-bottom-2">
+                      <Lightbulb className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-blue-100 text-sm font-medium">Dica de Ouro:</p>
+                        <p className="text-slate-400 text-xs italic">"{getExerciseTip()}"</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="relative w-full">
+                    <label htmlFor="video-upload" className={`group relative flex flex-col items-center justify-center w-full rounded-2xl cursor-pointer transition-all duration-500 overflow-hidden ${!!mediaFile ? 'bg-black border-slate-700 h-auto aspect-video shadow-2xl' : 'h-72 border-2 border-dashed border-slate-600 bg-slate-800/30 hover:border-blue-500 hover:bg-slate-800/60'}`}>
+                      {mediaPreview ? (
+                        <>
+                          {mediaFile && mediaFile.type && mediaFile.type.startsWith('image/') ? <img src={mediaPreview!} className="h-full w-full object-contain" /> : <video src={mediaPreview!} className="h-full w-full object-contain" controls={false} autoPlay muted loop playsInline />}
+
+                          {/* TECH HUD OVERLAY */}
+                          <div className="absolute inset-0 pointer-events-none">
+                            <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-blue-500/70 rounded-tl-lg"></div>
+                            <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-blue-500/70 rounded-tr-lg"></div>
+                            <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-blue-500/70 rounded-bl-lg"></div>
+                            <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-blue-500/70 rounded-br-lg"></div>
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border border-white/20 rounded-full flex items-center justify-center">
+                              <div className="w-1 h-1 bg-red-500 rounded-full animate-pulse"></div>
+                            </div>
+                            <div className="absolute bottom-6 left-0 right-0 text-center">
+                              <span className="bg-black/60 px-3 py-1 rounded text-[10px] text-white font-mono uppercase tracking-widest border border-white/10">Análise Pronta</span>
+                            </div>
+                          </div>
+
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                            <div className="flex flex-col items-center gap-2 text-white">
+                              <div className="p-3 bg-white/10 rounded-full backdrop-blur-md border border-white/20">
+                                <RefreshCcw className="w-8 h-8" />
+                              </div>
+                              <span className="font-bold text-sm tracking-wide">Clique para Trocar</span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center p-4">
+                          <div className="w-20 h-20 bg-slate-700/50 rounded-full flex items-center justify-center mb-6 text-slate-400 group-hover:text-blue-400 transition-all duration-300 shadow-xl border border-slate-600 group-hover:border-blue-500/50 group-hover:scale-110 relative">
+                            {/* Pulse Effect behind icon */}
+                            <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping opacity-0 group-hover:opacity-100"></div>
+                            {isSpecialMode ? <ImageIcon className="w-8 h-8 relative z-10" /> : <UploadCloud className="w-8 h-8 relative z-10" />}
+                          </div>
+                          <p className="text-slate-200 font-bold text-lg group-hover:text-white transition-colors">{(isSpecialMode && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) ? 'Selecionar Foto' : 'Selecionar Vídeo'}</p>
+                          <p className="text-slate-500 text-xs mt-2 max-w-[200px] text-center group-hover:text-slate-400">
+                            Certifique-se de que o corpo inteiro esteja visível
+                          </p>
+                          {!isSpecialMode && (
+                            <div className="mt-4 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full flex items-center gap-2">
+                              <Timer className="w-3 h-3 text-yellow-500" />
+                              <span className="text-[10px] text-yellow-200 font-medium">Recomendado: vídeos de até 2 min</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <input ref={fileInputRef} id="video-upload" type="file" accept={(isSpecialMode && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) ? "video/*,image/*" : "video/*"} className="hidden" onChange={handleFileChange} />
+                    </label>
+
+                    {!!mediaFile && (
+                      <button
+                        onClick={clearSelectedMedia}
+                        className="absolute -top-3 -right-3 p-2 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-500 transition-colors z-10 border-2 border-slate-900"
+                        title="Remover arquivo"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="mb-6 p-5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-200 text-center text-sm flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 shadow-xl shadow-red-950/20">
+                    <div className="flex items-center gap-4 text-left">
+                      <div className="p-2 bg-red-500/20 rounded-full"><AlertTriangle className="w-6 h-6 text-red-400 shrink-0" /></div>
+                      <div>
+                        <p className="font-bold text-red-400">Conteúdo Rejeitado</p>
+                        <p className="opacity-80 leading-relaxed">{error}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={triggerFilePicker}
+                      className="flex items-center gap-2 whitespace-nowrap px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg text-xs font-bold transition-all border border-red-500/30"
+                    >
+                      <RefreshCcw className="w-3 h-3" /> Trocar Arquivo
+                    </button>
                   </div>
                 )}
 
-                <div className="relative w-full">
-                  <label htmlFor="video-upload" className={`group relative flex flex-col items-center justify-center w-full rounded-2xl cursor-pointer transition-all duration-500 overflow-hidden ${!!mediaFile ? 'bg-black border-slate-700 h-auto aspect-video shadow-2xl' : 'h-72 border-2 border-dashed border-slate-600 bg-slate-800/30 hover:border-blue-500 hover:bg-slate-800/60'}`}>
-                    {mediaPreview ? (
-                      <>
-                        {mediaFile && mediaFile.type && mediaFile.type.startsWith('image/') ? <img src={mediaPreview!} className="h-full w-full object-contain" /> : <video src={mediaPreview!} className="h-full w-full object-contain" controls={false} autoPlay muted loop playsInline />}
-
-                        {/* TECH HUD OVERLAY */}
-                        <div className="absolute inset-0 pointer-events-none">
-                          <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-blue-500/70 rounded-tl-lg"></div>
-                          <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-blue-500/70 rounded-tr-lg"></div>
-                          <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-blue-500/70 rounded-bl-lg"></div>
-                          <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-blue-500/70 rounded-br-lg"></div>
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border border-white/20 rounded-full flex items-center justify-center">
-                            <div className="w-1 h-1 bg-red-500 rounded-full animate-pulse"></div>
-                          </div>
-                          <div className="absolute bottom-6 left-0 right-0 text-center">
-                            <span className="bg-black/60 px-3 py-1 rounded text-[10px] text-white font-mono uppercase tracking-widest border border-white/10">Análise Pronta</span>
-                          </div>
-                        </div>
-
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                          <div className="flex flex-col items-center gap-2 text-white">
-                            <div className="p-3 bg-white/10 rounded-full backdrop-blur-md border border-white/20">
-                              <RefreshCcw className="w-8 h-8" />
-                            </div>
-                            <span className="font-bold text-sm tracking-wide">Clique para Trocar</span>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center p-4">
-                        <div className="w-20 h-20 bg-slate-700/50 rounded-full flex items-center justify-center mb-6 text-slate-400 group-hover:text-blue-400 transition-all duration-300 shadow-xl border border-slate-600 group-hover:border-blue-500/50 group-hover:scale-110 relative">
-                          {/* Pulse Effect behind icon */}
-                          <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping opacity-0 group-hover:opacity-100"></div>
-                          {isSpecialMode ? <ImageIcon className="w-8 h-8 relative z-10" /> : <UploadCloud className="w-8 h-8 relative z-10" />}
-                        </div>
-                        <p className="text-slate-200 font-bold text-lg group-hover:text-white transition-colors">{(isSpecialMode && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) ? 'Selecionar Foto' : 'Selecionar Vídeo'}</p>
-                        <p className="text-slate-500 text-xs mt-2 max-w-[200px] text-center group-hover:text-slate-400">
-                          Certifique-se de que o corpo inteiro esteja visível
-                        </p>
-                        {!isSpecialMode && (
-                          <div className="mt-4 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full flex items-center gap-2">
-                            <Timer className="w-3 h-3 text-yellow-500" />
-                            <span className="text-[10px] text-yellow-200 font-medium">Recomendado: vídeos de até 2 min</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <input ref={fileInputRef} id="video-upload" type="file" accept={(isSpecialMode && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) ? "video/*,image/*" : "video/*"} className="hidden" onChange={handleFileChange} />
-                  </label>
-
-                  {!!mediaFile && (
+                {!!mediaFile && !error && (
+                  <div className="mb-6 flex justify-center">
                     <button
-                      onClick={clearSelectedMedia}
-                      className="absolute -top-3 -right-3 p-2 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-500 transition-colors z-10 border-2 border-slate-900"
-                      title="Remover arquivo"
+                      onClick={triggerFilePicker}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-700 text-slate-300 rounded-full text-xs font-semibold transition-all border border-slate-700"
                     >
-                      <X className="w-4 h-4" />
+                      <RefreshCcw className="w-3 h-3" /> Trocar Arquivo
                     </button>
-                  )}
-                </div>
-              </div>
-
-              {error && (
-                <div className="mb-6 p-5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-200 text-center text-sm flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 shadow-xl shadow-red-950/20">
-                  <div className="flex items-center gap-4 text-left">
-                    <div className="p-2 bg-red-500/20 rounded-full"><AlertTriangle className="w-6 h-6 text-red-400 shrink-0" /></div>
-                    <div>
-                      <p className="font-bold text-red-400">Conteúdo Rejeitado</p>
-                      <p className="opacity-80 leading-relaxed">{error}</p>
-                    </div>
                   </div>
+                )}
+
+                <div className="flex gap-4 pt-4 border-t border-slate-700/50">
                   <button
-                    onClick={triggerFilePicker}
-                    className="flex items-center gap-2 whitespace-nowrap px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg text-xs font-bold transition-all border border-red-500/30"
+                    onClick={handleGoBackToSelect}
+                    className="px-6 py-4 rounded-2xl bg-transparent border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white transition-all font-semibold"
                   >
-                    <RefreshCcw className="w-3 h-3" /> Trocar Arquivo
+                    Voltar
+                  </button>
+                  <button
+                    disabled={!mediaFile}
+                    onClick={handleAnalysis}
+                    className={`flex-1 px-8 py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-3 text-lg group ${!!mediaFile ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:scale-[1.02]' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                  >
+                    {!!mediaFile ? (
+                      <>
+                        <Sparkles className="w-5 h-5 text-yellow-300 group-hover:animate-spin" />
+                        <span>Iniciar Análise IA</span>
+                      </>
+                    ) : 'Analisar Agora'}
                   </button>
                 </div>
-              )}
-
-              {!!mediaFile && !error && (
-                <div className="mb-6 flex justify-center">
-                  <button
-                    onClick={triggerFilePicker}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-700 text-slate-300 rounded-full text-xs font-semibold transition-all border border-slate-700"
-                  >
-                    <RefreshCcw className="w-3 h-3" /> Trocar Arquivo
-                  </button>
-                </div>
-              )}
-
-              <div className="flex gap-4 pt-4 border-t border-slate-700/50">
-                <button
-                  onClick={handleGoBackToSelect}
-                  className="px-6 py-4 rounded-2xl bg-transparent border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white transition-all font-semibold"
-                >
-                  Voltar
-                </button>
-                <button
-                  disabled={!mediaFile}
-                  onClick={handleAnalysis}
-                  className={`flex-1 px-8 py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-3 text-lg group ${!!mediaFile ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:scale-[1.02]' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
-                >
-                  {!!mediaFile ? (
-                    <>
-                      <Sparkles className="w-5 h-5 text-yellow-300 group-hover:animate-spin" />
-                      <span>Iniciar Análise IA</span>
-                    </>
-                  ) : 'Analisar Agora'}
-                </button>
               </div>
             </div>
-          </div>
-        )}
+          )
+        }
 
-        {(step === AppStep.ANALYZING || step === AppStep.COMPRESSING) && selectedExercise && (
-          <LoadingScreen
-            step={step}
-            tip={getExerciseTip()}
-            exerciseType={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.alias || 'STANDARD')}
-          />
-        )}
+        {
+          (step === AppStep.ANALYZING || step === AppStep.COMPRESSING) && selectedExercise && (
+            <LoadingScreen
+              step={step}
+              tip={getExerciseTip()}
+              exerciseType={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.alias || 'STANDARD')}
+            />
+          )
+        }
 
-        {step === AppStep.RESULTS && analysisResult && selectedExercise && (
-          <ResultView
-            result={analysisResult}
-            exercise={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.name || 'Exercício')}
-            history={historyRecords}
-            userId={currentUser?.id || ''}
-            onReset={resetAnalysis}
-            onDeleteRecord={handleDeleteRecord}
-            onWorkoutSaved={() => currentUser && fetchUserWorkouts(currentUser.id)}
-            onDietSaved={() => currentUser && fetchUserDiets(currentUser.id)}
-            showToast={showToast}
-            triggerConfirm={triggerConfirm}
-          />
-        )}
-      </main>
+        {
+          step === AppStep.RESULTS && analysisResult && selectedExercise && (
+            <ResultView
+              result={analysisResult}
+              exercise={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.name || 'Exercício')}
+              history={historyRecords}
+              userId={currentUser?.id || ''}
+              onReset={resetAnalysis}
+              onDeleteRecord={handleDeleteRecord}
+              onWorkoutSaved={() => currentUser && fetchUserWorkouts(currentUser.id)}
+              onDietSaved={() => currentUser && fetchUserDiets(currentUser.id)}
+              showToast={showToast}
+              triggerConfirm={triggerConfirm}
+            />
+          )
+        }
+      </main >
 
       {/* --- MODALS --- */}
-      <SubscriptionModal
+      < SubscriptionModal
         isOpen={showPlansModal}
         onClose={() => setShowPlansModal(false)}
         currentUser={currentUser}
       />
 
       {/* --- OFFLINE BANNER --- */}
-      {isOffline && (
-        <div className="fixed bottom-0 left-0 right-0 bg-red-600 text-white py-2 px-4 flex items-center justify-center gap-3 z-[1000] animate-in slide-in-from-bottom-full duration-300">
-          <Smartphone className="w-5 h-5 opacity-80" />
-          <span className="text-sm font-bold">Você está offline. Algumas funções podem não funcionar.</span>
-          <RefreshCcw className="w-4 h-4 animate-spin-slow opacity-60" />
-        </div>
-      )}
-    </div>
+      {
+        isOffline && (
+          <div className="fixed bottom-0 left-0 right-0 bg-red-600 text-white py-2 px-4 flex items-center justify-center gap-3 z-[1000] animate-in slide-in-from-bottom-full duration-300">
+            <Smartphone className="w-5 h-5 opacity-80" />
+            <span className="text-sm font-bold">Você está offline. Algumas funções podem não funcionar.</span>
+            <RefreshCcw className="w-4 h-4 animate-spin-slow opacity-60" />
+          </div>
+        )
+      }
+    </div >
   );
 };
 

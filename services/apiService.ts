@@ -81,15 +81,27 @@ export const apiService = {
             assignedExercises: data.assignedExercises || [],
             phone: data.telefone || undefined,
             plan: data.plan,
-            usage: data.usage
+            usage: data.usage,
+            accessLevel: (data.accessLevel || data.access_level || 'FULL').toUpperCase() as 'FULL' | 'READONLY'
         };
     },
 
     getMe: async (userId: string | number): Promise<User> => {
+        // --- MIGRATION: Using /api/usuarios/{id} instead of /api/me to get full accessLevel field ---
+
+        // Try to get auth params from storage
+        let authParams = getAuthQueryParams();
+
+        // If empty (e.g. during first login), try to use the userId itself as requester
+        // This is a fallback assumption that the user is requesting themselves
+        if (!authParams.requesterId) {
+            authParams = { requesterId: String(userId), requesterRole: 'USER' };
+        }
+
         const data = await nativeFetch({
             method: 'GET',
-            url: `${API_BASE_URL}/api/me`,
-            params: { userId: String(userId) }
+            url: `${API_BASE_URL}/api/usuarios/${userId}`,
+            params: authParams
         });
 
         const id = data.id ? String(data.id) : String(userId);
@@ -110,16 +122,35 @@ export const apiService = {
             assignedExercises: data.assignedExercises || [],
             phone: data.telefone || undefined,
             plan: data.plan,
-            usage: data.usage
+            usage: data.usage,
+            accessLevel: (data.accessLevel || data.access_level || 'FULL').toUpperCase() as 'FULL' | 'READONLY'
         };
     },
 
-    signup: async (name: string, email: string, password: string, phone: string, _creatorId?: string, role: string = 'user') => {
+    signup: async (name: string, email: string, password: string, phone: string, _creatorId?: string, role: string = 'user', accessLevel: 'FULL' | 'READONLY' = 'FULL') => {
         return await nativeFetch({
             method: 'POST',
             url: `${API_BASE_URL}/api/usuarios/`,
             params: getAuthQueryParams(),
-            data: { nome: name, name, email, senha: password, telefone: phone, role }
+            data: {
+                nome: name,
+                name,
+                email,
+                senha: password,
+                telefone: phone,
+                role,
+                accessLevel,
+                access_level: accessLevel
+            }
+        });
+    },
+
+    updateUser: async (userId: string | number, data: Partial<User>) => {
+        return await nativeFetch({
+            method: 'PUT',
+            url: `${API_BASE_URL}/api/usuarios/${userId}`,
+            params: getAuthQueryParams(),
+            data: { ...data, access_level: data.accessLevel }
         });
     },
 
@@ -371,8 +402,26 @@ export const apiService = {
             params
         });
 
-        if (Array.isArray(data)) return data;
-        return data.students || [];
+        let mappedUsers: any[] = [];
+        if (Array.isArray(data)) {
+            mappedUsers = data.map((u: any) => {
+                const rawLevel = u.accessLevel || u.access_level || 'FULL';
+                return {
+                    ...u,
+                    accessLevel: String(rawLevel).toUpperCase().trim()
+                };
+            });
+        } else {
+            mappedUsers = (data.students || []).map((u: any) => {
+                const rawLevel = u.accessLevel || u.access_level || 'FULL';
+                return {
+                    ...u,
+                    accessLevel: String(rawLevel).toUpperCase().trim()
+                };
+            });
+        }
+
+        return mappedUsers;
     },
 
     // --- CHECK-INS ---
