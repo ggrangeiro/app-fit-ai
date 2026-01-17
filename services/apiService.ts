@@ -83,7 +83,9 @@ export const apiService = {
             plan: data.plan,
             usage: data.usage,
             accessLevel: (data.accessLevel || data.access_level || 'FULL').toUpperCase() as 'FULL' | 'READONLY',
-            anamnesis: data.anamnesis || data.anamnese || undefined
+            anamnesis: data.anamnesis || data.anamnese || undefined,
+            methodology: data.methodology || undefined,
+            communicationStyle: data.communicationStyle || undefined
         };
     },
 
@@ -125,7 +127,9 @@ export const apiService = {
             plan: data.plan,
             usage: data.usage,
             accessLevel: (data.accessLevel || data.access_level || 'FULL').toUpperCase() as 'FULL' | 'READONLY',
-            anamnesis: data.anamnesis || data.anamnese || undefined
+            anamnesis: data.anamnesis || data.anamnese || undefined,
+            methodology: data.methodology || undefined,
+            communicationStyle: data.communicationStyle || undefined
         };
     },
 

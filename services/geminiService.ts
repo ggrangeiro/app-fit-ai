@@ -217,13 +217,34 @@ export const generateDietPlan = async (
   userId: string | number,
   userRole: string,
   documentFile?: File | null,
-  photoFile?: File | null
+  photoFile?: File | null,
+  personalConfig?: { methodology?: string; communicationStyle?: string }
 ): Promise<string> => {
   const genAI = await getGenAI(userId, userRole);
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
 
+  // PERSONALIZATION BLOCK
+  let personalContext = "";
+  if (personalConfig?.methodology || personalConfig?.communicationStyle) {
+    personalContext = `
+    === CONTEXTO DO PROFISSIONAL RESPONSÁVEL (PRIORIDADE ABSOLUTA) ===
+    O profissional definiu a seguinte metodologia e estilo de comunicação.
+    VOCÊ DEVE SEGUIR ISSO RIGOROSAMENTE ACIMA DE QUALQUER OUTRA REGRA PADRÃO.
+    
+    METODOLOGIA (Preferências dietéticas, tipos de alimentos, estrutura):
+    "${personalConfig.methodology || 'Padrão'}"
+    
+    ESTILO DE COMUNICAÇÃO (Tom de voz):
+    "${personalConfig.communicationStyle || 'Profissional e acolhedor'}"
+    ======================================================================
+    `;
+  }
+
   const prompt = `
-    Atue como um Nutricionista Esportivo. Perfil: ${userData.weight}kg, Objetivo: ${userData.goal}, Sexo: ${userData.gender}.
+    Atue como um Nutricionista Esportivo.
+    ${personalContext}
+
+    Perfil: ${userData.weight}kg, Objetivo: ${userData.goal}, Sexo: ${userData.gender}.
     ${userData.observations ? `Observações Adicionais: ${userData.observations}` : ''}
 
     ${formatAnamnesisForPrompt(userData.anamnesis)}
@@ -288,12 +309,33 @@ export const generateWorkoutPlan = async (
   userId: string | number,
   userRole: string,
   documentFile?: File | null,
-  photoFile?: File | null
+  photoFile?: File | null,
+  personalConfig?: { methodology?: string; communicationStyle?: string }
 ): Promise<string> => {
   const genAI = await getGenAI(userId, userRole);
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
+
+  // PERSONALIZATION BLOCK
+  let personalContext = "";
+  if (personalConfig?.methodology || personalConfig?.communicationStyle) {
+    personalContext = `
+    === CONTEXTO DO PERSONAL TRAINER RESPONSÁVEL (PRIORIDADE ABSOLUTA) ===
+    O personal trainer definiu regras específicas de como ele monta treinos e fala com alunos.
+    VOCÊ DEVE SEGUIR ISSO RIGOROSAMENTE ACIMA DE QUALQUER OUTRA REGRA PADRÃO.
+    
+    METODOLOGIA DE TRABALHO (Use estas técnicas, divisões e preferências):
+    "${personalConfig.methodology || 'Padrão'}"
+    
+    ESTILO DE COMUNICAÇÃO (Use este tom de voz exato):
+    "${personalConfig.communicationStyle || 'Profissional e motivador'}"
+    ======================================================================
+    `;
+  }
+
   const prompt = `
     Atue como um Personal Trainer Especialista e Motivador.
+    ${personalContext}
+
     PERFIL DO ALUNO:
     - Sexo: ${userData.gender}
     - Peso: ${userData.weight}kg
@@ -507,7 +549,8 @@ export const generateWorkoutPlanV2 = async (
   userId: string | number,
   userRole: string,
   documentFile?: File | null,
-  photoFile?: File | null
+  photoFile?: File | null,
+  personalConfig?: { methodology?: string; communicationStyle?: string }
 ): Promise<WorkoutPlanV2> => {
   const genAI = await getGenAI(userId, userRole);
   // Using Pro model for better JSON adherence and analysis
@@ -515,6 +558,23 @@ export const generateWorkoutPlanV2 = async (
     model: ANALYSIS_MODEL,
     generationConfig: { responseMimeType: "application/json" }
   });
+
+  // PERSONALIZATION BLOCK
+  let personalContext = "";
+  if (personalConfig?.methodology || personalConfig?.communicationStyle) {
+    personalContext = `
+    === CONTEXTO DO PERSONAL TRAINER RESPONSÁVEL (PRIORIDADE ABSOLUTA) ===
+    O personal trainer definiu regras específicas de como ele monta treinos e fala com alunos.
+    VOCÊ DEVE SEGUIR ISSO RIGOROSAMENTE ACIMA DE QUALQUER OUTRA REGRA PADRÃO.
+    
+    METODOLOGIA DE TRABALHO (Use estas técnicas, divisões e preferências):
+    "${personalConfig.methodology || 'Padrão'}"
+    
+    ESTILO DE COMUNICAÇÃO (Use este tom de voz exato - reflita no "motivation", "considerations" e nomes):
+    "${personalConfig.communicationStyle || 'Profissional e motivador'}"
+    ======================================================================
+    `;
+  }
 
   // Regras de Volume por Duração para V2
   let volumeRule = "";
@@ -524,6 +584,8 @@ export const generateWorkoutPlanV2 = async (
 
   const prompt = `
     Atue como um Personal Trainer de Elite altamente técnico.
+    ${personalContext}
+    
     Analise o perfil e documentos do aluno para criar um TREINO ESTRUTURADO (V2) em formato JSON.
 
     PERFIL DO ALUNO:
@@ -614,7 +676,8 @@ export const generateDietPlanV2 = async (
   userId: string | number,
   userRole: string,
   documentFile?: File | null,
-  photoFile?: File | null
+  photoFile?: File | null,
+  personalConfig?: { methodology?: string; communicationStyle?: string }
 ): Promise<DietPlanV2> => {
   const genAI = await getGenAI(userId, userRole);
   // Using Pro model for complex JSON structure
@@ -623,8 +686,27 @@ export const generateDietPlanV2 = async (
     generationConfig: { responseMimeType: "application/json" }
   });
 
+  // PERSONALIZATION BLOCK
+  let personalContext = "";
+  if (personalConfig?.methodology || personalConfig?.communicationStyle) {
+    personalContext = `
+    === CONTEXTO DO PROFISSIONAL RESPONSÁVEL (PRIORIDADE ABSOLUTA) ===
+    O profissional definiu a seguinte metodologia e estilo de comunicação.
+    VOCÊ DEVE SEGUIR ISSO RIGOROSAMENTE ACIMA DE QUALQUER OUTRA REGRA PADRÃO.
+    
+    METODOLOGIA (Preferências dietéticas, tipos de alimentos, estrutura):
+    "${personalConfig.methodology || 'Padrão'}"
+    
+    ESTILO DE COMUNICAÇÃO (Tom de voz - reflita no "motivation", "considerations"):
+    "${personalConfig.communicationStyle || 'Profissional e acolhedor'}"
+    ======================================================================
+    `;
+  }
+
   const prompt = `
     Atue como um Nutricionista Esportivo de Elite.
+    ${personalContext}
+
     Analise o perfil e documentos do aluno para criar uma DIETA ESTRUTURADA (V2) em formato JSON.
 
     PERFIL DO ALUNO:

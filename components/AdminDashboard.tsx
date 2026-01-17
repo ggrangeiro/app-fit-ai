@@ -11,6 +11,7 @@ import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus,
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 import { AnamnesisModal } from './AnamnesisModal';
+import { AICustomizationModal } from './AICustomizationModal';
 import { ClipboardList, Camera } from 'lucide-react';
 import { getFullImageUrl } from '../utils/imageUtils';
 
@@ -130,6 +131,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     const [actionPhoto, setActionPhoto] = useState<File | null>(null);
     const [actionPhotoPreview, setActionPhotoPreview] = useState<string | null>(null);
 
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ isOpen: boolean; recordId: string | null }>({ isOpen: false, recordId: null });
+    const [isAnamnesisModalOpen, setIsAnamnesisModalOpen] = useState(false);
+    const [isAICustomizationModalOpen, setIsAICustomizationModalOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const brandLogoInputRef = useRef<HTMLInputElement>(null);
     const stdAvatarInputRef = useRef<HTMLInputElement>(null);
@@ -348,6 +352,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
         setAllExercises(combined);
     };
 
+    const [isEditingSelf, setIsEditingSelf] = useState(false);
+
+    // ... (existing code)
+
     const fetchBackendUsers = async () => {
         setIsLoadingUsers(true);
         try {
@@ -357,14 +365,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     id: String(u.id),
                     name: u.nome || u.name || 'Sem Nome',
                     email: u.email,
-                    // CORREÇÃO: Converter role para minúsculo para garantir compatibilidade com o filtro (USER -> user)
-                    role: u.role ? String(u.role).toLowerCase() : 'user',
+                    // Fix: Cast role string to UserRole (assuming backend validates values)
+                    role: (u.role ? String(u.role).toLowerCase() : 'user') as 'admin' | 'personal' | 'user',
                     credits: u.credits || 0,
                     avatar: u.avatar,
                     assignedExercises: u.assignedExercises || [],
                     phone: u.telefone || u.phone,
                     plan: u.plan,
-                    usage: u.usage
+                    usage: u.usage,
+                    methodology: u.methodology,
+                    communicationStyle: u.communicationStyle
                 }));
                 setUsers(mappedUsers);
                 return;
@@ -575,7 +585,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     observations: actionFormData.observations,
                     workoutPlan: workoutContext, // Contexto,
                     anamnesis: selectedUser.anamnesis
-                }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
+                }, currentUser.id, currentUser.role, actionDocument, actionPhoto, {
+                    methodology: currentUser.methodology,
+                    communicationStyle: currentUser.communicationStyle
+                });
 
                 const planJson = JSON.stringify(planV2);
                 const newDiet = await apiService.createDietV2(selectedUser.id, planJson, actionFormData.goal);
@@ -591,7 +604,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     observations: actionFormData.observations,
                     workoutPlan: workoutContext, // Contexto
                     anamnesis: selectedUser.anamnesis
-                }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
+                }, currentUser.id, currentUser.role, actionDocument, actionPhoto, {
+                    methodology: currentUser.methodology,
+                    communicationStyle: currentUser.communicationStyle
+                });
 
                 const newDiet = await apiService.createDiet(selectedUser.id, planHtml, actionFormData.goal);
                 showToast(`Dieta salva para ${selectedUser.name}!`, 'success');
@@ -638,7 +654,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     currentUser.id,
                     currentUser.role,
                     actionDocument,
-                    actionPhoto
+                    actionPhoto,
+                    {
+                        methodology: currentUser.methodology,
+                        communicationStyle: currentUser.communicationStyle
+                    }
                 );
                 const planJson = JSON.stringify(planV2);
                 const newWorkout = await apiService.createTrainingV2(selectedUser.id, planJson, actionFormData.goal);
@@ -652,7 +672,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     currentUser.id,
                     currentUser.role,
                     actionDocument,
-                    actionPhoto
+                    actionPhoto,
+                    {
+                        methodology: currentUser.methodology,
+                        communicationStyle: currentUser.communicationStyle
+                    }
                 );
                 const newWorkout = await apiService.createTraining(selectedUser.id, planHtml, actionFormData.goal);
 
@@ -1455,12 +1479,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     <div className="fixed inset-0 z-[120] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
                         <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
                             <div className="flex justify-between items-center max-w-6xl mx-auto mb-6 no-print">
-                                <button
-                                    onClick={() => setViewingPlan(null)}
-                                    className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
-                                >
-                                    <X className="w-6 h-6" /> <span className="hidden sm:inline">Fechar Visualização</span>
-                                </button>
+                                <div className="flex items-center gap-4">
+
+                                    <button
+                                        onClick={() => setIsEditingSelf(true)}
+                                        className="text-xs text-slate-400 hover:text-white underline"
+                                    >
+                                        Editar Perfil
+                                    </button>
+                                    <button
+                                        onClick={() => setViewingPlan(null)}
+                                        className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
+                                    >
+                                        <X className="w-6 h-6" /> <span className="hidden sm:inline">Fechar Visualização</span>
+                                    </button>
+                                </div>
                                 <div className="flex gap-3">
                                     {/* Redo Button - For Workouts and Diets (Personal/Admin) */}
                                     {(isPersonal || isAdmin) && (
@@ -1855,9 +1888,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                 <h2 className="text-2xl font-bold text-white flex items-center gap-3">
                                     <Users className="w-6 h-6 text-blue-400" /> {isPersonal ? 'Gestão dos Meus Alunos' : 'Gestão Global de Usuários'}
                                 </h2>
-                                <button onClick={fetchBackendUsers} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                                    <PlayCircle className="w-3 h-3" /> Atualizar Lista
-                                </button>
+                                <div className="flex items-center gap-3">
+                                    {(isPersonal || isAdmin) && (
+                                        <button
+                                            onClick={() => setIsAICustomizationModalOpen(true)}
+                                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-500/20 transition-all border border-indigo-500/50"
+                                        >
+                                            <Sparkles className="w-4 h-4" /> Minha IA
+                                        </button>
+                                    )}
+                                    <button onClick={fetchBackendUsers} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                                        <PlayCircle className="w-3 h-3" /> Atualizar Lista
+                                    </button>
+                                </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar">
                                 {isLoadingUsers ? (
@@ -2282,18 +2325,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 </div>
             </div>
 
-            {showAnamnesisModal && selectedUser && (
+            {isAnamnesisModalOpen && selectedUser && (
                 <AnamnesisModal
-                    isOpen={showAnamnesisModal}
-                    onClose={() => setShowAnamnesisModal(false)}
-                    user={selectedUser}
-                    onUpdate={(updated) => {
+                    isOpen={isAnamnesisModalOpen}
+                    onClose={() => setIsAnamnesisModalOpen(false)}
+                    studentId={selectedUser.id}
+                    studentName={selectedUser.name}
+                    initialData={selectedUser.anamnesis}
+                    onSave={async (updatedAnamnesis) => {
+                        // Atualiza estado local
+                        const updated = { ...selectedUser, anamnesis: updatedAnamnesis };
                         setSelectedUser(updated);
-                        setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+                        // Atualiza lista principal se necessário
+                        const updatedList = users.map(u => u.id === updated.id ? updated : u);
+                        // setUsers(updatedList); // Se tivesse setUsers aqui
+                        setIsAnamnesisModalOpen(false);
                     }}
-                    isEditable={true}
                 />
             )}
+
+            <AICustomizationModal
+                isOpen={isAICustomizationModalOpen}
+                onClose={() => setIsAICustomizationModalOpen(false)}
+                currentUser={currentUser}
+                onUpdateUser={(updated) => {
+                    if (onUpdateUser) onUpdateUser(updated);
+                }}
+            />
         </div >
     );
 };

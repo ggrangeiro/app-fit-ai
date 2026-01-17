@@ -182,6 +182,8 @@ export interface User {
   accessLevel?: 'FULL' | 'READONLY'; // Novo campo para controle de permissões
   anamnesis?: Anamnesis; // Novo campo para ficha de avaliação
   brandLogo?: string; // URL Relativa da Logo do Personal (White Label)
+  methodology?: string; // Metodologia do Personal
+  communicationStyle?: string; // Estilo de comunicação do Personal
 }
 
 export interface ExerciseRecord {
