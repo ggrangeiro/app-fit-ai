@@ -10,6 +10,8 @@ import LoadingScreen from './LoadingScreen';
 import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock, Trash2 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
+import { AnamnesisModal } from './AnamnesisModal';
+import { ClipboardList } from 'lucide-react';
 
 // LISTA FIXA DE EXERCÍCIOS PARA O PERSONAL (SUBSTITUI CHAMADA DE API)
 const FIXED_EXERCISES_LIST = [
@@ -65,10 +67,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     const [viewingPlan, setViewingPlan] = useState<{ type: 'workout' | 'diet', title: string, content: string, daysData?: string, id: string, redoCount?: number, originalFormData?: any } | null>(null);
     const [pdfLoading, setPdfLoading] = useState(false);
 
-    // Redo Workout States
+    // Modals
+    const [showEvolutionModal, setShowEvolutionModal] = useState(false);
+    const [showPlansModal, setShowPlansModal] = useState(false);
+    const [showAnamnesisModal, setShowAnamnesisModal] = useState(false);
     const [showRedoModal, setShowRedoModal] = useState(false);
-    const [redoFeedback, setRedoFeedback] = useState('');
 
+    const [selectedExerciseId, setSelectedExerciseId] = useState<string | number | null>(null);
+    const [redoFeedback, setRedoFeedback] = useState('');
     const [checkIns, setCheckIns] = useState<WorkoutCheckIn[]>([]);
     const [isCheckInsExpanded, setIsCheckInsExpanded] = useState(false);
     const [isLoadingCheckIns, setIsLoadingCheckIns] = useState(false);
@@ -520,7 +526,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     goal: actionFormData.goal,
                     gender: actionFormData.gender,
                     observations: actionFormData.observations,
-                    workoutPlan: workoutContext // Contexto
+                    workoutPlan: workoutContext, // Contexto,
+                    anamnesis: selectedUser.anamnesis
                 }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
 
                 const planJson = JSON.stringify(planV2);
@@ -535,7 +542,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     goal: actionFormData.goal,
                     gender: actionFormData.gender,
                     observations: actionFormData.observations,
-                    workoutPlan: workoutContext // Contexto
+                    workoutPlan: workoutContext, // Contexto
+                    anamnesis: selectedUser.anamnesis
                 }, currentUser.id, currentUser.role, actionDocument, actionPhoto);
 
                 const newDiet = await apiService.createDiet(selectedUser.id, planHtml, actionFormData.goal);
@@ -578,7 +586,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
             };
 
             if (useV2) {
-                const planV2 = await generateWorkoutPlanV2(originalData, currentUser.id, currentUser.role, actionDocument, actionPhoto);
+                const planV2 = await generateWorkoutPlanV2(
+                    { ...originalData, anamnesis: selectedUser.anamnesis },
+                    currentUser.id,
+                    currentUser.role,
+                    actionDocument,
+                    actionPhoto
+                );
                 const planJson = JSON.stringify(planV2);
                 const newWorkout = await apiService.createTrainingV2(selectedUser.id, planJson, actionFormData.goal);
 
@@ -586,7 +600,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
                 setViewingPlan({ type: 'workout', content: `<pre class="whitespace-pre-wrap text-xs bg-slate-900 text-blue-400 p-4 rounded-lg overflow-auto">${JSON.stringify(planV2, null, 2)}</pre>`, title: 'Novo Treino V2 (JSON)', id: newWorkout.id, redoCount: 0, originalFormData: originalData });
             } else {
-                const planHtml = await generateWorkoutPlan(originalData, currentUser.id, currentUser.role, actionDocument, actionPhoto);
+                const planHtml = await generateWorkoutPlan(
+                    { ...originalData, anamnesis: selectedUser.anamnesis },
+                    currentUser.id,
+                    currentUser.role,
+                    actionDocument,
+                    actionPhoto
+                );
                 const newWorkout = await apiService.createTraining(selectedUser.id, planHtml, actionFormData.goal);
 
                 showToast(`Treino salva para ${selectedUser.name}!`, 'success');
@@ -1880,6 +1900,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                     <button onClick={() => setShowTeacherActionModal('DIET')} className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors">
                                                         <Utensils className="w-4 h-4" /> Prescrever Dieta
                                                     </button>
+                                                    <button onClick={() => setShowAnamnesisModal(true)} className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors">
+                                                        <ClipboardList className="w-4 h-4" /> Anamnese Completa
+                                                    </button>
                                                     <button onClick={() => setShowResetPasswordModal(true)} className="flex items-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium transition-colors">
                                                         <Key className="w-4 h-4" /> Resetar Senha
                                                     </button>
@@ -2125,6 +2148,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     )}
                 </div>
             </div>
+
+            {showAnamnesisModal && selectedUser && (
+                <AnamnesisModal
+                    isOpen={showAnamnesisModal}
+                    onClose={() => setShowAnamnesisModal(false)}
+                    user={selectedUser}
+                    onUpdate={(updated) => {
+                        setSelectedUser(updated);
+                        setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+                    }}
+                    isEditable={true}
+                />
+            )}
         </div >
     );
 };

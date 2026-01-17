@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { AnalysisResult, ExerciseType, SPECIAL_EXERCISES, WorkoutPlanV2, DietPlanV2 } from "../types";
+import { AnalysisResult, ExerciseType, SPECIAL_EXERCISES, WorkoutPlanV2, DietPlanV2, Anamnesis } from "../types";
 import { getGeminiApiKey, clearApiKeyCache } from "./configService";
 
 // --- CONFIGURAÇÃO ---
@@ -61,8 +61,44 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
       resolve({ inlineData: { data: base64Content, mimeType: file.type } });
     };
     reader.onerror = (e) => reject(new Error("Falha ao ler arquivo: " + e));
-    reader.readAsDataURL(file);
   });
+};
+
+/**
+ * Formata os dados da anamnese para serem incluídos no prompt da IA.
+ */
+const formatAnamnesisForPrompt = (anamnesis?: Anamnesis): string => {
+  if (!anamnesis) return "";
+
+  const { personal, physical, health, fitness, nutrition, preferences, goals } = anamnesis;
+
+  return `
+    DADOS DETALHADOS DA AVALIAÇÃO (ANAMNESE):
+    - Nome: ${personal.fullName}, Idade: ${personal.age}, Gênero: ${personal.gender}
+    - Profissão/Atividade Diária: ${personal.profession} (${health.dailyActivity})
+    - Peso Atual: ${physical.weight}kg, Altura: ${physical.height}cm
+    - Objetivo 3 meses: ${goals.threeMonthGoal}
+    - Obstáculo Principal: ${goals.mainObstacle}
+    
+    SAÚDE E LESÕES:
+    - Condições: ${health.conditions.length > 0 ? health.conditions.join(", ") : "Nenhuma informada"}
+    - Lesões/Dores: ${health.injuries || "Nenhuma informada"}
+    - Qualidade do Sono: ${health.sleepQuality}
+    - Dor no Peito: ${health.chestPain ? "SIM (ALERTA CRÍTICO)" : "Não"}
+    
+    PREFERÊNCIAS E FITNESS:
+    - Local de Treino: ${fitness.trainingLocation}
+    - Tempo Disponível: ${fitness.trainingTimeAvailable}
+    - Frequência: ${fitness.weeklyFrequency}x por semana
+    - Exercícios que GOSTA: ${preferences.likedExercises}
+    - Exercícios que NÃO GOSTA: ${preferences.dislikedExercises} (EVITE ESTES!)
+    - Foco Muscular: ${preferences.bodyPartFocus}
+    - Preferência Cardio: ${preferences.cardioPreference}
+    
+    NUTRIÇÃO:
+    - Hábitos/Restrições: ${nutrition.eatingHabits}
+    - Acompanhamento Profissional: ${nutrition.nutritionalMonitoring ? "Sim" : "Não"}
+  `;
 };
 
 // --- ANÁLISE DE VÍDEO (PROMPTS REFINADOS) ---
@@ -190,6 +226,8 @@ export const generateDietPlan = async (
     Atue como um Nutricionista Esportivo. Perfil: ${userData.weight}kg, Objetivo: ${userData.goal}, Sexo: ${userData.gender}.
     ${userData.observations ? `Observações Adicionais: ${userData.observations}` : ''}
 
+    ${formatAnamnesisForPrompt(userData.anamnesis)}
+
     ${userData.workoutPlan ? `
     CONTEXTO DE TREINO DO USUÁRIO (IMPORTANTE):
     O usuário possui o seguinte treino ativo. Leve isso em consideração para ajustar macros e horários (ex: pré/pós treino):
@@ -263,10 +301,10 @@ export const generateWorkoutPlan = async (
     - Objetivo: ${userData.goal}
     - Nível de Experiência: ${userData.level}
     - Frequência Semanal: ${userData.frequency}x
-    - Nível de Experiência: ${userData.level}
-    - Frequência Semanal: ${userData.frequency}x
     - Duração Preferida: ${userData.duration === 'short' ? 'Curto (30min)' : userData.duration === 'long' ? 'Longo (90min+)' : 'Médio (60min)'}
     - Observações/Restrições: ${userData.observations || 'Nenhuma'}
+
+    ${formatAnamnesisForPrompt(userData.anamnesis)}
 
     ${userData.duration === 'short' ? 'REGRA DE VOLUME: TREINO RÁPIDO. Gere no MÁXIMO 4 exercícios por dia.' : userData.duration === 'long' ? 'REGRA DE VOLUME: TREINO LONGO. Gere entre 7 a 9 exercícios.' : 'REGRA DE VOLUME: Padrão (5-6 exercícios).'}
 
@@ -496,6 +534,8 @@ export const generateWorkoutPlanV2 = async (
     - Nível: ${userData.level}
     - Frequência: ${userData.frequency}x/semana
     - Observações: ${userData.observations || 'Nenhuma'}
+
+    ${formatAnamnesisForPrompt(userData.anamnesis)}
     - Duração Solicitada: ${userData.duration || 'Padrão'}
     ${volumeRule}
 
@@ -593,6 +633,8 @@ export const generateDietPlanV2 = async (
     - Altura: ${userData.height}cm
     - Objetivo: ${userData.goal}
     - Observações: ${userData.observations || 'Nenhuma'}
+
+    ${formatAnamnesisForPrompt(userData.anamnesis)}
 
     ${userData.workoutPlan ? `
     CONTEXTO DE TREINO DO USUÁRIO (IMPORTANTE):

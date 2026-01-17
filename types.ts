@@ -109,6 +109,62 @@ export interface Usage {
   generationsLimit: number;
 }
 
+export interface Anamnesis {
+  userId: string | number;
+  updatedAt: string;
+
+  personal: {
+    fullName: string;
+    whatsapp: string;
+    birthDate: string;
+    age: number;
+    location: { city: string; state: string; country: string };
+    maritalStatus: 'Solteiro(a)' | 'Casado(a)' | 'Divorciado(a)' | 'Viúvo(a)';
+    profession: string;
+    gender: 'Masculino' | 'Feminino';
+  };
+
+  physical: {
+    weight: number;
+    height: number;
+    targetWeight: number;
+    currentBodyShape: number; // 1-10
+    desiredBodyShape: number;
+  };
+
+  health: {
+    conditions: string[];
+    injuries: string;
+    dailyActivity: 'Sentado(a)' | 'Em pé' | 'Moderada' | 'Intensa';
+    sleepQuality: 'Ruim' | 'Regular' | 'Boa' | 'Excelente';
+    chestPain: boolean;
+  };
+
+  fitness: {
+    currentlyExercising: boolean;
+    trainingLocation: 'Academia' | 'Casa' | 'Ar Livre';
+    weeklyFrequency: number;
+    trainingTimeAvailable: string;
+  };
+
+  nutrition: {
+    nutritionalMonitoring: boolean;
+    eatingHabits: string;
+  };
+
+  preferences: {
+    likedExercises: string;
+    dislikedExercises: string;
+    bodyPartFocus: string;
+    cardioPreference: string;
+  };
+
+  goals: {
+    threeMonthGoal: string;
+    mainObstacle: string;
+  };
+}
+
 export interface User {
   id: string; // Frontend usa string, backend pode mandar number. Converteremos.
   name: string;
@@ -124,6 +180,7 @@ export interface User {
   plan?: Plan;
   usage?: Usage;
   accessLevel?: 'FULL' | 'READONLY'; // Novo campo para controle de permissões
+  anamnesis?: Anamnesis; // Novo campo para ficha de avaliação
 }
 
 export interface ExerciseRecord {

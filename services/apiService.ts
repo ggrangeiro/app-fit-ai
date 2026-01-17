@@ -82,7 +82,8 @@ export const apiService = {
             phone: data.telefone || undefined,
             plan: data.plan,
             usage: data.usage,
-            accessLevel: (data.accessLevel || data.access_level || 'FULL').toUpperCase() as 'FULL' | 'READONLY'
+            accessLevel: (data.accessLevel || data.access_level || 'FULL').toUpperCase() as 'FULL' | 'READONLY',
+            anamnesis: data.anamnesis || data.anamnese || undefined
         };
     },
 
@@ -123,7 +124,8 @@ export const apiService = {
             phone: data.telefone || undefined,
             plan: data.plan,
             usage: data.usage,
-            accessLevel: (data.accessLevel || data.access_level || 'FULL').toUpperCase() as 'FULL' | 'READONLY'
+            accessLevel: (data.accessLevel || data.access_level || 'FULL').toUpperCase() as 'FULL' | 'READONLY',
+            anamnesis: data.anamnesis || data.anamnese || undefined
         };
     },
 
@@ -408,7 +410,8 @@ export const apiService = {
                 const rawLevel = u.accessLevel || u.access_level || 'FULL';
                 return {
                     ...u,
-                    accessLevel: String(rawLevel).toUpperCase().trim()
+                    accessLevel: String(rawLevel).toUpperCase().trim(),
+                    anamnesis: u.anamnesis || u.anamnese || undefined
                 };
             });
         } else {
@@ -416,7 +419,8 @@ export const apiService = {
                 const rawLevel = u.accessLevel || u.access_level || 'FULL';
                 return {
                     ...u,
-                    accessLevel: String(rawLevel).toUpperCase().trim()
+                    accessLevel: String(rawLevel).toUpperCase().trim(),
+                    anamnesis: u.anamnesis || u.anamnese || undefined
                 };
             });
         }
@@ -541,6 +545,16 @@ export const apiService = {
             method: 'POST',
             url: `${API_BASE_URL}/api/subscriptions/cancel`,
             params: { userId: String(userId) }
+        });
+    },
+
+    // --- ANAMNESE ---
+    updateAnamnesis: async (userId: string | number, data: any) => {
+        return await nativeFetch({
+            method: 'PUT',
+            url: `${API_BASE_URL}/api/usuarios/${userId}/anamnese`,
+            params: getAuthQueryParams(),
+            data: data
         });
     }
 };

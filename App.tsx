@@ -21,6 +21,8 @@ import BuyCreditsModal from './components/BuyCreditsModal';
 import LoadingScreen from './components/LoadingScreen';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { PaymentCallback } from './components/PaymentCallback';
+import { AnamnesisModal } from './components/AnamnesisModal';
+import { FileText, ClipboardList } from 'lucide-react';
 
 // --- ICON MAPPING SYSTEM ---
 const EXERCISE_ICONS: Record<string, React.ReactNode> = {
@@ -342,6 +344,7 @@ const App: React.FC = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showBuyCreditsModal, setShowBuyCreditsModal] = useState(false);
   const [showPlansModal, setShowPlansModal] = useState(false);
+  const [showAnamnesisModal, setShowAnamnesisModal] = useState(false);
   const [isOffline, setIsOffline] = useState(!window.navigator.onLine);
 
   // Password Reset Token Detection
@@ -390,6 +393,7 @@ const App: React.FC = () => {
   const [showGenerateWorkoutForm, setShowGenerateWorkoutForm] = useState(false);
   const [generatingWorkout, setGeneratingWorkout] = useState(false);
   const [viewingWorkoutHtml, setViewingWorkoutHtml] = useState<string | null>(null);
+  const [showPaymentCallback, setShowPaymentCallback] = useState(false);
   const [showDietModal, setShowDietModal] = useState(false);
   const [showGenerateDietForm, setShowGenerateDietForm] = useState(false);
   const [generatingDiet, setGeneratingDiet] = useState(false);
@@ -428,6 +432,37 @@ const App: React.FC = () => {
     setWorkoutDocument(null);
     setWorkoutPhoto(null);
     setWorkoutPhotoPreview(null);
+  };
+
+  const handleOpenWorkoutForm = () => {
+    if (!canCreateWorkout(currentUser)) return;
+
+    if (currentUser?.anamnesis) {
+      const { physical, fitness, personal } = currentUser.anamnesis;
+      setWorkoutFormData(prev => ({
+        ...prev,
+        weight: physical.weight ? String(physical.weight) : prev.weight,
+        height: physical.height ? String(physical.height) : prev.height,
+        gender: personal.gender === 'Feminino' ? 'feminino' : 'masculino',
+        frequency: fitness.weeklyFrequency ? String(fitness.weeklyFrequency) : prev.frequency,
+      }));
+    }
+    setShowGenerateWorkoutForm(true);
+  };
+
+  const handleOpenDietForm = () => {
+    if (!canCreateWorkout(currentUser)) return; // reusing the same credit check
+
+    if (currentUser?.anamnesis) {
+      const { physical, personal } = currentUser.anamnesis;
+      setDietFormData(prev => ({
+        ...prev,
+        weight: physical.weight ? String(physical.weight) : prev.weight,
+        height: physical.height ? String(physical.height) : prev.height,
+        gender: personal.gender === 'Feminino' ? 'feminino' : 'masculino',
+      }));
+    }
+    setShowGenerateDietForm(true);
   };
 
   const resetDietForm = () => {
@@ -1094,7 +1129,13 @@ const App: React.FC = () => {
 
     setGeneratingWorkout(true);
     try {
-      const planHtml = await generateWorkoutPlan(workoutFormData, currentUser.id, currentUser.role, workoutDocument, workoutPhoto);
+      const planHtml = await generateWorkoutPlan(
+        { ...workoutFormData, anamnesis: currentUser.anamnesis },
+        currentUser.id,
+        currentUser.role,
+        workoutDocument,
+        workoutPhoto
+      );
       // Usa apiService para criar e refresh, sem fallbacks quebrados
       await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal);
       await fetchUserWorkouts(currentUser.id);
@@ -1152,7 +1193,8 @@ const App: React.FC = () => {
 
       const planHtml = await generateDietPlan({
         ...dietFormData,
-        workoutPlan: workoutContext // INJEÇÃO DO CONTEXTO
+        workoutPlan: workoutContext, // INJEÇÃO DO CONTEXTO
+        anamnesis: currentUser.anamnesis
       }, currentUser.id, currentUser.role, dietDocument, dietPhoto);
 
       // Usa apiService para criar e refresh
@@ -1934,6 +1976,18 @@ const App: React.FC = () => {
                           <p className="text-[10px] text-slate-400">Recarga e Histórico</p>
                         </div>
                       </button>
+                      <button
+                        onClick={() => { setShowAnamnesisModal(true); setShowUserMenu(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-700 transition-colors text-left"
+                      >
+                        <div className="p-1.5 bg-blue-500 rounded-lg text-white">
+                          <ClipboardList className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white">Meu Perfil de Treino</p>
+                          <p className="text-[10px] text-slate-400">Ficha de Avaliação (IA)</p>
+                        </div>
+                      </button>
 
                       <button
                         onClick={() => { setShowChangePasswordModal(true); setShowUserMenu(false); }}
@@ -1988,7 +2042,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-      </header>
+      </header >
 
       {showWorkoutModal && renderWorkoutModal()}
       {showDietModal && renderDietModal()}
@@ -1997,18 +2051,30 @@ const App: React.FC = () => {
       {showCheckInModal && renderCheckInModal()}
       {showChangePasswordModal && renderChangePasswordModal()}
 
-      {/* Evolution Modal Rendering */}
-      {showEvolutionModal && selectedExercise && (
-        <EvolutionModal
-          isOpen={showEvolutionModal}
-          onClose={() => setShowEvolutionModal(false)}
-          history={historyRecords}
-          exerciseType={exercisesList.find(e => e.id === selectedExercise)?.name || selectedExercise}
-          highlightLatestAsCurrent={false}
-          onDelete={handleDeleteRecord}
-          triggerConfirm={triggerConfirm}
+      {showAnamnesisModal && currentUser && (
+        <AnamnesisModal
+          isOpen={showAnamnesisModal}
+          onClose={() => setShowAnamnesisModal(false)}
+          user={currentUser}
+          onUpdate={handleUpdateUser}
+          isEditable={true}
         />
       )}
+
+      {/* Evolution Modal Rendering */}
+      {
+        showEvolutionModal && selectedExercise && (
+          <EvolutionModal
+            isOpen={showEvolutionModal}
+            onClose={() => setShowEvolutionModal(false)}
+            history={historyRecords}
+            exerciseType={exercisesList.find(e => e.id === selectedExercise)?.name || selectedExercise}
+            highlightLatestAsCurrent={false}
+            onDelete={handleDeleteRecord}
+            triggerConfirm={triggerConfirm}
+          />
+        )
+      }
 
       {/* Renderização Condicional baseada no Role */}
       <main className="flex-grow flex items-center justify-center p-4 md:p-8">
@@ -2028,6 +2094,25 @@ const App: React.FC = () => {
               </div>
               <h2 className="text-3xl md:text-5xl font-bold text-white">Olá! <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">O que vamos fazer hoje?</span></h2>
             </div>
+
+            {/* ALERTA DE SEGURANÇA CARDIOVASCULAR (ANAMNESE) */}
+            {currentUser?.anamnesis?.health?.chestPain && (
+              <div className="w-full max-w-5xl mb-8 p-4 rounded-2xl bg-red-500/10 border-2 border-red-500/50 flex flex-col md:flex-row items-center gap-4 animate-bounce-subtle">
+                <div className="p-3 bg-red-500 rounded-xl text-white shadow-lg shadow-red-500/20">
+                  <AlertTriangle className="w-8 h-8" />
+                </div>
+                <div className="flex-grow text-center md:text-left">
+                  <h3 className="text-xl font-bold text-red-400">Restrição Médica Detectada</h3>
+                  <p className="text-slate-300 text-sm">Identificamos dor no peito em sua avaliação. <strong>Não inicie exercícios sem liberação médica.</strong></p>
+                </div>
+                <button
+                  onClick={() => setShowAnamnesisModal(true)}
+                  className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-500/20 whitespace-nowrap"
+                >
+                  Revisar Avaliação
+                </button>
+              </div>
+            )}
 
             {/* ... Restante do código de seleção de exercício (igual ao anterior) ... */}
             <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -2055,7 +2140,7 @@ const App: React.FC = () => {
                     </div>
                   ) : (
                     <button
-                      onClick={() => canCreateWorkout(currentUser) && setShowGenerateWorkoutForm(true)}
+                      onClick={handleOpenWorkoutForm}
                       className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
                     >
                       <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Dumbbell className="w-8 h-8" /></div>
@@ -2088,7 +2173,7 @@ const App: React.FC = () => {
                     </div>
                   ) : (
                     <button
-                      onClick={() => canCreateWorkout(currentUser) && setShowGenerateDietForm(true)}
+                      onClick={handleOpenDietForm}
                       className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
                     >
                       <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Utensils className="w-8 h-8" /></div>
