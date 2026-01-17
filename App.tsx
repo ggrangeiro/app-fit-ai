@@ -22,7 +22,8 @@ import LoadingScreen from './components/LoadingScreen';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { PaymentCallback } from './components/PaymentCallback';
 import { AnamnesisModal } from './components/AnamnesisModal';
-import { FileText, ClipboardList } from 'lucide-react';
+import { Camera, ClipboardList } from 'lucide-react';
+import { getFullImageUrl } from './utils/imageUtils';
 
 // --- ICON MAPPING SYSTEM ---
 const EXERCISE_ICONS: Record<string, React.ReactNode> = {
@@ -488,6 +489,30 @@ const App: React.FC = () => {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const profileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleProfilePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+
+    try {
+      showToast("Enviando foto...", 'info');
+      // Assume requester is the user mostly, unless we want to support admin doing it here?? 
+      // The menu is for "currentUser", so valid.
+      const response = await apiService.uploadAsset(currentUser.id, file, 'avatar', currentUser.id, currentUser.role);
+
+      if (response && response.success) {
+        // Update user state
+        const newAvatarUrl = response.imageUrl; // Relative path from backend
+        const updatedUser = { ...currentUser, avatar: newAvatarUrl };
+        handleUpdateUser(updatedUser);
+        showToast("Foto de perfil atualizada!", 'success');
+      }
+    } catch (error: any) {
+      console.error("Erro upload avatar:", error);
+      showToast("Erro ao enviar foto: " + error.message, 'error');
+    }
+  };
 
   // User Menu State
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -1840,22 +1865,32 @@ const App: React.FC = () => {
       <header className="sticky top-0 z-50 glass-panel border-b-0" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 group cursor-default">
-            <div className="p-2 bg-blue-600 rounded-lg group-hover:bg-blue-500 transition-colors shadow-lg">
-              <Video className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex flex-col">
-              <h1 className="text-xl font-bold tracking-tight text-white hidden md:block">FitAI <span className="text-blue-400 font-light">Analyzer</span></h1>
-              {currentUser?.plan && (
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded w-fit -mt-1 hidden md:block
-                    ${currentUser.plan.type === 'PRO' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                    currentUser.plan.type === 'STUDIO' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
-                      currentUser.plan.type === 'STARTER' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
-                        'bg-slate-700 text-slate-400 border border-slate-600'}
-                 `}>
-                  {currentUser.plan.type}
-                </span>
-              )}
-            </div>
+            {currentUser?.brandLogo ? (
+              <img
+                src={getFullImageUrl(currentUser.brandLogo)}
+                alt="Logo"
+                className="h-10 w-auto object-contain max-w-[150px]"
+              />
+            ) : (
+              <>
+                <div className="p-2 bg-blue-600 rounded-lg group-hover:bg-blue-500 transition-colors shadow-lg">
+                  <Video className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex flex-col">
+                  <h1 className="text-xl font-bold tracking-tight text-white hidden md:block">FitAI <span className="text-blue-400 font-light">Analyzer</span></h1>
+                  {currentUser?.plan && (
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded w-fit -mt-1 hidden md:block
+                        ${currentUser.plan.type === 'PRO' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                        currentUser.plan.type === 'STUDIO' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/20' :
+                          currentUser.plan.type === 'STARTER' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+                            'bg-slate-700 text-slate-400 border border-slate-600'}
+                    `}>
+                      {currentUser.plan.type}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-4">
             {currentUser && (
@@ -1924,10 +1959,14 @@ const App: React.FC = () => {
                     )}
                   </div>
                 </div>
-                <div className={`w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600 relative transition-all ${showUserMenu ? 'ring-2 ring-blue-500 border-blue-400' : 'group-hover:border-slate-500'}`}>
-                  <UserIcon className="w-5 h-5 text-slate-300" />
+                <div className={`w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600 relative transition-all overflow-hidden ${showUserMenu ? 'ring-2 ring-blue-500 border-blue-400' : 'group-hover:border-slate-500'}`}>
+                  {currentUser?.avatar ? (
+                    <img src={getFullImageUrl(currentUser.avatar)} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserIcon className="w-5 h-5 text-slate-300" />
+                  )}
                   {currentUser?.plan && (
-                    <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center text-[8px] font-bold text-white
+                    <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 flex items-center justify-center text-[8px] font-bold text-white z-10
                         ${currentUser.plan.type === 'PRO' ? 'bg-emerald-500' :
                         currentUser.plan.type === 'STUDIO' ? 'bg-purple-500' :
                           currentUser.plan.type === 'STARTER' ? 'bg-yellow-500' :
@@ -1950,7 +1989,27 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="p-2 space-y-1">
-                      {/* Upgrade Option */}
+                      {/* Profile Photo Option */}
+                      <button
+                        onClick={() => { profileInputRef.current?.click(); setShowUserMenu(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-700 transition-colors text-left"
+                      >
+                        <input
+                          type="file"
+                          ref={profileInputRef}
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleProfilePhotoUpload}
+                        />
+                        <div className="p-1.5 bg-slate-600 rounded-lg text-white">
+                          <Camera className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white">Alterar Foto</p>
+                          <p className="text-[10px] text-slate-400">Personalize seu perfil</p>
+                        </div>
+                      </button>
+
                       <button
                         onClick={() => { setShowPlansModal(true); setShowUserMenu(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-700 transition-colors text-left"

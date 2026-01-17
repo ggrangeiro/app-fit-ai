@@ -3,7 +3,7 @@ import { DietGoalEntity, User, UserRole, AnalysisResult } from "../types";
 import { secureStorage } from "../utils/secureStorage";
 
 
-const API_BASE_URL = "https://app-back-ia-732767853162.southamerica-east1.run.app";
+export const API_BASE_URL = "https://app-back-ia-732767853162.southamerica-east1.run.app";
 
 // --- HELPERS PARA CREDENCIAIS E AUTH ---
 
@@ -154,6 +154,49 @@ export const apiService = {
             params: getAuthQueryParams(),
             data: { ...data, access_level: data.accessLevel }
         });
+    },
+
+    uploadAsset: async (userId: string | number, file: { uri: string, name: string, type: string } | File, type: 'avatar' | 'logo', requesterId: string, requesterRole: string) => {
+        // Implementação híbrida para funcionar no Web (File object) e Mobile (URI object)
+        const formData = new FormData();
+
+        if (file instanceof File) {
+            formData.append('file', file);
+        } else {
+            // Capacitor/Mobile way if needed, but usually we handle Blob/File. 
+            // If passing a simple object, we might need to convert or assume the native layer handles it.
+            // For this codebase, assuming standard FormData usage or specific adaptation.
+            // Given the context of "Mobile", usually we need to read the file into a Blob or transmit as base64 if NativeFetch doesn't support FormData directly.
+            // BUT, the prompt example says: formData.append('file', { uri: ..., name: ..., type: ... });
+            // This suggests React Native style FormData.
+            formData.append('file', file as any);
+        }
+
+        formData.append('type', type);
+
+        const url = `${API_BASE_URL}/api/usuarios/${userId}/upload-asset?requesterId=${requesterId}&requesterRole=${requesterRole}`;
+
+        // Native Fetch do Capacitor suporta FormData? 
+        // CapacitorHttp request supports 'data' with FormData? It says "data: options.data".
+        // Let's rely on axios style or standard fetch if available. 
+        // The codebase uses `nativeFetch` wrapper. Let's look at `nativeFetch`.
+        // It sets 'Content-Type': 'application/json'. This is bad for FormData.
+
+        // We need a specific fetch for upload or modify nativeFetch to handle FormData.
+        // Or just use direct fetch() since Capacitor intercepts it?
+        // Let's try to use standard fetch for this specific call to allow properly set Content-Type (multipart/form-data boundary is auto-set by browser/engine).
+
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+            // headers: {} // Let browser set Content-Type with boundary
+        });
+
+        if (!response.ok) {
+            throw new Error(`Erro ao enviar imagem: ${response.statusText}`);
+        }
+
+        return await response.json();
     },
 
     // --- CRÉDITOS ---

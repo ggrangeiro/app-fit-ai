@@ -11,7 +11,8 @@ import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus,
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 import { AnamnesisModal } from './AnamnesisModal';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, Camera } from 'lucide-react';
+import { getFullImageUrl } from '../utils/imageUtils';
 
 // LISTA FIXA DE EXERCÍCIOS PARA O PERSONAL (SUBSTITUI CHAMADA DE API)
 const FIXED_EXERCISES_LIST = [
@@ -130,6 +131,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     const [actionPhotoPreview, setActionPhotoPreview] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const brandLogoInputRef = useRef<HTMLInputElement>(null);
+    const stdAvatarInputRef = useRef<HTMLInputElement>(null);
+
+    const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            showToast("Enviando logo...", 'info');
+            // Para logo, o target é o próprio personal (currentUser)
+            const response = await apiService.uploadAsset(currentUser.id, file, 'logo', currentUser.id, currentUser.role);
+            if (response && response.success) {
+                // Se o onUpdateUser foi passado (geralmente é o App.tsx), atualiza o estado global
+                if (onUpdateUser) {
+                    const updated = { ...currentUser, brandLogo: response.imageUrl };
+                    onUpdateUser(updated);
+                }
+                showToast("Logo atualizada com sucesso!", 'success');
+            }
+        } catch (e: any) {
+            showToast("Erro ao enviar logo: " + e.message, 'error');
+        }
+    };
+
+    const handleUploadStudentAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedUser) return;
+
+        try {
+            showToast("Enviando foto do aluno...", 'info');
+            // Upload para o selectedUser, mas requisitado pelo currentUser (Personal/Admin)
+            // Backend espera /api/usuarios/{targetId}/upload-asset
+            const response = await apiService.uploadAsset(selectedUser.id, file, 'avatar', currentUser.id, currentUser.role);
+
+            if (response && response.success) {
+                const newUrl = response.imageUrl;
+                const updated = { ...selectedUser, avatar: newUrl };
+                setSelectedUser(updated);
+                // Atualiza na lista também
+                setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+                showToast("Foto do aluno atualizada!", 'success');
+            }
+        } catch (e: any) {
+            showToast("Erro ao enviar foto: " + e.message, 'error');
+        }
+    };
 
     // Reset helper for action forms
     const resetActionForm = () => {
@@ -1627,11 +1674,76 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                         )
                     )}
 
-                    {activeTab === 'assets' && isAdmin && (
-                        <div className="max-w-2xl mx-auto text-center py-10">
-                            {/* ... (Assets view unchanged) ... */}
-                            <h2 className="text-3xl font-bold text-white mb-4">Personalização com IA</h2>
-                            <button onClick={handleGenerateAssets} className="bg-indigo-600 text-white px-6 py-3 rounded-full">Gerar Capas</button>
+                    {activeTab === 'assets' && (isAdmin || isPersonal) && (
+                        <div className="max-w-3xl mx-auto py-10 animate-in fade-in">
+                            <h2 className="text-3xl font-bold text-white mb-8 flex items-center gap-3">
+                                <Sparkles className="w-8 h-8 text-indigo-400" /> Personalização & Assets
+                            </h2>
+
+                            {/* BRAND LOGO SECTION (WHITE LABEL) */}
+                            <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50 mb-8">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white mb-2">Sua Marca (White Label)</h3>
+                                        <p className="text-slate-400 text-sm max-w-md">
+                                            Adicione sua logomarca para personalizar o aplicativo. Seus alunos verão <strong>sua marca</strong> no topo da tela principal.
+                                        </p>
+                                    </div>
+                                    <div className="bg-indigo-500/10 p-3 rounded-xl">
+                                        <ImageIcon className="w-8 h-8 text-indigo-400" />
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col md:flex-row items-center gap-8">
+                                    {/* Preview */}
+                                    <div className="w-full md:w-1/3 flex flex-col items-center gap-3">
+                                        <div className="w-full aspect-[3/1] bg-slate-900 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center relative overflow-hidden group">
+                                            {currentUser.brandLogo ? (
+                                                <img
+                                                    src={getFullImageUrl(currentUser.brandLogo)}
+                                                    alt="Brand Logo"
+                                                    className="w-full h-full object-contain p-2"
+                                                />
+                                            ) : (
+                                                <span className="text-slate-600 text-xs font-bold uppercase tracking-wider">Sem Logo</span>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-slate-500">Formato recomendado: PNG Transparente (300x100)</p>
+                                    </div>
+
+                                    {/* Action */}
+                                    <div className="w-full md:w-2/3">
+                                        <input
+                                            type="file"
+                                            ref={brandLogoInputRef}
+                                            className="hidden"
+                                            accept="image/png,image/jpeg"
+                                            onChange={handleUploadLogo}
+                                        />
+                                        <button
+                                            onClick={() => brandLogoInputRef.current?.click()}
+                                            className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-900/20 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <UploadCloud className="w-5 h-5" />
+                                            Carregar Logomarca
+                                        </button>
+                                        <p className="text-slate-500 text-xs mt-3 text-center">
+                                            Ao enviar, a logo será atualizada imediatamente para todos os seus alunos.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ADMIN ONLY ASSETS */}
+                            {isAdmin && (
+                                <div className="bg-slate-800/30 p-6 rounded-3xl border border-slate-700/30 opacity-70 hover:opacity-100 transition-opacity">
+                                    <h3 className="text-lg font-bold text-white mb-2">Assets do Sistema</h3>
+                                    <p className="text-slate-400 text-sm mb-4">Geração automática de tumbnails para exercícios.</p>
+                                    <button onClick={handleGenerateAssets} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium text-sm transition-colors">
+                                        Gerar Capas de Exercícios (IA)
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -1764,7 +1876,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                             return (
                                                 <div key={user.id} onClick={() => setSelectedUser(user)} className="bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 rounded-2xl p-5 cursor-pointer transition-all group">
                                                     <div className="flex justify-between items-start mb-3">
-                                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold">{user.name.charAt(0)}</div>
+                                                        <div className="w-10 h-10 rounded-full bg-slate-700 overflow-hidden border border-slate-600 relative">
+                                                            {user.avatar ? (
+                                                                <img src={getFullImageUrl(user.avatar)} alt={user.name} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold">{user.name.charAt(0)}</div>
+                                                            )}
+                                                        </div>
                                                         <div className="flex flex-col items-end gap-1">
                                                             <div className="px-2 py-1 rounded text-xs font-bold text-slate-500 bg-slate-700/30">
                                                                 {user.role === 'personal' ? 'Personal' : 'Aluno'}
@@ -1820,6 +1938,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                     )}
                                                 </h3>
                                                 <p className="text-slate-400 text-sm mb-2">{selectedUser.email}</p>
+
+                                                {/* STUDENT AVATAR UPLOAD */}
+                                                <button
+                                                    onClick={() => stdAvatarInputRef.current?.click()}
+                                                    className="flex items-center gap-1.5 text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase tracking-wider mt-1 transition-colors group"
+                                                >
+                                                    <Camera className="w-3 h-3" /> Alterar Foto
+                                                </button>
+                                                <input
+                                                    type="file"
+                                                    ref={stdAvatarInputRef}
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={handleUploadStudentAvatar}
+                                                />
                                             </div>
                                             {selectedUser.usage && (
                                                 <div className="text-right">
