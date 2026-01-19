@@ -559,6 +559,26 @@ export const apiService = {
         });
     },
 
+    // --- WEEKLY CHECK-IN TRACKER ---
+    getWeekData: async (userId: string | number, weekStart?: string) => {
+        const params: any = getAuthQueryParams();
+        if (weekStart) params.weekStart = weekStart;
+
+        return await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/checkins/${userId}/week`,
+            params
+        });
+    },
+
+    getStreakData: async (userId: string | number) => {
+        return await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/checkins/${userId}/streak`,
+            params: getAuthQueryParams()
+        });
+    },
+
     // --- PASSWORD MANAGEMENT ---
     changePassword: async (userId: string | number, senhaAtual: string, novaSenha: string) => {
         return await nativeFetch({

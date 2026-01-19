@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User } from '../types';
 import { apiService } from '../services/apiService';
 import { secureStorage } from '../utils/secureStorage';
-import { Dumbbell, ArrowRight, Lock, Mail, User as UserIcon, Phone, X, CheckCircle, Loader2 } from 'lucide-react';
+import { Dumbbell, ArrowRight, Lock, Mail, User as UserIcon, Phone, X, CheckCircle, Loader2, Medal } from 'lucide-react';
 import { ToastType } from './Toast';
 
 interface LoginProps {
@@ -12,6 +12,7 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
   const [isRegistering, setIsRegistering] = useState(false);
+  const [role, setRole] = useState<'user' | 'personal'>('user');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -55,7 +56,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
 
         // Usa o novo serviço de cadastro V2
         // Nota: Cadastro público cria como 'user' por padrão.
-        await apiService.signup(name, email, password, phone);
+        // Passa o role selecionado
+        await apiService.signup(name, email, password, phone, undefined, role);
 
         showToast("Cadastro realizado com sucesso! Faça login.", 'success');
 
@@ -91,6 +93,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
     setName('');
     setPhone('');
     setPassword('');
+    setRole('user');
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -144,6 +147,45 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
 
             {isRegistering && (
               <>
+                <div className="flex gap-3 mb-2 animate-in slide-in-from-top-4 duration-300">
+                  {/* Student Card */}
+                  <div
+                    onClick={() => setRole('user')}
+                    className={`flex-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${role === 'user'
+                      ? 'border-blue-500 bg-blue-500/10'
+                      : 'border-slate-700 bg-slate-800/50 hover:bg-slate-800'
+                      }`}
+                  >
+                    <div className="flex flex-col items-center text-center gap-2">
+                      <div className={`p-2 rounded-full ${role === 'user' ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                        <UserIcon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className={`font-bold block text-sm ${role === 'user' ? 'text-white' : 'text-slate-400'}`}>Sou Aluno</span>
+                        <span className="text-xs text-slate-500 leading-tight block mt-1 opacity-80">Treinos com IA, Análise e Evolução</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Personal Card */}
+                  <div
+                    onClick={() => setRole('personal')}
+                    className={`flex-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${role === 'personal'
+                      ? 'border-indigo-500 bg-indigo-500/10'
+                      : 'border-slate-700 bg-slate-800/50 hover:bg-slate-800'
+                      }`}
+                  >
+                    <div className="flex flex-col items-center text-center gap-2">
+                      <div className={`p-2 rounded-full ${role === 'personal' ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                        <Medal className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className={`font-bold block text-sm ${role === 'personal' ? 'text-white' : 'text-slate-400'}`}>Sou Personal</span>
+                        <span className="text-xs text-slate-500 leading-tight block mt-1 opacity-80">Gestão de Alunos e Produtividade</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div className="space-y-1 animate-in slide-in-from-top-4 duration-300">
                   <label className="text-sm font-medium text-slate-300 ml-1">Seu Nome</label>
                   <div className="relative">
@@ -219,7 +261,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
               className={`
                       mt-2 w-full font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98] flex items-center justify-center gap-2
                       ${isRegistering
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white'
+                  ? (role === 'user'
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white'
+                    : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white')
                   : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white'}
                     `}
             >
@@ -227,7 +271,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
                 <span className="flex items-center gap-2">Conectando...</span>
               ) : (
                 <>
-                  {isRegistering ? 'Cadastrar' : 'Entrar'}
+                  {isRegistering
+                    ? (role === 'user' ? 'Cadastrar como Aluno' : 'Cadastrar como Personal')
+                    : 'Entrar'}
                   <ArrowRight className="w-5 h-5" />
                 </>
               )}
@@ -255,14 +301,24 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
               {isRegistering ? 'Já tenho uma conta? Fazer Login' : 'Não tem conta? Criar nova conta'}
             </button>
 
-            <a
-              href="https://analisa-exercicio.web.app/privacy-policy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 text-xs text-slate-500 hover:text-blue-400 transition-colors border-b border-transparent hover:border-blue-400"
-            >
-              Política de Privacidade
-            </a>
+            <div className="flex gap-4 mt-4">
+              <a
+                href="https://fitanalizer.com.br/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-slate-500 hover:text-blue-400 transition-colors border-b border-transparent hover:border-blue-400"
+              >
+                Termos de Uso
+              </a>
+              <a
+                href="https://fitanalizer.com.br/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-slate-500 hover:text-blue-400 transition-colors border-b border-transparent hover:border-blue-400"
+              >
+                Política de Privacidade
+              </a>
+            </div>
           </div>
         </div>
       </div>

@@ -206,6 +206,36 @@ export interface WorkoutCheckIn {
   comment?: string;   // Comentário opcional (string)
 }
 
+// --- WEEKLY CHECK-IN TRACKER TYPES ---
+
+export interface WeeklyCheckInDay {
+  dayOfWeek: string;      // 'monday' | 'tuesday' | ...
+  dayLabel: string;       // 'Seg' | 'Ter' | ...
+  date: string;           // 'YYYY-MM-DD'
+  hasCheckIn: boolean;
+  checkIn: {
+    id: string;
+    timestamp: number;
+    comment?: string;
+  } | null;
+}
+
+export interface WeeklyCheckInData {
+  weekStart: string;
+  weekEnd: string;
+  weekLabel: string;      // 'Semana 3 de Janeiro'
+  weeklyGoal: number;
+  totalCheckIns: number;
+  days: WeeklyCheckInDay[];
+}
+
+export interface StreakData {
+  currentStreak: number;
+  longestStreak: number;
+  lastCheckInDate: string | null;
+  isActiveToday: boolean;
+}
+
 export interface CreditHistoryItem {
   id: number;
   userId: string;
