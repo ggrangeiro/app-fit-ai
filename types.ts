@@ -79,6 +79,7 @@ export interface AnalysisResult {
   muscleGroups: string[];
   date?: string;
   identifiedExercise?: string; // Nome do exercício identificado no modo livre
+  imageUrl?: string; // URL da foto usada na análise (para histórico de Postura/Composição)
 }
 
 export enum AppStep {
@@ -93,7 +94,7 @@ export enum AppStep {
   PAYMENT_CALLBACK = 'PAYMENT_CALLBACK'
 }
 
-export type UserRole = 'admin' | 'user' | 'personal';
+export type UserRole = 'admin' | 'user' | 'personal' | 'professor';
 
 export interface Plan {
   type: 'FREE' | 'STARTER' | 'PRO' | 'STUDIO';
@@ -184,6 +185,7 @@ export interface User {
   brandLogo?: string; // URL Relativa da Logo do Personal (White Label)
   methodology?: string; // Metodologia do Personal
   communicationStyle?: string; // Estilo de comunicação do Personal
+  managerId?: string; // ID do Personal responsável (para Professores)
 }
 
 export interface ExerciseRecord {
@@ -211,6 +213,55 @@ export interface CreditHistoryItem {
   reason: string;
   description: string;
   date: string;
+}
+
+// --- PROFESSOR MANAGEMENT TYPES ---
+
+export type ProfessorActionType =
+  | 'STUDENT_CREATED'
+  | 'WORKOUT_GENERATED'
+  | 'DIET_GENERATED'
+  | 'ANALYSIS_PERFORMED'
+  | 'WORKOUT_DELETED'
+  | 'DIET_DELETED'
+  | 'WORKOUT_REDO'
+  | 'DIET_REDO';
+
+export interface ProfessorActivity {
+  id: number; // Changed from string to number
+  professorId: number; // Changed from string to number
+  professorName: string;
+  actionType: ProfessorActionType;
+  targetUserId?: number; // Added
+  targetUserName?: string; // Previously targetName
+  resourceType?: 'TRAINING' | 'DIET' | 'ANALYSIS' | 'USER'; // Added
+  resourceId?: number; // Added
+  metadata?: Record<string, any>; // Added
+  createdAt: string; // Changed from timestamp (number) to createdAt (string ISO)
+}
+
+export interface ProfessorStats {
+  studentsCreated: number;
+  workoutsGenerated: number;
+  dietsGenerated: number;
+  analysisPerformed: number;
+  totalActions: number;
+}
+
+export interface ProfessorProductivity {
+  id: number;
+  name: string;
+  avatar?: string;
+  stats: ProfessorStats;
+  lastActivity: string | null;
+}
+
+export interface ProfessorSummary {
+  period: 'day' | 'week' | 'month';
+  startDate: string;
+  endDate: string;
+  professors: ProfessorProductivity[];
+  totals: ProfessorStats;
 }
 
 // --- V2 STRUCTURED DATA TYPES ---

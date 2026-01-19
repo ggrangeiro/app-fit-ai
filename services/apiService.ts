@@ -1,5 +1,5 @@
 import { CapacitorHttp, HttpResponse } from '@capacitor/core';
-import { DietGoalEntity, User, UserRole, AnalysisResult } from "../types";
+import { DietGoalEntity, User, UserRole, AnalysisResult, ProfessorActivity, ProfessorSummary } from "../types";
 import { secureStorage } from "../utils/secureStorage";
 
 
@@ -63,12 +63,15 @@ export const apiService = {
             data: { email: email, senha: password }
         });
 
+        console.log('[DEBUG] apiService.login - Raw Data:', JSON.stringify(data, null, 2));
+
         const userId = data.id ? String(data.id) : "0";
         let role: UserRole = 'user';
         if (data.role) {
             const r = String(data.role).toLowerCase();
             if (r === 'admin') role = 'admin';
             else if (r === 'personal') role = 'personal';
+            else if (r === 'professor') role = 'professor';
         }
 
         return {
@@ -80,7 +83,7 @@ export const apiService = {
             avatar: data.avatar,
             assignedExercises: data.assignedExercises || [],
             phone: data.telefone || undefined,
-            plan: data.plan,
+            plan: data.plan || data.plano,
             usage: data.usage,
             accessLevel: (data.accessLevel || data.access_level || 'FULL').toUpperCase() as 'FULL' | 'READONLY',
             anamnesis: data.anamnesis || data.anamnese || undefined,
@@ -107,12 +110,15 @@ export const apiService = {
             params: authParams
         });
 
+        console.log('[DEBUG] apiService.getMe - Raw Data:', JSON.stringify(data, null, 2));
+
         const id = data.id ? String(data.id) : String(userId);
         let role: UserRole = 'user';
         if (data.role) {
             const r = String(data.role).toLowerCase();
             if (r === 'admin') role = 'admin';
             else if (r === 'personal') role = 'personal';
+            else if (r === 'professor') role = 'professor';
         }
 
         return {
@@ -124,12 +130,38 @@ export const apiService = {
             avatar: data.avatar,
             assignedExercises: data.assignedExercises || [],
             phone: data.telefone || undefined,
-            plan: data.plan,
+            plan: data.plan || data.plano,
             usage: data.usage,
             accessLevel: (data.accessLevel || data.access_level || 'FULL').toUpperCase() as 'FULL' | 'READONLY',
             anamnesis: data.anamnesis || data.anamnese || undefined,
             methodology: data.methodology || undefined,
             communicationStyle: data.communicationStyle || undefined
+        };
+    },
+
+    // --- STATUS / PLAN / CREDITS REFRESH ---
+    getUserStatus: async (userId: string | number): Promise<Partial<User>> => {
+        const data = await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/usuarios/status`,
+            params: { requesterId: String(userId) }
+        });
+
+        let role: UserRole | undefined;
+        if (data.role) {
+            const r = String(data.role).toLowerCase();
+            if (r === 'admin') role = 'admin';
+            else if (r === 'personal') role = 'personal';
+            else if (r === 'professor') role = 'professor';
+            else role = 'user';
+        }
+
+        return {
+            id: String(data.id),
+            role: role,
+            accessLevel: (data.accessLevel || 'FULL').toUpperCase() as 'FULL' | 'READONLY',
+            plan: data.plan,
+            usage: data.usage
         };
     },
 
@@ -203,7 +235,36 @@ export const apiService = {
         return await response.json();
     },
 
-    // --- CRÉDITOS ---
+    // --- UPLOAD DE EVIDÊNCIA DE ANÁLISE (Postura/Composição Corporal) ---
+    uploadAnalysisEvidence: async (
+        userId: string | number,
+        file: File | { uri: string; name: string; type: string }
+    ): Promise<{ success: boolean; imageUrl: string }> => {
+        const formData = new FormData();
+
+        if (file instanceof File) {
+            formData.append('file', file);
+        } else {
+            formData.append('file', file as any);
+        }
+
+        formData.append('type', 'analysis_evidence');
+
+        const creds = getRequesterCredentials();
+        const url = `${API_BASE_URL}/api/usuarios/${userId}/upload-asset?requesterId=${creds?.id}&requesterRole=${creds?.role || 'USER'}`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error(`Erro ao enviar evidência: ${response.statusText}`);
+        }
+
+        return await response.json();
+    },
+
     // --- CRÉDITOS ---
     consumeCredit: async (targetUserId: string | number, reason: 'ANALISE' | 'TREINO' | 'DIETA', analysisType?: string) => {
         const params: any = getAuthQueryParams();
@@ -603,5 +664,79 @@ export const apiService = {
             params: getAuthQueryParams(),
             data: data
         });
+    },
+
+    // --- GERENCIAMENTO DE PROFESSORES ---
+    getProfessors: async (managerId: string | number): Promise<User[]> => {
+        const data = await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/usuarios/professors`,
+            params: { ...getAuthQueryParams(), managerId: String(managerId) }
+        });
+        // CORREÇÃO: Backend retorna { professors: [...], total: ... }
+        if (data && Array.isArray(data.professors)) {
+            return data.professors;
+        }
+        return Array.isArray(data) ? data : [];
+    },
+
+    createProfessor: async (
+        name: string,
+        email: string,
+        phone: string,
+        managerId: string
+    ): Promise<any> => {
+        return await nativeFetch({
+            method: 'POST',
+            url: `${API_BASE_URL}/api/usuarios/`,
+            params: getAuthQueryParams(),
+            data: {
+                nome: name,
+                name,
+                email,
+                senha: 'mudar123',
+                telefone: phone,
+                role: 'professor',
+                managerId,
+                accessLevel: 'FULL'
+            }
+        });
+    },
+
+    getProfessorsSummary: async (
+        managerId: string | number,
+        period: 'day' | 'week' | 'month' = 'week'
+    ): Promise<ProfessorSummary> => {
+        return await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/activities/professors/summary`,
+            params: { ...getAuthQueryParams(), managerId: String(managerId), period }
+        });
+    },
+
+    getProfessorsActivities: async (
+        managerId: string | number,
+        page = 0,
+        size = 20,
+        professorId?: string
+    ): Promise<ProfessorActivity[]> => {
+        const params: any = {
+            ...getAuthQueryParams(),
+            managerId: String(managerId),
+            page,
+            size
+        };
+        if (professorId) params.professorId = professorId;
+
+        const data = await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/activities/professors`,
+            params
+        });
+        // CORREÇÃO: Backend retorna { activities: [...], pagination: ... }
+        if (data && Array.isArray(data.activities)) {
+            return data.activities;
+        }
+        return Array.isArray(data) ? data : [];
     }
 };

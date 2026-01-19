@@ -110,8 +110,8 @@ const App: React.FC = () => {
           return AppStep.ONBOARDING;
         }
 
-        // Se for admin OU personal, vai para dashboard
-        if (user.role === 'admin' || user.role === 'personal') {
+        // Se for admin OU personal OU professor, vai para dashboard
+        if (user.role === 'admin' || user.role === 'personal' || user.role === 'professor') {
           return AppStep.ADMIN_DASHBOARD;
         }
         return AppStep.SELECT_EXERCISE;
@@ -136,7 +136,7 @@ const App: React.FC = () => {
       const hasSeen = secureStorage.getItem<string>('hasSeenOnboarding_v6');
       if (!hasSeen) {
         setStep(AppStep.ONBOARDING);
-      } else if (currentUser.role === 'admin' || currentUser.role === 'personal') {
+      } else if (currentUser.role === 'admin' || currentUser.role === 'personal' || currentUser.role === 'professor') {
         setStep(AppStep.ADMIN_DASHBOARD);
       } else {
         setStep(AppStep.SELECT_EXERCISE);
@@ -146,7 +146,7 @@ const App: React.FC = () => {
 
   const handleOnboardingComplete = () => {
     secureStorage.setItem('hasSeenOnboarding_v6', 'true');
-    if (currentUser?.role === 'admin' || currentUser?.role === 'personal') {
+    if (currentUser?.role === 'admin' || currentUser?.role === 'personal' || currentUser?.role === 'professor') {
       setStep(AppStep.ADMIN_DASHBOARD);
     } else {
       setStep(AppStep.SELECT_EXERCISE);
@@ -579,13 +579,15 @@ const App: React.FC = () => {
   // Mantém este effect como backup caso o estado inicial falhe por algum motivo raro
   useEffect(() => {
     if (!currentUser) {
-      const stored = localStorage.getItem('fitai_current_session');
-      if (stored) {
+      const storedUser = secureStorage.getItem<User>('fitai_current_session');
+      if (storedUser) {
+        console.log('[DEBUG] Session Restored:', storedUser);
+        if (storedUser.plan) console.log('[DEBUG] Restored Plan:', storedUser.plan);
         try {
-          const storedUser = JSON.parse(stored);
+          // const storedUser = JSON.parse(stored); // Removed manual parse, secureStorage handles it
           setCurrentUser(storedUser);
           // Redirecionamento baseado em role
-          if (storedUser.role === 'admin' || storedUser.role === 'personal') {
+          if (storedUser.role === 'admin' || storedUser.role === 'personal' || storedUser.role === 'professor') {
             setStep(AppStep.ADMIN_DASHBOARD);
           } else {
             setStep(AppStep.SELECT_EXERCISE);
@@ -621,7 +623,14 @@ const App: React.FC = () => {
 
   const canCreateWorkout = (user: User | null) => {
     if (!user) return false;
-    if (user.role === 'admin' || user.role === 'personal') return true;
+
+    // 0. READONLY check (Absolute Blocker)
+    if (user.accessLevel === 'READONLY') {
+      showToast("Seu perfil é apenas de leitura.", 'info');
+      return false;
+    }
+
+    if (user.role === 'admin' || user.role === 'personal' || user.role === 'professor') return true;
 
     // Planos Ilimitados
     if (user.plan?.type === 'PRO' || user.plan?.type === 'STUDIO') return true;
@@ -631,16 +640,23 @@ const App: React.FC = () => {
       const used = user.usage?.generations || 0;
       const limit = user.usage?.generationsLimit || 10;
 
-      if (used >= limit) {
-        showToast("Você atingiu o limite do plano Starter. Faça upgrade!", 'info');
-        setShowPlansModal(true);
-        return false;
-      }
+      if (used < limit) return true; // Quota available
+
+      // If limit reached, fall through to check credits
+    }
+
+    // Check Credits (Fallback for Free, No Plan, or Exhausted Starter)
+    if (user.credits && user.credits > 0) {
       return true;
     }
 
-    // Plano Free ou sem plano (pode usar créditos se implementado, mas seguindo a spec:)
-    showToast("Assine um plano para gerar treinos e dietas!", 'info');
+    // User blocked
+    if (user.plan?.type === 'STARTER') {
+      showToast("Limite do plano atingido e sem créditos.", 'info');
+    } else {
+      showToast("Assine um plano ou compre créditos para gerar treinos!", 'info');
+    }
+
     setShowPlansModal(true);
     return false;
   };
@@ -681,8 +697,19 @@ const App: React.FC = () => {
     if (!currentUser) return;
     try {
       showToast("Atualizando dados...", 'info');
+      // 1. Get raw profile data (might miss plan/usage)
       const updatedUser = await apiService.getMe(currentUser.id);
-      handleUpdateUser(updatedUser);
+
+      // 2. Get fresh status (Plan & Usage) - NEW ENDPOINT
+      const statusData = await apiService.getUserStatus(currentUser.id);
+
+      // 3. Merge carefully
+      const robustUser = {
+        ...updatedUser,
+        ...statusData, // This will overwrite plan/usage with FRESH data from the specific endpoint
+      };
+
+      handleUpdateUser(robustUser as User);
       showToast("Dados atualizados!", 'success');
     } catch (error) {
       console.error("Erro ao atualizar usuário:", error);
@@ -716,7 +743,7 @@ const App: React.FC = () => {
   const loadExercisesList = async (user: User) => {
     setLoadingExercises(true);
     try {
-      if (user.role === 'admin' || user.role === 'personal') {
+      if (user.role === 'admin' || user.role === 'personal' || user.role === 'professor') {
         // Admins e Personais carregam lista completa
         try {
           const allEx = await apiService.getAllExercises();
@@ -817,9 +844,20 @@ const App: React.FC = () => {
         // --- ALWAYS REFRESH USER DATA ON MOUNT ---
         // Ensuring permissions (accessLevel) and credits are up-to-date
         try {
-          const fullUser = await apiService.getMe(currentUser.id);
-          // Preserve token if exists, update everything else
-          handleUpdateUser({ ...currentUser, ...fullUser });
+          // Parallel fetch for speed
+          const [fullUser, statusData] = await Promise.all([
+            apiService.getMe(currentUser.id),
+            apiService.getUserStatus(currentUser.id)
+          ]);
+
+          // Merge: Profile + Status
+          handleUpdateUser({
+            ...currentUser,
+            ...fullUser,
+            ...statusData // Overwrites plan/usage with fresh data
+          });
+
+          console.log('[DEBUG] initData - Merged User Plan:', statusData.plan);
           await loadExercisesList(fullUser); // Load exercises based on fresh role
         } catch (e) {
           console.error("Background sync failed", e);
@@ -853,13 +891,15 @@ const App: React.FC = () => {
 
 
   const handleLogin = (user: User) => {
+    console.log('[DEBUG] handleLogin - Incoming User:', user);
+    console.log('[DEBUG] handleLogin - User Plan:', user.plan);
     setCurrentUser(user);
     secureStorage.setItem('fitai_current_session', user); // Ensure session is saved
 
     const hasSeen = secureStorage.getItem<string>('hasSeenOnboarding_v6');
     if (!hasSeen) {
       setStep(AppStep.ONBOARDING);
-    } else if (user.role === 'admin' || user.role === 'personal') {
+    } else if (user.role === 'admin' || user.role === 'personal' || user.role === 'professor') {
       setStep(AppStep.ADMIN_DASHBOARD);
     } else {
       setStep(AppStep.SELECT_EXERCISE);
@@ -1114,13 +1154,33 @@ const App: React.FC = () => {
 
       setAnalysisResult(result);
 
+      // --- UPLOAD DE EVIDÊNCIA PARA ANÁLISES ESPECIAIS (Postura/Composição Corporal) ---
+      let uploadedImageUrl: string | undefined;
+      const isPostureOrBodyComp =
+        selectedExercise === SPECIAL_EXERCISES.POSTURE ||
+        exerciseObj?.alias === SPECIAL_EXERCISES.POSTURE ||
+        selectedExercise === SPECIAL_EXERCISES.BODY_COMPOSITION ||
+        exerciseObj?.alias === SPECIAL_EXERCISES.BODY_COMPOSITION;
+
+      if (isPostureOrBodyComp && mediaFile) {
+        try {
+          const uploadResult = await apiService.uploadAnalysisEvidence(currentUser.id, mediaFile);
+          if (uploadResult.success) {
+            uploadedImageUrl = uploadResult.imageUrl;
+          }
+        } catch (err) {
+          console.error("Falha no upload da evidência:", err);
+          // Continua a análise mesmo sem salvar a foto
+        }
+      }
+
       try {
         const payload = {
           userId: currentUser.id,
           userName: currentUser.name,
           exercise: backendId,
           timestamp: Date.now(),
-          result: { ...result, date: new Date().toISOString() }
+          result: { ...result, date: new Date().toISOString(), imageUrl: uploadedImageUrl }
         };
 
         // USE APISERVICE TO SAVE HISTORY (Auto-handles requester logic)
@@ -1162,7 +1222,29 @@ const App: React.FC = () => {
         workoutPhoto
       );
       // Usa apiService para criar e refresh, sem fallbacks quebrados
+      // Usa apiService para criar e refresh, sem fallbacks quebrados
       await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal);
+
+      // CONSUME CREDIT LOGIC
+      const isUnlimited = currentUser.role === 'admin' || currentUser.role === 'personal' || currentUser.role === 'professor'
+        || currentUser.plan?.type === 'PRO' || currentUser.plan?.type === 'STUDIO';
+
+      const isStarterQuota = currentUser.plan?.type === 'STARTER' && (currentUser.usage?.generations || 0) < (currentUser.usage?.generationsLimit || 10);
+
+      if (!isUnlimited && !isStarterQuota) {
+        try {
+          await apiService.consumeCredit(currentUser.id, 'TREINO');
+          showToast("1 Crédito Utilizado", 'info');
+        } catch (e) {
+          console.error("Erro ao consumir crédito", e);
+          // Non-blocking? User already got the content. 
+          // Ideally we charge before, but here we prioritize UX flow.
+        }
+
+        // Force refresh credits on success to update UI
+        handleRefreshUser();
+      }
+
       await fetchUserWorkouts(currentUser.id);
       showToast("Treino gerado com sucesso!", 'success');
 
@@ -1224,6 +1306,25 @@ const App: React.FC = () => {
 
       // Usa apiService para criar e refresh
       await apiService.createDiet(currentUser.id, planHtml, dietFormData.goal);
+
+      // CONSUME CREDIT LOGIC
+      const isUnlimited = currentUser.role === 'admin' || currentUser.role === 'personal' || currentUser.role === 'professor'
+        || currentUser.plan?.type === 'PRO' || currentUser.plan?.type === 'STUDIO';
+
+      const isStarterQuota = currentUser.plan?.type === 'STARTER' && (currentUser.usage?.generations || 0) < (currentUser.usage?.generationsLimit || 10);
+
+      if (!isUnlimited && !isStarterQuota) {
+        try {
+          await apiService.consumeCredit(currentUser.id, 'DIETA');
+          showToast("1 Crédito Utilizado", 'info');
+        } catch (e) {
+          console.error("Erro ao consumir crédito", e);
+        }
+
+        // Force refresh credits on success to update UI
+        handleRefreshUser();
+      }
+
       await fetchUserDiets(currentUser.id);
       showToast("Dieta gerada com sucesso!", 'success');
 
@@ -2131,6 +2232,8 @@ const App: React.FC = () => {
             highlightLatestAsCurrent={false}
             onDelete={handleDeleteRecord}
             triggerConfirm={triggerConfirm}
+            userId={currentUser?.id || ''}
+            userRole={currentUser?.role || 'user'}
           />
         )
       }
@@ -2138,8 +2241,8 @@ const App: React.FC = () => {
       {/* Renderização Condicional baseada no Role */}
       <main className="flex-grow flex items-center justify-center p-4 md:p-8">
 
-        {/* DASHBOARD PARA ADMIN E PERSONAL */}
-        {step === AppStep.ADMIN_DASHBOARD && (currentUser?.role === 'admin' || currentUser?.role === 'personal') && (
+        {/* DASHBOARD PARA ADMIN, PERSONAL E PROFESSOR */}
+        {step === AppStep.ADMIN_DASHBOARD && (currentUser?.role === 'admin' || currentUser?.role === 'personal' || currentUser?.role === 'professor') && (
           <AdminDashboard currentUser={currentUser} onRefreshData={() => { }} onUpdateUser={handleUpdateUser} />
         )}
 
@@ -2550,6 +2653,7 @@ const App: React.FC = () => {
               exercise={selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.name || 'Exercício')}
               history={historyRecords}
               userId={currentUser?.id || ''}
+              currentUser={currentUser}
               onReset={resetAnalysis}
               onDeleteRecord={handleDeleteRecord}
               onWorkoutSaved={() => currentUser && fetchUserWorkouts(currentUser.id)}

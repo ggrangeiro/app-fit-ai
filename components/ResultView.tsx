@@ -6,7 +6,7 @@ import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { EvolutionModal } from './EvolutionModal';
 import { ToastType } from './Toast';
-import { apiService } from '../services/apiService';
+import { apiService, API_BASE_URL } from '../services/apiService';
 import { shareAsPdf } from '../utils/pdfUtils';
 
 interface ResultViewProps {
@@ -518,6 +518,8 @@ ${strengthsText}${improvementsText}
         highlightLatestAsCurrent={true}
         onDelete={onDeleteRecord}
         triggerConfirm={triggerConfirm}
+        userId={currentUser?.id || userId}
+        userRole={currentUser?.role || 'user'}
       />
 
       {/* Modal Form for Diet */}
@@ -1047,6 +1049,26 @@ ${strengthsText}${improvementsText}
               ))}
             </div>
           </div>
+
+          {/* Foto da Análise (Se existir imageUrl) */}
+          {result.imageUrl && (
+            <div className="glass-panel p-6 rounded-3xl">
+              <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+                <ImageIcon className="w-5 h-5 text-cyan-400" /> Foto da Análise
+              </h3>
+              <div className="flex justify-center">
+                <img
+                  src={result.imageUrl.startsWith('http') ? result.imageUrl : `${API_BASE_URL}${result.imageUrl}`}
+                  alt="Foto usada na análise"
+                  className="max-w-full max-h-96 rounded-xl border border-slate-700 shadow-lg"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              </div>
+              <p className="text-center text-slate-500 text-xs mt-3">
+                Evidência fotográfica utilizada para esta avaliação
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

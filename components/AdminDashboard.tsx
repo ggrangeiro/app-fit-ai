@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, AnalysisResult, DietPlan, WorkoutPlan, AppStep, WorkoutCheckIn } from '../types';
+import { User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, AnalysisResult, DietPlan, WorkoutPlan, AppStep, WorkoutCheckIn, ProfessorActivity, ProfessorSummary } from '../types';
 import { MockDataService } from '../services/mockDataService';
 import { apiService } from '../services/apiService';
 import { generateExerciseThumbnail, analyzeVideo, generateDietPlan, generateWorkoutPlan, regenerateWorkoutPlan, regenerateDietPlan, generateDietPlanV2, generateWorkoutPlanV2, regenerateWorkoutPlanV2, regenerateDietPlanV2 } from '../services/geminiService';
@@ -7,7 +7,7 @@ import { compressVideo } from '../utils/videoUtils';
 import { shareAsPdf } from '../utils/pdfUtils';
 import { ResultView } from './ResultView';
 import LoadingScreen from './LoadingScreen';
-import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock, Trash2 } from 'lucide-react';
+import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock, Trash2, UsersRound, BarChart3 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 import { AnamnesisModal } from './AnamnesisModal';
@@ -54,7 +54,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshData, onUpdateUser }) => {
-    const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets' | 'team'>('users');
     const [users, setUsers] = useState<User[]>([]);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [isLoadingUsers, setIsLoadingUsers] = useState(false); // Novo estado de loading
@@ -98,6 +98,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
     // --- V2 GENERATION STATE ---
     const [useV2, setUseV2] = useState(false);
+
+    // --- TEAM MANAGEMENT STATES (Only for Personal) ---
+    const [professors, setProfessors] = useState<User[]>([]);
+    const [loadingProfessors, setLoadingProfessors] = useState(false);
+    const [showCreateProfessorModal, setShowCreateProfessorModal] = useState(false);
+    const [newProfessorName, setNewProfessorName] = useState('');
+    const [newProfessorEmail, setNewProfessorEmail] = useState('');
+    const [newProfessorPhone, setNewProfessorPhone] = useState('');
+    const [teamSummary, setTeamSummary] = useState<ProfessorSummary | null>(null);
+    const [teamActivities, setTeamActivities] = useState<ProfessorActivity[]>([]);
+    const [summaryPeriod, setSummaryPeriod] = useState<'day' | 'week' | 'month'>('week');
 
 
     // Máscara de telefone brasileiro (10 ou 11 dígitos)
@@ -215,7 +226,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
         isOpen: false, title: '', message: '', onConfirm: () => { }, isDestructive: false
     });
 
-    const isPersonal = currentUser.role === 'personal';
+    const isPersonal = currentUser.role === 'personal' || currentUser.role === 'professor';
+    const isManager = currentUser.role === 'personal'; // Só Personal pode gerenciar equipe
     const isAdmin = currentUser.role === 'admin';
 
     const showToast = (message: string, type: ToastType = 'info') => {
@@ -351,6 +363,56 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
 
         setAllExercises(combined);
     };
+
+    // --- TEAM FETCH FUNCTIONS (Only for Personal/Manager) ---
+    const fetchTeamData = async () => {
+        if (currentUser.role !== 'personal') return;
+
+        setLoadingProfessors(true);
+        try {
+            const [profs, summary, activities] = await Promise.all([
+                apiService.getProfessors(currentUser.id),
+                apiService.getProfessorsSummary(currentUser.id, summaryPeriod),
+                apiService.getProfessorsActivities(currentUser.id)
+            ]);
+            setProfessors(profs);
+            setTeamSummary(summary);
+            setTeamActivities(activities);
+        } catch (e) {
+            console.error("Erro ao buscar dados da equipe:", e);
+        } finally {
+            setLoadingProfessors(false);
+        }
+    };
+
+    const handleCreateProfessor = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newProfessorName || !newProfessorEmail) {
+            showToast("Preencha nome e email do professor.", 'error');
+            return;
+        }
+        setProcessing(true);
+        try {
+            await apiService.createProfessor(newProfessorName, newProfessorEmail, newProfessorPhone, currentUser.id);
+            showToast("Professor cadastrado com sucesso! Senha inicial: mudar123", 'success');
+            setShowCreateProfessorModal(false);
+            setNewProfessorName('');
+            setNewProfessorEmail('');
+            setNewProfessorPhone('');
+            fetchTeamData();
+        } catch (err: any) {
+            showToast("Erro ao cadastrar professor: " + (err.message || "Tente novamente."), 'error');
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    // Fetch team data when switching to team tab
+    useEffect(() => {
+        if (activeTab === 'team' && currentUser.role === 'personal') {
+            fetchTeamData();
+        }
+    }, [activeTab, summaryPeriod]);
 
     const [isEditingSelf, setIsEditingSelf] = useState(false);
 
@@ -761,13 +823,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 }
             }
 
+            // --- UPLOAD DE EVIDÊNCIA PARA ANÁLISES ESPECIAIS (Postura/Composição Corporal) ---
+            let uploadedImageUrl: string | undefined;
+            const isPostureOrBodyComp =
+                finalType === SPECIAL_EXERCISES.POSTURE ||
+                finalType === SPECIAL_EXERCISES.BODY_COMPOSITION;
+
+            if (isPostureOrBodyComp && assessmentFiles.length > 0) {
+                try {
+                    const fileToUpload = assessmentFiles[0];
+                    const uploadResult = await apiService.uploadAnalysisEvidence(selectedUser.id, fileToUpload);
+                    if (uploadResult.success) {
+                        uploadedImageUrl = uploadResult.imageUrl;
+                    }
+                } catch (err) {
+                    console.error("Falha no upload da evidência:", err);
+                    // Continua a análise mesmo sem salvar a foto
+                }
+            }
+
             // 4. Save to History (using selectedUser.id as owner, but log who requested)
             const payload = {
                 userId: selectedUser.id,
                 userName: selectedUser.name,
                 exercise: finalType,
                 timestamp: Date.now(),
-                result: { ...result, date: new Date().toISOString() }
+                result: { ...result, date: new Date().toISOString(), imageUrl: uploadedImageUrl }
             };
 
             // Updated to use apiService with correct query params for Personal/Admin
@@ -779,7 +860,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 userId: selectedUser.id,
                 userName: selectedUser.name,
                 exercise: finalType,
-                result: { ...result, date: new Date().toISOString() },
+                result: { ...result, date: new Date().toISOString(), imageUrl: uploadedImageUrl },
                 timestamp: Date.now()
             };
 
@@ -1627,6 +1708,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     exercise={viewingRecord.exercise}
                                     history={detailedHistory}
                                     userId={selectedUser.id}
+                                    currentUser={currentUser}
                                     onReset={() => setViewingRecord(null)}
                                     onDeleteRecord={handleDeleteRecord}
                                     isHistoricalView={true}
@@ -1659,6 +1741,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                         >
                             <UserPlus className="w-5 h-5" /> {isPersonal ? 'Cadastrar Aluno' : 'Novo Usuário'}
                         </button>
+
+                        {/* Botão Equipe - Apenas para Personal Trainer (Manager) */}
+                        {isManager && (
+                            <button
+                                onClick={() => setActiveTab('team')}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all mt-2 ${activeTab === 'team' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/20' : 'text-slate-300 hover:bg-slate-800'}`}
+                            >
+                                <UsersRound className="w-5 h-5" /> Minha Equipe
+                            </button>
+                        )}
 
                         {isAdmin && (
                             <>
@@ -1705,6 +1797,224 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                 <p className="text-slate-400 mt-2">Processando solicitação...</p>
                             </div>
                         )
+                    )}
+
+                    {/* ===== TEAM TAB (Gerenciamento de Professores - Somente Personal) ===== */}
+                    {activeTab === 'team' && isManager && (
+                        <div className="max-w-4xl mx-auto py-6 animate-in fade-in space-y-6">
+                            {/* Header */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-3 bg-purple-500/20 rounded-xl">
+                                        <UsersRound className="w-6 h-6 text-purple-400" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-white">Minha Equipe</h2>
+                                        <p className="text-slate-400 text-sm">Gerencie seus professores assistentes</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowCreateProfessorModal(true)}
+                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl flex items-center gap-2 font-bold shadow-lg shadow-purple-900/20 transition-all"
+                                >
+                                    <UserPlus className="w-4 h-4" /> Adicionar Professor
+                                </button>
+                            </div>
+
+                            {/* Summary Cards */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Users className="w-4 h-4 text-blue-400" />
+                                        <span className="text-xs text-slate-400 uppercase font-bold">Alunos</span>
+                                    </div>
+                                    <span className="text-2xl font-bold text-white">{teamSummary?.totals?.studentsCreated || 0}</span>
+                                </div>
+                                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Dumbbell className="w-4 h-4 text-emerald-400" />
+                                        <span className="text-xs text-slate-400 uppercase font-bold">Treinos</span>
+                                    </div>
+                                    <span className="text-2xl font-bold text-white">{teamSummary?.totals?.workoutsGenerated || 0}</span>
+                                </div>
+                                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Utensils className="w-4 h-4 text-orange-400" />
+                                        <span className="text-xs text-slate-400 uppercase font-bold">Dietas</span>
+                                    </div>
+                                    <span className="text-2xl font-bold text-white">{teamSummary?.totals?.dietsGenerated || 0}</span>
+                                </div>
+                                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Activity className="w-4 h-4 text-pink-400" />
+                                        <span className="text-xs text-slate-400 uppercase font-bold">Análises</span>
+                                    </div>
+                                    <span className="text-2xl font-bold text-white">{teamSummary?.totals?.analysisPerformed || 0}</span>
+                                </div>
+                            </div>
+
+                            {/* Period Filter */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-400">Período:</span>
+                                {(['day', 'week', 'month'] as const).map(p => (
+                                    <button
+                                        key={p}
+                                        onClick={() => setSummaryPeriod(p)}
+                                        className={`px-3 py-1 text-xs rounded-lg font-bold transition-all ${summaryPeriod === p ? 'bg-purple-600 text-white' : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'}`}
+                                    >
+                                        {p === 'day' ? 'Hoje' : p === 'week' ? 'Semana' : 'Mês'}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Professor List */}
+                            <div className="bg-slate-800/30 p-5 rounded-2xl border border-slate-700/50">
+                                <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                                    <UsersRound className="w-5 h-5 text-purple-400" /> Professores ({professors.length})
+                                </h3>
+                                {loadingProfessors ? (
+                                    <div className="flex justify-center py-8">
+                                        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                                    </div>
+                                ) : professors.length === 0 ? (
+                                    <div className="text-center py-8 text-slate-500">
+                                        <UsersRound className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                                        <p>Nenhum professor cadastrado ainda.</p>
+                                        <p className="text-xs mt-1">Clique em "Adicionar Professor" para começar.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {professors.map(prof => (
+                                            <div key={prof.id} className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl hover:bg-slate-800 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center">
+                                                        <span className="text-purple-400 font-bold">{prof.name?.[0]?.toUpperCase() || 'P'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-white font-medium">{prof.name}</p>
+                                                        <p className="text-xs text-slate-500">{prof.email}</p>
+                                                    </div>
+                                                </div>
+                                                {prof.phone && (
+                                                    <span className="text-xs text-slate-400">{prof.phone}</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Activity Timeline */}
+                            <div className="bg-slate-800/30 p-5 rounded-2xl border border-slate-700/50">
+                                <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                                    <BarChart3 className="w-5 h-5 text-cyan-400" /> Atividades Recentes
+                                </h3>
+                                {teamActivities.length === 0 ? (
+                                    <p className="text-slate-500 text-center py-4">Nenhuma atividade registrada.</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-80 overflow-y-auto">
+                                        {teamActivities.map(act => (
+                                            <div key={act.id} className="flex items-start gap-3 p-3 bg-slate-800/40 rounded-xl">
+                                                <div className={`w-2 h-2 rounded-full mt-2 ${act.actionType.includes('CREATED') ? 'bg-emerald-400' :
+                                                    act.actionType.includes('GENERATED') ? 'bg-blue-400' :
+                                                        act.actionType.includes('DELETED') ? 'bg-red-400' : 'bg-yellow-400'
+                                                    }`} />
+                                                <div className="flex-1">
+                                                    <p className="text-sm text-slate-300">
+                                                        <span className="font-bold text-white">{act.professorName}</span>
+                                                        {' '}
+                                                        {act.actionType === 'STUDENT_CREATED' && 'cadastrou aluno'}
+                                                        {act.actionType === 'WORKOUT_GENERATED' && 'gerou treino para'}
+                                                        {act.actionType === 'DIET_GENERATED' && 'gerou dieta para'}
+                                                        {act.actionType === 'ANALYSIS_PERFORMED' && 'analisou'}
+                                                        {act.actionType === 'WORKOUT_DELETED' && 'excluiu treino de'}
+                                                        {act.actionType === 'DIET_DELETED' && 'excluiu dieta de'}
+                                                        {act.actionType === 'WORKOUT_REDO' && 'refez treino de'}
+                                                        {act.actionType === 'DIET_REDO' && 'refez dieta de'}
+                                                        {' '}
+                                                        {act.targetUserName && <span className="text-cyan-400">{act.targetUserName}</span>}
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-500 mt-1">
+                                                        {new Date(act.createdAt).toLocaleString('pt-BR')}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Create Professor Modal */}
+                    {showCreateProfessorModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+                            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-md relative shadow-2xl">
+                                <button onClick={() => setShowCreateProfessorModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+                                    <X className="w-6 h-6" />
+                                </button>
+
+                                <div className="flex flex-col items-center mb-6">
+                                    <div className="p-3 bg-purple-500/20 text-purple-400 rounded-full mb-3">
+                                        <UserPlus className="w-8 h-8" />
+                                    </div>
+                                    <h3 className="text-2xl font-bold text-white">Novo Professor</h3>
+                                    <p className="text-slate-400 text-center text-sm">Cadastre um membro para sua equipe</p>
+                                </div>
+
+                                <form onSubmit={handleCreateProfessor} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Nome Completo *</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                            value={newProfessorName}
+                                            onChange={e => setNewProfessorName(e.target.value)}
+                                            placeholder="Nome do professor"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Email *</label>
+                                        <input
+                                            type="email"
+                                            required
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                            value={newProfessorEmail}
+                                            onChange={e => setNewProfessorEmail(e.target.value)}
+                                            placeholder="email@exemplo.com"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Telefone</label>
+                                        <input
+                                            type="tel"
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                            value={newProfessorPhone}
+                                            onChange={e => setNewProfessorPhone(formatPhone(e.target.value))}
+                                            placeholder="(11) 99999-9999"
+                                        />
+                                    </div>
+
+                                    <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
+                                        <p className="text-xs text-slate-400 flex items-center gap-2">
+                                            <Key className="w-4 h-4" />
+                                            Senha inicial: <span className="font-mono text-purple-400">mudar123</span>
+                                        </p>
+                                        <p className="text-[10px] text-slate-500 mt-1">O professor deve trocar a senha no primeiro acesso.</p>
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={processing}
+                                        className="w-full mt-4 bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                        {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
+                                        {processing ? 'Cadastrando...' : 'Cadastrar Professor'}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
                     )}
 
                     {activeTab === 'assets' && (isAdmin || isPersonal) && (
