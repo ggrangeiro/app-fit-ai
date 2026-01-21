@@ -382,3 +382,19 @@ export interface DietPlanV2 {
   summary: DietSummaryV2;
   days: DietDayV2[];
 }
+
+// ===============================================
+// ========== EVOLUTION PHOTOS TYPES =============
+// ===============================================
+
+export type PhotoCategory = 'FRONT' | 'BACK' | 'LEFT' | 'RIGHT';
+
+export interface EvolutionPhoto {
+  id: number;
+  userId: number;
+  imageUrl: string;
+  category: PhotoCategory;
+  photoDate: string;  // YYYY-MM-DD
+  createdAt: string;
+  uploadedBy: number;
+}

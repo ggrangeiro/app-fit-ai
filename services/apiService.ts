@@ -1,5 +1,5 @@
 import { CapacitorHttp, HttpResponse } from '@capacitor/core';
-import { DietGoalEntity, User, UserRole, AnalysisResult, ProfessorActivity, ProfessorSummary } from "../types";
+import { DietGoalEntity, User, UserRole, AnalysisResult, ProfessorActivity, ProfessorSummary, PhotoCategory, EvolutionPhoto } from "../types";
 import { secureStorage } from "../utils/secureStorage";
 
 
@@ -788,5 +788,78 @@ export const apiService = {
             return data.activities;
         }
         return Array.isArray(data) ? data : [];
+    },
+
+    // ===============================================
+    // ========== EVOLUTION PHOTOS ===================
+    // ===============================================
+
+    /**
+     * Upload de foto de evolução
+     * Rota: POST /api/usuarios/{userId}/fotos-evolucao
+     */
+    uploadEvolutionPhoto: async (
+        userId: string | number,
+        file: File | { uri: string; name: string; type: string },
+        category: 'FRONT' | 'BACK' | 'LEFT' | 'RIGHT',
+        photoDate: string
+    ): Promise<{ success: boolean; foto: any }> => {
+        const formData = new FormData();
+
+        if (file instanceof File) {
+            formData.append('file', file);
+        } else {
+            formData.append('file', file as any);
+        }
+
+        formData.append('category', category);
+        formData.append('photoDate', photoDate);
+
+        const creds = getRequesterCredentials();
+        const url = `${API_BASE_URL}/api/usuarios/${userId}/fotos-evolucao?requesterId=${creds?.id}&requesterRole=${creds?.role || 'USER'}`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || "Erro ao fazer upload da foto.");
+        }
+
+        return await response.json();
+    },
+
+    /**
+     * Listar fotos de evolução do usuário
+     * Rota: GET /api/usuarios/{userId}/fotos-evolucao
+     */
+    getEvolutionPhotos: async (
+        userId: string | number,
+        category?: 'FRONT' | 'BACK' | 'LEFT' | 'RIGHT'
+    ): Promise<{ fotos: any[]; total: number }> => {
+        const params: any = getAuthQueryParams();
+        if (category) params.category = category;
+
+        const data = await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/usuarios/${userId}/fotos-evolucao`,
+            params
+        });
+
+        return data;
+    },
+
+    /**
+     * Deletar foto de evolução
+     * Rota: DELETE /api/fotos-evolucao/{fotoId}
+     */
+    deleteEvolutionPhoto: async (fotoId: number): Promise<{ success: boolean; message: string }> => {
+        return await nativeFetch({
+            method: 'DELETE',
+            url: `${API_BASE_URL}/api/fotos-evolucao/${fotoId}`,
+            params: getAuthQueryParams()
+        });
     }
 };

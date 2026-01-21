@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User } from '../types';
 import { apiService } from '../services/apiService';
 import { secureStorage } from '../utils/secureStorage';
-import { Dumbbell, ArrowRight, Lock, Mail, User as UserIcon, Phone, X, CheckCircle, Loader2, Medal, Crown } from 'lucide-react';
+import { Dumbbell, ArrowRight, Lock, Mail, User as UserIcon, Phone, X, CheckCircle, Loader2, Medal, Crown, MessageCircle } from 'lucide-react';
 import { ToastType } from './Toast';
 
 interface LoginProps {
@@ -343,6 +343,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
                 Política de Privacidade
               </a>
             </div>
+
+            {/* WhatsApp Contact Button */}
+            <a
+              href="https://wa.me/5511974927080?text=Olá! Gostaria de saber mais sobre o FitAI."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 transition-all text-sm font-medium"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Fale conosco no WhatsApp
+            </a>
           </div>
         </div>
       </div>

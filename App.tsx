@@ -12,7 +12,7 @@ import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import ResetPassword from './components/ResetPassword';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check, Share2, CheckCircle, ThumbsUp, RefreshCw } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check, Share2, CheckCircle, ThumbsUp, RefreshCw, MessageCircle } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import { OnboardingGuide } from './components/OnboardingGuide';
 import Toast, { ToastType } from './components/Toast';
@@ -23,6 +23,7 @@ import LoadingScreen from './components/LoadingScreen';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { PaymentCallback } from './components/PaymentCallback';
 import { AnamnesisModal } from './components/AnamnesisModal';
+import EvolutionPhotosModal from './components/EvolutionPhotosModal';
 import { Camera, ClipboardList } from 'lucide-react';
 import { getFullImageUrl } from './utils/imageUtils';
 
@@ -145,6 +146,14 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Access Logic for Evolution Photos
+  const canAccessEvolution = (
+    (currentUser?.credits || 0) > 0 ||
+    (currentUser?.plan?.status === 'ACTIVE' && currentUser?.plan?.type !== 'FREE') ||
+    !!currentUser?.personalId ||
+    ['admin', 'personal', 'professor'].includes(currentUser?.role || '')
+  );
+
   const handleOnboardingComplete = () => {
     secureStorage.setItem('hasSeenOnboarding_v6', 'true');
     if (currentUser?.role === 'admin' || currentUser?.role === 'personal' || currentUser?.role === 'professor') {
@@ -165,6 +174,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [showEvolutionModal, setShowEvolutionModal] = useState(false);
+  const [showEvolutionPhotosModal, setShowEvolutionPhotosModal] = useState(false);
   const [showRedoModal, setShowRedoModal] = useState(false);
   const [redoFeedback, setRedoFeedback] = useState('');
   const [redoCount, setRedoCount] = useState(0);
@@ -2410,6 +2420,19 @@ const App: React.FC = () => {
                       </button>
 
                       <button
+                        onClick={() => { setShowEvolutionPhotosModal(true); setShowUserMenu(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-700 transition-colors text-left"
+                      >
+                        <div className="p-1.5 bg-purple-500 rounded-lg text-white">
+                          <ImageIcon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white">Minha Evolução</p>
+                          <p className="text-[10px] text-slate-400">Fotos comparativas</p>
+                        </div>
+                      </button>
+
+                      <button
                         onClick={() => { setShowChangePasswordModal(true); setShowUserMenu(false); }}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-700 transition-colors text-left"
                       >
@@ -2425,6 +2448,18 @@ const App: React.FC = () => {
                       <div className="h-px bg-slate-700/50 my-1"></div>
 
                       <div className="h-px bg-slate-700/50 my-1"></div>
+
+                      {/* WhatsApp Contact Button */}
+                      <a
+                        href="https://wa.me/5511974927080?text=Olá! Preciso de ajuda com o FitAI."
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setShowUserMenu(false)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-emerald-500/10 text-emerald-400 hover:text-emerald-300 transition-colors"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span className="text-sm font-medium">Falar no WhatsApp</span>
+                      </a>
 
                       <button
                         onClick={() => {
@@ -2461,7 +2496,7 @@ const App: React.FC = () => {
               )}
             </div>
           </div>
-        </div>
+        </div >
       </header >
 
       {showWorkoutModal && renderWorkoutModal()}
@@ -2471,15 +2506,28 @@ const App: React.FC = () => {
       {showCheckInModal && renderCheckInModal()}
       {showChangePasswordModal && renderChangePasswordModal()}
 
-      {showAnamnesisModal && currentUser && (
-        <AnamnesisModal
-          isOpen={showAnamnesisModal}
-          onClose={() => setShowAnamnesisModal(false)}
-          user={currentUser}
-          onUpdate={handleUpdateUser}
-          isEditable={true}
-        />
-      )}
+      {
+        showEvolutionPhotosModal && currentUser && (
+          <EvolutionPhotosModal
+            isOpen={showEvolutionPhotosModal}
+            onClose={() => setShowEvolutionPhotosModal(false)}
+            targetUser={currentUser}
+            currentUser={currentUser}
+          />
+        )
+      }
+
+      {
+        showAnamnesisModal && currentUser && (
+          <AnamnesisModal
+            isOpen={showAnamnesisModal}
+            onClose={() => setShowAnamnesisModal(false)}
+            user={currentUser}
+            onUpdate={handleUpdateUser}
+            isEditable={true}
+          />
+        )
+      }
 
       {/* Evolution Modal Rendering */}
       {
@@ -2654,6 +2702,17 @@ const App: React.FC = () => {
                   <div className="text-left"><h3 className="text-white font-bold text-lg">{bodyCompExercise.name}</h3><p className="text-slate-400 text-xs">Biotipo & % Gordura</p></div>
                 </button>
               )}
+
+
+              {/* Fotos Evolução Card */}
+              <button
+                disabled={!canAccessEvolution}
+                className={`glass-panel p-5 rounded-2xl flex items-center gap-4 group transition-all border-2 flex-1 text-left ${canAccessEvolution ? 'border-blue-500/30 hover:bg-blue-600/20' : 'opacity-50 cursor-not-allowed grayscale border-slate-700'}`}
+                onClick={() => canAccessEvolution && setShowEvolutionPhotosModal(true)}
+              >
+                <div className={`p-3 rounded-full text-white shadow-lg transition-transform ${canAccessEvolution ? 'bg-blue-600 group-hover:scale-110' : 'bg-slate-700'}`}><ImageIcon className="w-5 h-5" /></div>
+                <div className="text-left"><h3 className="text-white font-bold text-lg">Fotos Evolução</h3><p className="text-slate-400 text-xs">{canAccessEvolution ? 'Comparativo Visual' : 'Recurso Bloqueado'}</p></div>
+              </button>
             </div>
 
             {/* --- ACCORDION CONTAINER FOR EXERCISE LIST --- */}

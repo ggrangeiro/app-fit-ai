@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Zap, Crown, Shield, Check, Info, ArrowRight, Star } from 'lucide-react';
+import { X, Zap, Crown, Shield, Check, Info, ArrowRight, Star, MessageCircle } from 'lucide-react';
 
 interface PlanData {
     id: string;
@@ -212,6 +212,17 @@ const PlansModal: React.FC<PlansModalProps> = ({ isOpen, onClose, onSubscribe })
                     <p className="mt-4 text-center text-[11px] text-slate-400 flex items-center justify-center gap-1">
                         <Info className="w-3 h-3" /> Pagamento seguro via Mercado Pago
                     </p>
+
+                    {/* Demo Request Button */}
+                    <a
+                        href="https://wa.me/5511974927080?text=Olá! Gostaria de solicitar uma demonstração do FitAI para Personais."
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-medium transition-all text-sm"
+                    >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>Solicitar Demo via WhatsApp</span>
+                    </a>
                 </div>
             </div>
         </div>
