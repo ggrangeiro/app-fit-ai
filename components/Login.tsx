@@ -126,21 +126,36 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
+      {/* Button moved outside glass-panel for guaranteed z-index interaction */}
+      {onViewPlans && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Ver Planos Clicked (Root)');
+            if (onViewPlans) onViewPlans();
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Ver Planos Touched (Root)');
+            if (onViewPlans) onViewPlans();
+          }}
+          className="fixed top-12 right-6 z-[9999] text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1 border border-blue-500/30 px-4 py-2 rounded-full hover:bg-blue-500/10 cursor-pointer bg-slate-900/80 backdrop-blur-md shadow-lg active:scale-95 touch-manipulation"
+        >
+          <Crown className="w-4 h-4" /> <span className="font-bold">Ver Planos</span>
+        </button>
+      )}
+
       <div className="glass-panel w-full max-w-md p-8 rounded-3xl animate-fade-in relative overflow-hidden transition-all duration-500">
+
         <div className="absolute top-0 right-0 p-10 opacity-10 pointer-events-none">
           <Dumbbell className="w-40 h-40 text-blue-500 rotate-45" />
         </div>
 
         <div className="relative z-10">
           <div className="flex flex-col items-center mb-8 text-center relative">
-            {onViewPlans && (
-              <button
-                onClick={onViewPlans}
-                className="absolute right-0 -top-2 text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1 border border-blue-500/30 px-2 py-1 rounded-full hover:bg-blue-500/10"
-              >
-                <Crown className="w-3 h-3" /> Ver Planos
-              </button>
-            )}
             <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-900/30 mb-4">
               <Dumbbell className="w-8 h-8 text-white" />
             </div>

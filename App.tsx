@@ -379,6 +379,7 @@ const App: React.FC = () => {
     };
   }, []);
 
+
   // Accordion State - INICIA FECHADO (false) PARA MINIMIZAR POLUIÇÃO
   const [showExerciseList, setShowExerciseList] = useState(false);
 
@@ -522,6 +523,133 @@ const App: React.FC = () => {
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [changePasswordForm, setChangePasswordForm] = useState({ senhaAtual: '', novaSenha: '', confirmarSenha: '' });
   const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+
+  // --- ANDROID BACK BUTTON HANDLER ---
+  // Previne que o botão nativo voltar do Android feche o app
+  // Em vez disso, fecha modais abertos ou navega para a tela anterior
+  useEffect(() => {
+    const handleBackButton = CapApp.addListener('backButton', ({ canGoBack }) => {
+      // 1. Primeiro, verifica se há algum modal aberto e o fecha
+      if (showEvolutionModal) {
+        setShowEvolutionModal(false);
+        return;
+      }
+      if (showRedoModal) {
+        setShowRedoModal(false);
+        return;
+      }
+      if (showBuyCreditsModal) {
+        setShowBuyCreditsModal(false);
+        return;
+      }
+      if (showPlansModal) {
+        setShowPlansModal(false);
+        return;
+      }
+      if (showAnamnesisModal) {
+        setShowAnamnesisModal(false);
+        return;
+      }
+      if (showWorkoutModal) {
+        setShowWorkoutModal(false);
+        setViewingWorkoutHtml(null);
+        return;
+      }
+      if (showDietModal) {
+        setShowDietModal(false);
+        setViewingDietHtml(null);
+        return;
+      }
+      if (showCheckInModal) {
+        setShowCheckInModal(false);
+        return;
+      }
+      if (showChangePasswordModal) {
+        setShowChangePasswordModal(false);
+        setChangePasswordForm({ senhaAtual: '', novaSenha: '', confirmarSenha: '' });
+        return;
+      }
+      if (showGenerateWorkoutForm) {
+        setShowGenerateWorkoutForm(false);
+        resetWorkoutForm();
+        return;
+      }
+      if (showGenerateDietForm) {
+        setShowGenerateDietForm(false);
+        resetDietForm();
+        return;
+      }
+      if (showUserMenu) {
+        setShowUserMenu(false);
+        return;
+      }
+      if (confirmModal.isOpen) {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        return;
+      }
+
+      // 2. Se não há modal, navega entre as telas/steps
+      switch (step) {
+        case AppStep.RESULTS:
+          // De resultados, volta para upload
+          setStep(AppStep.UPLOAD_VIDEO);
+          setAnalysisResult(null);
+          break;
+        case AppStep.UPLOAD_VIDEO:
+          // De upload, volta para seleção de exercício
+          setStep(AppStep.SELECT_EXERCISE);
+          setSelectedExercise(null);
+          setMediaFile(null);
+          setMediaPreview(null);
+          break;
+        case AppStep.ADMIN_DASHBOARD:
+        case AppStep.SELECT_EXERCISE:
+        case AppStep.LOGIN:
+        case AppStep.ONBOARDING:
+          // Nas telas principais, permite que o app seja minimizado/fechado
+          // Não chamamos CapApp.exitApp() para permitir comportamento padrão
+          break;
+        case AppStep.ANALYZING:
+        case AppStep.COMPRESSING:
+          // Durante análise/compressão, não permite voltar (previne perda de progresso)
+          break;
+        case AppStep.PAYMENT_CALLBACK:
+          // De callback de pagamento, volta para seleção
+          if (currentUser) {
+            if (currentUser.role === 'admin' || currentUser.role === 'personal' || currentUser.role === 'professor') {
+              setStep(AppStep.ADMIN_DASHBOARD);
+            } else {
+              setStep(AppStep.SELECT_EXERCISE);
+            }
+          } else {
+            setStep(AppStep.LOGIN);
+          }
+          break;
+        default:
+          break;
+      }
+    });
+
+    return () => {
+      handleBackButton.then(listener => listener.remove());
+    };
+  }, [
+    step,
+    showEvolutionModal,
+    showRedoModal,
+    showBuyCreditsModal,
+    showPlansModal,
+    showAnamnesisModal,
+    showWorkoutModal,
+    showDietModal,
+    showCheckInModal,
+    showChangePasswordModal,
+    showGenerateWorkoutForm,
+    showGenerateDietForm,
+    showUserMenu,
+    confirmModal.isOpen,
+    currentUser
+  ]);
 
   // --- AUTO SCROLL EFFECTS ---
   // Rola para o topo sempre que o passo muda (Ex: Seleção -> Upload)
@@ -927,6 +1055,38 @@ const App: React.FC = () => {
       setStep(AppStep.SELECT_EXERCISE);
     }
     showToast(`Bem-vindo, ${user.name || 'Usuário'}!`, 'success');
+
+    // Auto-open plans modal if user is FREE and has NO Personal Trainer
+    // Robust check for plan type to prevent false positives for PRO/STUDIO users
+    let isFree = true;
+
+    // Log for debugging
+    console.log('Checking plan for auto-modal:', user.plan);
+
+    if (user.plan) {
+      const p = user.plan as any;
+      if (typeof p === 'string') {
+        isFree = p.toUpperCase() === 'FREE';
+      } else if (p.type) {
+        isFree = String(p.type).toUpperCase() === 'FREE';
+      } else if (p.status === 'ACTIVE' && p.type !== 'FREE') {
+        isFree = false;
+      } else {
+        isFree = false;
+      }
+    }
+
+    // personalId might be null, undefined or empty string
+    const hasPersonal = !!user.personalId;
+
+    console.log(`[DEBUG] Plan Check: plan=${JSON.stringify(user.plan)}, isFree=${isFree}, hasPersonal=${hasPersonal}`);
+
+    if (isFree && !hasPersonal) {
+      // Small delay to ensure UI transition is smooth
+      setTimeout(() => {
+        setShowPlansModal(true);
+      }, 500);
+    }
   };
 
   const handleLogout = () => {
@@ -1536,7 +1696,25 @@ const App: React.FC = () => {
 
   if (step === AppStep.LOGIN) return (
     <>
-      <Login onLogin={handleLogin} showToast={showToast} onViewPlans={() => setShowPlansModal(true)} />
+      <Login
+        onLogin={handleLogin}
+        showToast={showToast}
+        onViewPlans={async () => {
+          const url = 'https://fitanalizer.com.br/planos';
+          try {
+            console.log('Attempting to open via Capacitor Browser...');
+            await Browser.open({ url, windowName: '_system' });
+          } catch (e) {
+            console.warn('Browser.open failed, trying window.open fallback:', e);
+            try {
+              window.open(url, '_system', 'noopener,noreferrer');
+            } catch (fallbackError) {
+              console.error('All open methods failed:', fallbackError);
+              showToast('Não foi possível abrir o link. Acesse: fitanalizer.com.br/planos', 'error');
+            }
+          }
+        }}
+      />
       <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} onClose={closeToast} />
     </>
   );
@@ -2045,7 +2223,7 @@ const App: React.FC = () => {
         currentUser={currentUser}
       />
 
-      <header className="sticky top-0 z-50 glass-panel border-b-0" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <header className="sticky top-0 z-50 glass-panel border-b-0" style={{ paddingTop: 'max(35px, env(safe-area-inset-top))' }}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 group cursor-default">
             {currentUser?.brandLogo ? (
