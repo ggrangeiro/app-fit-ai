@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { User } from '../types';
 import { apiService } from '../services/apiService';
 import { secureStorage } from '../utils/secureStorage';
-import { Dumbbell, ArrowRight, Lock, Mail, User as UserIcon, Phone, X, CheckCircle, Loader2, Medal } from 'lucide-react';
+import { Dumbbell, ArrowRight, Lock, Mail, User as UserIcon, Phone, X, CheckCircle, Loader2, Medal, Crown } from 'lucide-react';
 import { ToastType } from './Toast';
 
 interface LoginProps {
   onLogin: (user: User) => void;
   showToast: (message: string, type: ToastType) => void;
+  onViewPlans?: () => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [role, setRole] = useState<'user' | 'personal'>('user');
   const [email, setEmail] = useState('');
@@ -131,7 +132,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast }) => {
         </div>
 
         <div className="relative z-10">
-          <div className="flex flex-col items-center mb-8 text-center">
+          <div className="flex flex-col items-center mb-8 text-center relative">
+            {onViewPlans && (
+              <button
+                onClick={onViewPlans}
+                className="absolute right-0 -top-2 text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1 border border-blue-500/30 px-2 py-1 rounded-full hover:bg-blue-500/10"
+              >
+                <Crown className="w-3 h-3" /> Ver Planos
+              </button>
+            )}
             <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-900/30 mb-4">
               <Dumbbell className="w-8 h-8 text-white" />
             </div>

@@ -80,6 +80,7 @@ export interface AnalysisResult {
   date?: string;
   identifiedExercise?: string; // Nome do exercício identificado no modo livre
   imageUrl?: string; // URL da foto usada na análise (para histórico de Postura/Composição)
+  imageUrls?: string[]; // URLs de múltiplas fotos para análise (Postura/Composição)
 }
 
 export enum AppStep {

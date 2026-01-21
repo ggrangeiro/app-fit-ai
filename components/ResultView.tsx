@@ -1,13 +1,110 @@
 import React, { useEffect, useState } from 'react';
 import { AnalysisResult, ExerciseType, ExerciseRecord, SPECIAL_EXERCISES, User } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User as UserIcon, ArrowLeft, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download, Lightbulb, UploadCloud, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User as UserIcon, ArrowLeft, ArrowRight, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download, Lightbulb, UploadCloud, Image as ImageIcon } from 'lucide-react';
 import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { EvolutionModal } from './EvolutionModal';
 import { ToastType } from './Toast';
 import { apiService, API_BASE_URL } from '../services/apiService';
 import { shareAsPdf } from '../utils/pdfUtils';
+
+// Image Gallery component for displaying multiple analysis images
+const ImageGallery: React.FC<{ imageUrls: string[] }> = ({ imageUrls }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  if (imageUrls.length === 0) return null;
+
+  const getFullUrl = (url: string) => url?.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+
+  if (imageUrls.length === 1) {
+    return (
+      <div className="glass-panel p-6 rounded-3xl">
+        <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+          <ImageIcon className="w-5 h-5 text-cyan-400" /> Foto da Análise
+        </h3>
+        <div className="flex justify-center">
+          <img
+            src={getFullUrl(imageUrls[0])}
+            alt="Foto usada na análise"
+            className="max-w-full max-h-96 rounded-xl border border-slate-700 shadow-lg"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        </div>
+        <p className="text-center text-slate-500 text-xs mt-3">
+          Evidência fotográfica utilizada para esta avaliação
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-panel p-6 rounded-3xl">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-white font-bold text-lg flex items-center gap-2">
+          <ImageIcon className="w-5 h-5 text-cyan-400" /> Fotos da Análise
+        </h3>
+        <span className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded-full">
+          {currentIndex + 1} / {imageUrls.length}
+        </span>
+      </div>
+
+      <div className="relative">
+        <div className="flex justify-center">
+          <img
+            src={getFullUrl(imageUrls[currentIndex])}
+            alt={`Foto ${currentIndex + 1} usada na análise`}
+            className="max-w-full max-h-96 rounded-xl border border-slate-700 shadow-lg"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        </div>
+
+        {/* Navigation Arrows */}
+        {currentIndex > 0 && (
+          <button
+            onClick={() => setCurrentIndex(prev => prev - 1)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/60 hover:bg-black/80 rounded-full text-white"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        )}
+        {currentIndex < imageUrls.length - 1 && (
+          <button
+            onClick={() => setCurrentIndex(prev => prev + 1)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/60 hover:bg-black/80 rounded-full text-white"
+          >
+            <ArrowRight className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
+      {/* Thumbnail Strip */}
+      <div className="flex gap-2 mt-3 overflow-x-auto pb-2 justify-center">
+        {imageUrls.map((url, idx) => (
+          <button
+            key={idx}
+            onClick={() => setCurrentIndex(idx)}
+            className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${idx === currentIndex
+                ? 'border-cyan-500 ring-2 ring-cyan-500/30'
+                : 'border-slate-700 hover:border-slate-500'
+              }`}
+          >
+            <img
+              src={getFullUrl(url)}
+              alt={`Miniatura ${idx + 1}`}
+              className="w-full h-full object-cover"
+            />
+          </button>
+        ))}
+      </div>
+
+      <p className="text-center text-slate-500 text-xs mt-3">
+        Evidências fotográficas utilizadas para esta avaliação
+      </p>
+    </div>
+  );
+};
+
 
 interface ResultViewProps {
   result: AnalysisResult;
@@ -1050,24 +1147,13 @@ ${strengthsText}${improvementsText}
             </div>
           </div>
 
-          {/* Foto da Análise (Se existir imageUrl) */}
-          {result.imageUrl && (
-            <div className="glass-panel p-6 rounded-3xl">
-              <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
-                <ImageIcon className="w-5 h-5 text-cyan-400" /> Foto da Análise
-              </h3>
-              <div className="flex justify-center">
-                <img
-                  src={result.imageUrl.startsWith('http') ? result.imageUrl : `${API_BASE_URL}${result.imageUrl}`}
-                  alt="Foto usada na análise"
-                  className="max-w-full max-h-96 rounded-xl border border-slate-700 shadow-lg"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              </div>
-              <p className="text-center text-slate-500 text-xs mt-3">
-                Evidência fotográfica utilizada para esta avaliação
-              </p>
-            </div>
+          {/* Foto da Análise (Se existir imageUrl ou imageUrls) */}
+          {(result.imageUrl || (result.imageUrls && result.imageUrls.length > 0)) && (
+            <ImageGallery
+              imageUrls={result.imageUrls && result.imageUrls.length > 0
+                ? result.imageUrls
+                : (result.imageUrl ? [result.imageUrl] : [])}
+            />
           )}
         </div>
       </div>

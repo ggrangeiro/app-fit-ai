@@ -265,6 +265,36 @@ export const apiService = {
         return await response.json();
     },
 
+    // --- UPLOAD DE MÚLTIPLAS EVIDÊNCIAS DE ANÁLISE (Postura/Composição Corporal) ---
+    uploadAnalysisEvidenceBatch: async (
+        userId: string | number,
+        files: (File | { uri: string; name: string; type: string })[]
+    ): Promise<{ success: boolean; imageUrls: string[]; imageUrl: string }> => {
+        const formData = new FormData();
+
+        files.forEach(file => {
+            if (file instanceof File) {
+                formData.append('files', file);
+            } else {
+                formData.append('files', file as any);
+            }
+        });
+
+        const creds = getRequesterCredentials();
+        const url = `${API_BASE_URL}/api/usuarios/${userId}/upload-assets-batch?requesterId=${creds?.id}&requesterRole=${creds?.role || 'USER'}`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error(`Erro ao enviar múltiplas evidências: ${response.statusText}`);
+        }
+
+        return await response.json();
+    },
+
     // --- CRÉDITOS ---
     consumeCredit: async (targetUserId: string | number, reason: 'ANALISE' | 'TREINO' | 'DIETA', analysisType?: string) => {
         const params: any = getAuthQueryParams();

@@ -170,14 +170,19 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
                     </div>
 
                     <button
-                        onClick={handleSubscribe}
-                        disabled={processingPayment || !selectedPlanId}
+                        onClick={!currentUser ? onClose : handleSubscribe}
+                        disabled={processingPayment || (!selectedPlanId && !!currentUser)}
                         className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-lg shadow-purple-900/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                     >
                         {processingPayment ? (
                             <>
                                 <Loader2 className="w-5 h-5 animate-spin" />
                                 Processando...
+                            </>
+                        ) : !currentUser ? (
+                            <>
+                                Fazer Login
+                                <ArrowRight className="w-5 h-5" />
                             </>
                         ) : (
                             <>

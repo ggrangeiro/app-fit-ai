@@ -549,6 +549,16 @@ const App: React.FC = () => {
 
   const isSpecialMode = (selectedExercise === SPECIAL_EXERCISES.FREE_MODE) || (selectedExerciseObj?.category === 'SPECIAL');
 
+  // Specific check for Posture/Body Composition - allows multi-photo for all users
+  // This checks both the alias values AND the actual exercise IDs from the list
+  const isPostureOrBodyComp =
+    selectedExercise === SPECIAL_EXERCISES.POSTURE ||
+    selectedExercise === SPECIAL_EXERCISES.BODY_COMPOSITION ||
+    selectedExerciseObj?.alias === SPECIAL_EXERCISES.POSTURE ||
+    selectedExerciseObj?.alias === SPECIAL_EXERCISES.BODY_COMPOSITION ||
+    (postureExercise && selectedExercise === postureExercise.id) ||
+    (bodyCompExercise && selectedExercise === bodyCompExercise.id);
+
   const isSelectedInStandard = !!selectedExerciseObj && selectedExerciseObj.category === 'STANDARD';
 
   const selectedExerciseName = selectedExercise === SPECIAL_EXERCISES.FREE_MODE
@@ -601,6 +611,17 @@ const App: React.FC = () => {
   }, []);
 
   // --- HELPER FUNCTIONS FOR UI ---
+  // Returns the cost in credits for generating a workout/diet based on user's plan
+  const getGenerationCost = (): number => {
+    const planType = currentUser?.plan?.type?.toUpperCase() || 'FREE';
+    switch (planType) {
+      case 'STUDIO': return 2;
+      case 'PRO': return 3;
+      case 'STARTER': return 4;
+      default: return 5; // FREE or no plan
+    }
+  };
+
   const showToast = (message: string, type: ToastType = 'info') => {
     setToast({ message, type, isVisible: true });
   };
@@ -973,32 +994,55 @@ const App: React.FC = () => {
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
+    const files = Array.from(event.target.files || []) as File[];
     if (files.length === 0) return;
-
-    // Validate Types - simplified for single file
-    const file = files[0] as File;
-    const isVideo = file.type.startsWith('video/');
-    const isImage = file.type.startsWith('image/');
 
     const isFreeMode = selectedExercise === SPECIAL_EXERCISES.FREE_MODE;
 
-    if (isSpecialMode && !isFreeMode) {
-      if (!isVideo && !isImage) {
-        setError("Tipo de arquivo inválido.");
-        return;
+    // Check if we should allow multiple files and images
+    const allowMultipleAndImages = isSpecialMode || isPostureOrBodyComp;
+
+    if (allowMultipleAndImages && !isFreeMode) {
+      // Multi-file logic for posture/body composition
+      const validFiles: File[] = [];
+      const validPreviews: string[] = [];
+
+      for (const file of files) {
+        const isVideo = file.type.startsWith('video/');
+        const isImage = file.type.startsWith('image/');
+
+        if (!isVideo && !isImage) {
+          setError("Tipo de arquivo inválido.");
+          return;
+        }
+        validFiles.push(file);
+        validPreviews.push(URL.createObjectURL(file));
+      }
+
+      if (validFiles.length > 0) {
+        if (validFiles.length === 1) {
+          setMediaFile(validFiles[0]);
+          setMediaPreview(validPreviews[0]);
+        } else {
+          setMediaFile(validFiles);
+          setMediaPreview(validPreviews);
+        }
+        setError(null);
       }
     } else {
+      // Standard Mode (Single Video Only)
+      const file = files[0] as File;
+      const isVideo = file.type.startsWith('video/');
+
       if (!isVideo) {
         setError("Para este modo, envie apenas 1 vídeo.");
         return;
       }
-    }
 
-    // Always use Single File Mode
-    setMediaFile(file);
-    setMediaPreview(URL.createObjectURL(file));
-    setError(null);
+      setMediaFile(file);
+      setMediaPreview(URL.createObjectURL(file));
+      setError(null);
+    }
   };
 
   const handleExerciseToggle = (id: string) => {
@@ -1073,35 +1117,81 @@ const App: React.FC = () => {
 
     if (selectedExercise === SPECIAL_EXERCISES.FREE_MODE) {
       aiContextName = "Análise Livre";
-      backendId = "Análise Livre";
+      backendId = SPECIAL_EXERCISES.FREE_MODE;
     } else if (exerciseObj) {
       // CORREÇÃO: Prioriza o ALIAS (ID Técnico) para exercícios especiais
       if (exerciseObj.category === 'SPECIAL') {
-        aiContextName = exerciseObj.alias; // Envia 'BODY_COMPOSITION'
+        aiContextName = exerciseObj.alias;
       } else {
-        aiContextName = exerciseObj.name;  // Envia 'Agachamento'
+        aiContextName = exerciseObj.name;
       }
-      backendId = exerciseObj.name;
+      // Use alias if available for robust checking
+      backendId = exerciseObj.alias || exerciseObj.name;
     }
 
     try {
       setStep(AppStep.ANALYZING);
 
-      let filesToSend: File = mediaFile;
+      let filesToSend: File | File[] = mediaFile;
 
-      // Optimization Check (Only for single video currently)
-      // If we have a single file and it's a large video, compress it.
-      if (filesToSend.type.startsWith('video/')) {
+      // Handle Single Video Optimization
+      if (!Array.isArray(mediaFile) && mediaFile.type.startsWith('video/')) {
         setStep(AppStep.COMPRESSING);
         try {
-          filesToSend = await compressVideo(filesToSend);
-        } catch (compressError: any) {
-          setError("Erro ao otimizar vídeo.");
-          setStep(AppStep.UPLOAD_VIDEO);
-          return;
+          filesToSend = await compressVideo(mediaFile);
+        } catch (e) {
+          console.warn("Video compression failed, using original", e);
         }
-        // Reset step back to ANALYZING after compression
-        setStep(AppStep.ANALYZING);
+      } else if (Array.isArray(mediaFile)) {
+        filesToSend = mediaFile;
+      }
+
+      setStep(AppStep.ANALYZING);
+
+      // --- UPLOAD IMAGES FOR POSTURE / BODY COMP ---
+      let uploadedImageUrl: string | undefined = undefined;
+      let uploadedImageUrls: string[] = [];
+
+      const isPosture = backendId === SPECIAL_EXERCISES.POSTURE || backendId === 'POSTURE_ANALYSIS';
+      const isBodyComp = backendId === SPECIAL_EXERCISES.BODY_COMPOSITION || backendId === 'BODY_COMPOSITION';
+
+      // Ensure backendId matches what analyzeVideo expects if it's Posture/BodyComp
+      // If we detected it via alias checking earlier
+
+      if ((isPosture || isBodyComp) && mediaFile) {
+        try {
+          if (Array.isArray(mediaFile) && mediaFile.length > 1) {
+            // Parallel Uploads Fix
+            const uploadPromises = mediaFile.map(file =>
+              apiService.uploadAnalysisEvidence(currentUser.id, file)
+                .then(res => res.success ? res.imageUrl : null)
+                .catch(err => {
+                  console.error(`Erro no upload mobile do arquivo ${file.name}:`, err);
+                  return null;
+                })
+            );
+
+            const results = await Promise.all(uploadPromises);
+            const successUrls = results.filter(url => url !== null) as string[];
+
+            if (successUrls.length > 0) {
+              uploadedImageUrls = successUrls;
+              uploadedImageUrl = successUrls[0];
+            }
+          } else {
+            // Single file upload
+            const fileToUpload = Array.isArray(mediaFile) ? mediaFile[0] : mediaFile;
+            if (fileToUpload) {
+              const uploadResult = await apiService.uploadAnalysisEvidence(currentUser.id, fileToUpload);
+              if (uploadResult.success && uploadResult.imageUrl) {
+                uploadedImageUrl = uploadResult.imageUrl;
+                uploadedImageUrls = [uploadResult.imageUrl];
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Erro no upload de evidências mobile:", e);
+        }
       }
 
       let previousRecord: ExerciseRecord | null = null;
@@ -1122,6 +1212,10 @@ const App: React.FC = () => {
       }
 
       const result = await analyzeVideo(filesToSend, aiContextName, currentUser.id, currentUser.role, previousRecord?.result);
+
+      // Inject uploaded URLs into result
+      if (uploadedImageUrl) result.imageUrl = uploadedImageUrl;
+      if (uploadedImageUrls.length > 0) result.imageUrls = uploadedImageUrls;
 
       if (!result.isValidContent) {
         setError(result.validationError || "Conteúdo inválido para este exercício.");
@@ -1155,33 +1249,20 @@ const App: React.FC = () => {
 
       setAnalysisResult(result);
 
-      // --- UPLOAD DE EVIDÊNCIA PARA ANÁLISES ESPECIAIS (Postura/Composição Corporal) ---
-      let uploadedImageUrl: string | undefined;
-      const isPostureOrBodyComp =
-        selectedExercise === SPECIAL_EXERCISES.POSTURE ||
-        exerciseObj?.alias === SPECIAL_EXERCISES.POSTURE ||
-        selectedExercise === SPECIAL_EXERCISES.BODY_COMPOSITION ||
-        exerciseObj?.alias === SPECIAL_EXERCISES.BODY_COMPOSITION;
 
-      if (isPostureOrBodyComp && mediaFile) {
-        try {
-          const uploadResult = await apiService.uploadAnalysisEvidence(currentUser.id, mediaFile);
-          if (uploadResult.success) {
-            uploadedImageUrl = uploadResult.imageUrl;
-          }
-        } catch (err) {
-          console.error("Falha no upload da evidência:", err);
-          // Continua a análise mesmo sem salvar a foto
-        }
-      }
-
+      // Save History Logic (uses uploadedImageUrl from previous step)
       try {
         const payload = {
           userId: currentUser.id,
           userName: currentUser.name,
           exercise: backendId,
           timestamp: Date.now(),
-          result: { ...result, date: new Date().toISOString(), imageUrl: uploadedImageUrl }
+          result: {
+            ...result,
+            date: new Date().toISOString(),
+            imageUrl: uploadedImageUrl,
+            imageUrls: uploadedImageUrls.length > 0 ? uploadedImageUrls : undefined
+          }
         };
 
         // USE APISERVICE TO SAVE HISTORY (Auto-handles requester logic)
@@ -1455,7 +1536,7 @@ const App: React.FC = () => {
 
   if (step === AppStep.LOGIN) return (
     <>
-      <Login onLogin={handleLogin} showToast={showToast} />
+      <Login onLogin={handleLogin} showToast={showToast} onViewPlans={() => setShowPlansModal(true)} />
       <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} onClose={closeToast} />
     </>
   );
@@ -1867,7 +1948,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <button type="submit" disabled={generatingWorkout} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">{generatingWorkout ? <Loader2 className="animate-spin mx-auto" /> : 'Gerar Treino com IA'}</button>
+          <button type="submit" disabled={generatingWorkout} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">{generatingWorkout ? <Loader2 className="animate-spin mx-auto" /> : `Gerar Treino com IA (-${getGenerationCost()} Créditos)`}</button>
         </form>
       </div>
     </div>
@@ -1941,7 +2022,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <button type="submit" disabled={generatingDiet} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all">{generatingDiet ? <Loader2 className="animate-spin mx-auto" /> : 'Gerar Dieta com IA'}</button>
+          <button type="submit" disabled={generatingDiet} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all">{generatingDiet ? <Loader2 className="animate-spin mx-auto" /> : `Gerar Dieta com IA (-${getGenerationCost()} Créditos)`}</button>
         </form>
       </div>
     </div>
@@ -2563,13 +2644,13 @@ const App: React.FC = () => {
                           <div className="w-20 h-20 bg-slate-700/50 rounded-full flex items-center justify-center mb-6 text-slate-400 group-hover:text-blue-400 transition-all duration-300 shadow-xl border border-slate-600 group-hover:border-blue-500/50 group-hover:scale-110 relative">
                             {/* Pulse Effect behind icon */}
                             <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping opacity-0 group-hover:opacity-100"></div>
-                            {isSpecialMode ? <ImageIcon className="w-8 h-8 relative z-10" /> : <UploadCloud className="w-8 h-8 relative z-10" />}
+                            {(isSpecialMode || isPostureOrBodyComp) ? <ImageIcon className="w-8 h-8 relative z-10" /> : <UploadCloud className="w-8 h-8 relative z-10" />}
                           </div>
-                          <p className="text-slate-200 font-bold text-lg group-hover:text-white transition-colors">{(isSpecialMode && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) ? 'Selecionar Foto' : 'Selecionar Vídeo'}</p>
+                          <p className="text-slate-200 font-bold text-lg group-hover:text-white transition-colors">{isPostureOrBodyComp ? 'Selecionar Fotos' : (isSpecialMode && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) ? 'Selecionar Foto' : 'Selecionar Vídeo'}</p>
                           <p className="text-slate-500 text-xs mt-2 max-w-[200px] text-center group-hover:text-slate-400">
                             Certifique-se de que o corpo inteiro esteja visível
                           </p>
-                          {!isSpecialMode && (
+                          {!isSpecialMode && !isPostureOrBodyComp && (
                             <div className="mt-4 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full flex items-center gap-2">
                               <Timer className="w-3 h-3 text-yellow-500" />
                               <span className="text-[10px] text-yellow-200 font-medium">Recomendado: vídeos de até 2 min</span>
@@ -2577,7 +2658,7 @@ const App: React.FC = () => {
                           )}
                         </div>
                       )}
-                      <input ref={fileInputRef} id="video-upload" type="file" accept={(isSpecialMode && selectedExercise !== SPECIAL_EXERCISES.FREE_MODE) ? "video/*,image/*" : "video/*"} className="hidden" onChange={handleFileChange} />
+                      <input ref={fileInputRef} id="video-upload" type="file" accept={(isSpecialMode || isPostureOrBodyComp) ? "video/*,image/*" : "video/*"} className="hidden" onChange={handleFileChange} multiple={isPostureOrBodyComp} />
                     </label>
 
                     {!!mediaFile && (
