@@ -2678,7 +2678,7 @@ const App: React.FC = () => {
               </button>
             </div>
 
-            <div className="w-full max-w-5xl flex gap-3 mb-8">
+            <div className="w-full max-w-5xl flex flex-col md:flex-row gap-3 mb-8">
               {/* Posture Analysis Card */}
               {postureExercise && (
                 <button
