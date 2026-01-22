@@ -148,7 +148,6 @@ const App: React.FC = () => {
 
   // Access Logic for Evolution Photos
   const canAccessEvolution = (
-    (currentUser?.credits || 0) > 0 ||
     (currentUser?.plan?.status === 'ACTIVE' && currentUser?.plan?.type !== 'FREE') ||
     !!currentUser?.personalId ||
     ['admin', 'personal', 'professor'].includes(currentUser?.role || '')
@@ -435,6 +434,9 @@ const App: React.FC = () => {
   const [dietDocument, setDietDocument] = useState<File | null>(null);
   const [dietPhoto, setDietPhoto] = useState<File | null>(null);
   const [dietPhotoPreview, setDietPhotoPreview] = useState<string | null>(null);
+
+  // Trigger for WeeklyCheckInTracker refresh
+  const [checkInUpdateTrigger, setCheckInUpdateTrigger] = useState(0);
 
   const [pdfLoading, setPdfLoading] = useState(false);
 
@@ -1617,6 +1619,10 @@ const App: React.FC = () => {
     try {
       await apiService.createCheckIn(currentUser.id, currentWorkoutId, checkInDate, checkInComment);
       showToast('Check-in realizado com sucesso! 💪', 'success');
+
+      // Force refresh of tracking data
+      setCheckInUpdateTrigger(prev => prev + 1);
+
       setShowCheckInModal(false);
       setCheckInComment('');
     } catch (error) {
@@ -2571,6 +2577,7 @@ const App: React.FC = () => {
                 userId={currentUser.id}
                 onOpenCheckIn={(date) => { setCheckInDate(date); setShowCheckInModal(true); }}
                 showToast={showToast}
+                refreshTrigger={checkInUpdateTrigger}
               />
             )}
 
