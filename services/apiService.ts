@@ -418,7 +418,7 @@ export const apiService = {
         });
     },
 
-    createTrainingV2: async (userId: string | number, daysData: string, goal: string) => {
+    createTrainingV2: async (userId: string | number, daysData: string, goal: string, options?: { level?: string; legacyHtml?: string }) => {
         return await nativeFetch({
             method: 'POST',
             url: `${API_BASE_URL}/api/treinos/v2`,
@@ -426,6 +426,8 @@ export const apiService = {
             data: {
                 userId: String(userId),
                 goal: goal,
+                level: options?.level,
+                legacyHtml: options?.legacyHtml,
                 data: new Date().toISOString().split('T')[0],
                 daysData: daysData
             }

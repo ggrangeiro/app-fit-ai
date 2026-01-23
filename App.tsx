@@ -1605,6 +1605,20 @@ const App: React.FC = () => {
       // Usa apiService para criar e refresh, sem fallbacks quebrados
       await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal, daysDataStr);
 
+      // CRITICAL: Also create V2 structured record for interactive mode
+      if (daysDataStr) {
+        try {
+          await apiService.createTrainingV2(currentUser.id, daysDataStr, workoutFormData.goal, {
+            level: workoutFormData.level,
+            legacyHtml: planHtml
+          });
+          console.log('[DEBUG] V2 structured workout created successfully');
+        } catch (v2Error) {
+          console.warn('[DEBUG] Failed to create V2 workout (non-blocking):', v2Error);
+          // Non-blocking: V1 was created, V2 is a bonus
+        }
+      }
+
       // CONSUME CREDIT LOGIC
       const isUnlimited = currentUser.role === 'admin' || currentUser.role === 'personal' || currentUser.role === 'professor'
         || currentUser.plan?.type === 'PRO' || currentUser.plan?.type === 'STUDIO';
