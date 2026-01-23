@@ -1071,8 +1071,29 @@ const App: React.FC = () => {
   const fetchUserWorkouts = async (userId: string) => {
     setLoadingWorkouts(true);
     try {
-      const workouts = await apiService.getTrainings(userId);
-      setSavedWorkouts(workouts);
+      // Buscar V1 (HTML) e V2 (estruturado) em paralelo
+      const [workoutsV1, workoutsV2] = await Promise.all([
+        apiService.getTrainings(userId),
+        apiService.getTrainingsV2(userId).catch(() => []) // Fallback se V2 falhar
+      ]);
+
+      // Mesclar daysData do V2 no V1
+      const mergedWorkouts = workoutsV1.map((w: any) => {
+        // Se já tem daysData, usar
+        if (w.daysData || w.days_data) return w;
+
+        // Encontrar V2 correspondente pelo título no conteúdo HTML
+        const v2Match = workoutsV2.find((v2: any) =>
+          v2.title && w.content?.includes(v2.title.split(' - ')[0])
+        );
+
+        if (v2Match?.daysData) {
+          return { ...w, daysData: v2Match.daysData };
+        }
+        return w;
+      });
+
+      setSavedWorkouts(mergedWorkouts);
     } catch (e) {
       setSavedWorkouts([]);
     } finally {
