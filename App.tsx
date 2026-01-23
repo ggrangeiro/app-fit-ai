@@ -2875,7 +2875,6 @@ const App: React.FC = () => {
                 onOpenCheckIn={(date) => { setCheckInDate(date); setShowCheckInModal(true); }}
                 showToast={showToast}
                 refreshTrigger={checkInUpdateTrigger}
-                weeklyGoal={calculatedWeeklyGoal}
               />
             )}
 
