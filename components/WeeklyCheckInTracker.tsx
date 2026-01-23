@@ -111,8 +111,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
 
             const [week, streak] = await Promise.all([weekPromise, streakPromise]);
 
-            // Override weeklyGoal with prop value if provided (from workout plan non-rest days count)
-            setWeekData(propWeeklyGoal ? { ...week, weeklyGoal: propWeeklyGoal } : week);
+            setWeekData(week);
 
             // Only update streak if we actually fetched it
             if (streak) {
@@ -122,9 +121,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
         } catch (error) {
             console.warn('API unavailable, using mock data:', error);
             // Fallback to mock data
-            const mockData = generateMockWeekData(mondayDate);
-            // Override weeklyGoal with prop value if provided
-            setWeekData(propWeeklyGoal ? { ...mockData, weeklyGoal: propWeeklyGoal } : mockData);
+            setWeekData(generateMockWeekData(mondayDate));
             if (weekOffset === 0) {
                 setStreakData(generateMockStreakData());
             }
@@ -132,11 +129,18 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
         } finally {
             setLoading(false);
         }
-    }, [userId, weekOffset, refreshTrigger, propWeeklyGoal]); // Added refreshTrigger and propWeeklyGoal dependency
+    }, [userId, weekOffset, refreshTrigger]); // Added refreshTrigger dependency
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    // Apply weeklyGoal from prop without re-fetching data
+    useEffect(() => {
+        if (propWeeklyGoal && weekData) {
+            setWeekData(prev => prev ? { ...prev, weeklyGoal: propWeeklyGoal } : prev);
+        }
+    }, [propWeeklyGoal]);
 
     const handlePrevWeek = () => setWeekOffset(prev => prev - 1);
     const handleNextWeek = () => {
