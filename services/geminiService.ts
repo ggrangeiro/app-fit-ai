@@ -686,6 +686,80 @@ export const generateWorkoutPlanV2 = async (
   }
 };
 
+// --- REVERSE ENGINEERING (HTML -> JSON V2) ---
+export const extractWorkoutDataFromHtml = async (
+  htmlContent: string,
+  userId: string | number,
+  userRole: string
+): Promise<WorkoutPlanV2> => {
+  const genAI = await getGenAI(userId, userRole);
+  const model = genAI.getGenerativeModel({
+    model: ANALYSIS_MODEL,
+    generationConfig: { responseMimeType: "application/json" }
+  });
+
+  const prompt = `
+    ATENÇÃO: Você é um extrator de dados.
+    Sua tarefa é converter um Plano de Treino em HTML (texto abaixo) para o formato JSON Estruturado (V2).
+
+    HTML DO TREINO:
+    """
+    ${htmlContent}
+    """
+
+    INSTRUÇÕES:
+    1. Analise o HTML e extraia TODOS os dias e exercícios.
+    2. Tente inferir a "dayLabel" (ex: "Treino A - Peito") e "trainingType" (ex: "Hipertrofia").
+    3. Para cada exercício:
+       - Extraia o nome exato.
+       - Tente inferir séries, repetições e descanso do texto (ex: "3x 12, 60s").
+       - Se não encontrar carga explícita, deixe "load" como "A ajustar".
+    4. Gere o JSON APENAS, seguindo rigorosamente a estrutura V2 abaixo:
+
+    {
+      "summary": {
+        "trainingStyle": "Inferido do título ou conteúdo",
+        "estimatedDuration": "60 min",
+         "focus": ["Geral"],
+         "motivation": { "quote": "Transforme suor em força", "context": "Upgrade de treino antigo" }
+      },
+      "days": [
+        {
+          "dayOfWeek": "monday", // Distribua sequencialmente se não houver dia explícito (monday, tuesday...)
+          "dayLabel": "string",
+          "trainingType": "string",
+          "isRestDay": boolean, // Se o card disser "Descanso" ou "OFF"
+          "exercises": [
+             {
+              "order": 1,
+              "name": "string",
+              "muscleGroup": "Geral",
+              "sets": number,
+              "reps": "string",
+              "rest": "string",
+              "load": "string",
+              "technique": "string",
+              "videoQuery": "string (nome do exercício para busca)"
+            }
+          ]
+        }
+      ]
+    }
+  `;
+
+  try {
+    const result = await model.generateContent([{ text: prompt }]);
+    const text = result.response.text();
+    return JSON.parse(text);
+  } catch (error: any) {
+    console.error("Erro ao converter treino HTML->JSON:", error);
+    if (error.message?.includes("API key") || error.message?.includes("401") || error.message?.includes("403")) {
+      resetGeminiInstance();
+    }
+    throw new Error("Falha ao converter treino para modo interativo.");
+  }
+};
+
 export const generateDietPlanV2 = async (
   userData: any,
   userId: string | number,

@@ -437,11 +437,16 @@ export const apiService = {
         const params: any = getAuthQueryParams();
         params._t = Date.now();
 
+        console.log(`[DEBUG] Fetching trainings for user ${userId} with params:`, params);
+
         const data = await nativeFetch({
             method: 'GET',
             url: `${API_BASE_URL}/api/treinos/${userId}`,
             params: params
         });
+
+        console.log('[DEBUG] getTrainings RESPONSE:', JSON.stringify(data));
+
         return Array.isArray(data) ? data : (data.trainings || []);
     },
 

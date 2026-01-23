@@ -7,20 +7,33 @@ interface WorkoutSessionProps {
     onFinish: (updatedDayData: WorkoutDayV2) => void;
     onCancel: () => void;
     dayLabel: string;
+    previousLoads?: Record<string, { actualLoad: string; executedAt: number }>;
 }
 
-export const WorkoutSession: React.FC<WorkoutSessionProps> = ({ dayData, onFinish, onCancel, dayLabel }) => {
+export const WorkoutSession: React.FC<WorkoutSessionProps> = ({ dayData, onFinish, onCancel, dayLabel, previousLoads }) => {
     const [exercises, setExercises] = useState<ExerciseV2[]>([]);
     const [completedExercises, setCompletedExercises] = useState<Set<number>>(new Set());
     const [activeExerciseIndex, setActiveExerciseIndex] = useState<number>(0);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        // Initialize exercises from props, ensuring deep copy to avoid direct mutation
+        // Initialize exercises from props, ensuring deep copy
         if (dayData && dayData.exercises) {
-            setExercises(JSON.parse(JSON.stringify(dayData.exercises)));
+            const initialExercises = JSON.parse(JSON.stringify(dayData.exercises));
+
+            // Pre-fill with previous loads if current load is empty
+            if (previousLoads) {
+                initialExercises.forEach((ex: ExerciseV2) => {
+                    const prev = previousLoads[ex.name];
+                    if (prev && (!ex.load || ex.load.trim() === '')) {
+                        ex.load = prev.actualLoad;
+                    }
+                });
+            }
+
+            setExercises(initialExercises);
         }
-    }, [dayData]);
+    }, [dayData, previousLoads]);
 
     const handleLoadChange = (index: number, newLoad: string) => {
         const updated = [...exercises];
@@ -58,9 +71,9 @@ export const WorkoutSession: React.FC<WorkoutSessionProps> = ({ dayData, onFinis
     const progress = Math.round((completedExercises.size / exercises.length) * 100);
 
     return (
-        <div className="fixed inset-0 bg-slate-950 z-50 overflow-y-auto pb-20">
+        <div className="fixed inset-0 bg-slate-950 z-[200] overflow-y-auto pb-20">
             {/* Header */}
-            <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 p-4 flex items-center justify-between z-10 shadow-lg">
+            <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 p-4 flex items-center justify-between z-10 shadow-lg" style={{ paddingTop: 'max(2.5rem, env(safe-area-inset-top))' }}>
                 <button
                     onClick={onCancel}
                     className="p-2 -ml-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors"
@@ -166,16 +179,34 @@ export const WorkoutSession: React.FC<WorkoutSessionProps> = ({ dayData, onFinis
 
                                             {/* Load Input */}
                                             <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-700/50">
-                                                <label className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2 block flex items-center gap-1">
-                                                    <Dumbbell size={12} /> Carga (Kg)
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={exercise.load || ''}
-                                                    placeholder="Ex: 20kg (cada lado)"
-                                                    onChange={(e) => handleLoadChange(index, e.target.value)}
-                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 transition-colors"
-                                                />
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <label className="text-xs text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1">
+                                                        <Dumbbell size={12} /> Carga (Kg)
+                                                    </label>
+                                                    {previousLoads && previousLoads[exercise.name] && (
+                                                        <span className="text-[10px] text-purple-400 bg-purple-400/10 px-1.5 py-0.5 rounded border border-purple-400/20">
+                                                            Histórico: {previousLoads[exercise.name].actualLoad}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-2 items-center flex-wrap">
+                                                    <input
+                                                        type="text"
+                                                        value={exercise.load || ''}
+                                                        placeholder="Ex: 20kg (cada lado)"
+                                                        onChange={(e) => handleLoadChange(index, e.target.value)}
+                                                        className="flex-1 min-w-[120px] bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                                                    />
+                                                    {dayData.exercises[index].load && exercise.load !== dayData.exercises[index].load && (
+                                                        <button
+                                                            onClick={() => handleLoadChange(index, dayData.exercises[index].load || '')}
+                                                            className="text-xs text-emerald-400 hover:text-emerald-300 whitespace-nowrap bg-emerald-900/30 px-2 py-1 rounded border border-emerald-900/50 transition-colors"
+                                                            title="Restaurar carga sugerida"
+                                                        >
+                                                            Usar Sugestão: {dayData.exercises[index].load}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             {/* Tip */}
