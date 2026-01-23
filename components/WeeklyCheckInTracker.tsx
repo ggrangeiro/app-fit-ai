@@ -9,6 +9,7 @@ interface WeeklyCheckInTrackerProps {
     onOpenCheckIn: (date: string) => void;
     showToast: (message: string, type?: ToastType) => void;
     refreshTrigger?: number; // New prop to force refresh
+    weeklyGoal?: number; // Dynamic goal from workout plan (counts non-rest days)
 }
 
 // Helper to calculate Monday of a week based on offset
@@ -85,7 +86,8 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     userId,
     onOpenCheckIn,
     showToast,
-    refreshTrigger = 0
+    refreshTrigger = 0,
+    weeklyGoal: propWeeklyGoal
 }) => {
     const [weekOffset, setWeekOffset] = useState(0);
     const [weekData, setWeekData] = useState<WeeklyCheckInData | null>(null);
@@ -109,7 +111,8 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
 
             const [week, streak] = await Promise.all([weekPromise, streakPromise]);
 
-            setWeekData(week);
+            // Override weeklyGoal with prop value if provided (from workout plan non-rest days count)
+            setWeekData(propWeeklyGoal ? { ...week, weeklyGoal: propWeeklyGoal } : week);
 
             // Only update streak if we actually fetched it
             if (streak) {
@@ -119,7 +122,9 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
         } catch (error) {
             console.warn('API unavailable, using mock data:', error);
             // Fallback to mock data
-            setWeekData(generateMockWeekData(mondayDate));
+            const mockData = generateMockWeekData(mondayDate);
+            // Override weeklyGoal with prop value if provided
+            setWeekData(propWeeklyGoal ? { ...mockData, weeklyGoal: propWeeklyGoal } : mockData);
             if (weekOffset === 0) {
                 setStreakData(generateMockStreakData());
             }
@@ -127,7 +132,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
         } finally {
             setLoading(false);
         }
-    }, [userId, weekOffset, refreshTrigger]); // Added refreshTrigger dependency
+    }, [userId, weekOffset, refreshTrigger, propWeeklyGoal]); // Added refreshTrigger and propWeeklyGoal dependency
 
     useEffect(() => {
         fetchData();

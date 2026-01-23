@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, WorkoutPlan, DietPlan, WorkoutDayV2, WorkoutPlanV2 } from './types';
 import { App as CapApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
@@ -530,6 +530,33 @@ const App: React.FC = () => {
 
   // Trigger for WeeklyCheckInTracker refresh
   const [checkInUpdateTrigger, setCheckInUpdateTrigger] = useState(0);
+
+  // --- CALCULATE WEEKLY GOAL (DYNAMIC) ---
+  // Count non-rest days from the workout plan to determine weekly goal
+  const calculatedWeeklyGoal = useMemo(() => {
+    if (savedWorkouts.length > 0) {
+      try {
+        const currentWorkout = savedWorkouts[0];
+        const daysDataStr = currentWorkout?.daysData || currentWorkout?.days_data;
+
+        if (daysDataStr) {
+          const parsed = typeof daysDataStr === 'string'
+            ? JSON.parse(daysDataStr)
+            : daysDataStr;
+
+          if (parsed && Array.isArray(parsed.days)) {
+            // Count days that are NOT rest days
+            const trainingDays = parsed.days.filter((d: any) => !d.isRestDay).length;
+            if (trainingDays > 0) return trainingDays;
+          }
+        }
+      } catch (e) {
+        console.warn("Error parsing workout for goal calculation", e);
+      }
+    }
+    // Fallback to default
+    return 5;
+  }, [savedWorkouts]);
 
   const [pdfLoading, setPdfLoading] = useState(false);
 
@@ -2848,6 +2875,7 @@ const App: React.FC = () => {
                 onOpenCheckIn={(date) => { setCheckInDate(date); setShowCheckInModal(true); }}
                 showToast={showToast}
                 refreshTrigger={checkInUpdateTrigger}
+                weeklyGoal={calculatedWeeklyGoal}
               />
             )}
 
