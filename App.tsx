@@ -449,10 +449,11 @@ const App: React.FC = () => {
     try {
       const currentWorkout = savedWorkouts[0];
 
-      // 1. Save Execution Data (V2)
+      // 1. Save Execution Data (V2) - Use v2Id for foreign key constraint
+      const workoutIdForExecution = currentWorkout.v2Id || currentWorkout.id;
       const executionPayload = {
         userId: currentUser.id,
-        workoutId: currentWorkout.id,
+        workoutId: workoutIdForExecution,
         dayOfWeek: updatedDay.dayOfWeek,
         executedAt: Date.now(),
         exercises: updatedDay.exercises.map(ex => ({
@@ -1107,7 +1108,7 @@ const App: React.FC = () => {
 
         if (v2Match?.daysData) {
           console.log('[DEBUG] Merged V1 id', w.id, 'with V2 id', v2Match.id);
-          return { ...w, daysData: v2Match.daysData };
+          return { ...w, daysData: v2Match.daysData, v2Id: v2Match.id };
         }
         return w;
       });
