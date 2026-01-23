@@ -301,7 +301,7 @@ export const generateDietPlan = async (
 
 // --- GERAÇÃO DE TREINO (LAYOUT REFINADO) ---
 /**
- * Gera um plano de treino personalizado baseado nos dados do usuário.
+ * Gera um plano de treino personalizado (Híbrido: HTML + JSON hidden)
  * userData espera: { weight, height, gender, goal, level, frequency, observations }
  */
 export const generateWorkoutPlan = async (
@@ -365,6 +365,20 @@ export const generateWorkoutPlan = async (
     5. Dias de descanso (OFF) devem ter um card com fundo escuro (bg-slate-800) e texto claro.
     6. Personalize o volume e a escolha de exercícios considerando o sexo (${userData.gender}) e o objetivo (${userData.goal}).
     7. Output APENAS o código HTML interno da <div> principal.
+    8. GERAÇÃO HÍBRIDA (IMPORTANTE):
+       - Além do HTML visível, você deve incluir um BLOCO DE DADOS ESTRUTURADOS (JSON) no final da resposta.
+       - Esse JSON deve conter EXATAMENTE os dados dos exercícios para que o app possa criar a sessão interativa.
+       - O JSON deve estar envolvido em uma tag script invisível ou comentário especial, neste formato EXATO:
+       
+       <!-- DATA_JSON_START -->
+       {
+          "summary": { ... },
+          "days": [ ... array igual ao V2 Structured ... ]
+       }
+       <!-- DATA_JSON_END -->
+       
+       - CERTIFIQUE-SE QUE O JSON OBEDECE À ESTRUTURA DO "V2" (com load, videoQuery, etc).
+       - O usuário NÃO VERÁ isso no HTML renderizado, mas o sistema usará.
   `;
 
   try {
@@ -637,6 +651,7 @@ export const generateWorkoutPlanV2 = async (
               "sets": number,
               "reps": "string",
               "rest": "string",
+              "load": "string (Carga sugerida/estimada, ex: 'BW' para peso do corpo ou 'E leve' ou 'Halteres 4kg')",
               "technique": "string",
               "videoQuery": "string (termo de busca exato para youtube, ex: 'agachamento livre execucao')"
             }

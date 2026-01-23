@@ -1,0 +1,231 @@
+import React, { useState, useEffect } from 'react';
+import { WorkoutDayV2, ExerciseV2, WorkoutPlanV2 } from '../types';
+import { ArrowLeft, Clock, Info, CheckCircle2, Save, Play, Dumbbell } from 'lucide-react';
+
+interface WorkoutSessionProps {
+    dayData: WorkoutDayV2;
+    onFinish: (updatedDayData: WorkoutDayV2) => void;
+    onCancel: () => void;
+    dayLabel: string;
+}
+
+export const WorkoutSession: React.FC<WorkoutSessionProps> = ({ dayData, onFinish, onCancel, dayLabel }) => {
+    const [exercises, setExercises] = useState<ExerciseV2[]>([]);
+    const [completedExercises, setCompletedExercises] = useState<Set<number>>(new Set());
+    const [activeExerciseIndex, setActiveExerciseIndex] = useState<number>(0);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        // Initialize exercises from props, ensuring deep copy to avoid direct mutation
+        if (dayData && dayData.exercises) {
+            setExercises(JSON.parse(JSON.stringify(dayData.exercises)));
+        }
+    }, [dayData]);
+
+    const handleLoadChange = (index: number, newLoad: string) => {
+        const updated = [...exercises];
+        updated[index].load = newLoad;
+        setExercises(updated);
+    };
+
+    const toggleComplete = (index: number) => {
+        const newCompleted = new Set(completedExercises);
+        if (newCompleted.has(index)) {
+            newCompleted.delete(index);
+        } else {
+            newCompleted.add(index);
+            // Auto-advance to next exercise if not last
+            if (index === activeExerciseIndex && index < exercises.length - 1) {
+                setActiveExerciseIndex(index + 1);
+            }
+        }
+        setCompletedExercises(newCompleted);
+    };
+
+    const handleFinish = () => {
+        setLoading(true);
+        // Simulate a small delay for UX
+        setTimeout(() => {
+            const updatedDay: WorkoutDayV2 = {
+                ...dayData,
+                exercises: exercises
+            };
+            onFinish(updatedDay);
+            setLoading(false);
+        }, 500);
+    };
+
+    const progress = Math.round((completedExercises.size / exercises.length) * 100);
+
+    return (
+        <div className="fixed inset-0 bg-slate-950 z-50 overflow-y-auto pb-20">
+            {/* Header */}
+            <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 p-4 flex items-center justify-between z-10 shadow-lg">
+                <button
+                    onClick={onCancel}
+                    className="p-2 -ml-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors"
+                >
+                    <ArrowLeft size={24} />
+                </button>
+                <div className="text-center">
+                    <h2 className="text-white font-bold text-lg">{dayLabel}</h2>
+                    <p className="text-xs text-emerald-400 font-medium">{dayData.trainingType}</p>
+                </div>
+                <div className="w-8"></div> {/* Spacer for centering */}
+            </div>
+
+            {/* Progress Bar */}
+            <div className="bg-slate-900 h-1.5 w-full sticky top-[72px] z-10">
+                <div
+                    className="bg-emerald-500 h-full transition-all duration-500 ease-out"
+                    style={{ width: `${progress}%` }}
+                ></div>
+            </div>
+
+            <div className="max-w-md mx-auto p-4 space-y-6">
+
+                {/* Intro Card */}
+                <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800 shadow-sm">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                            <Play size={20} fill="currentColor" />
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-bold text-white">Hora do Treino!</h1>
+                            <p className="text-slate-400 text-sm">Foco total na execução.</p>
+                        </div>
+                    </div>
+                    {dayData.note && (
+                        <div className="mt-3 text-sm text-slate-300 bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                            <Info size={14} className="inline mr-1.5 text-emerald-400 -mt-0.5" />
+                            {dayData.note}
+                        </div>
+                    )}
+                </div>
+
+                {/* Exercises List */}
+                <div className="space-y-4">
+                    {exercises.map((exercise, index) => {
+                        const isCompleted = completedExercises.has(index);
+                        const isActive = index === activeExerciseIndex;
+
+                        return (
+                            <div
+                                key={index}
+                                className={`
+                    relative rounded-2xl border transition-all duration-300 overflow-hidden
+                    ${isActive ? 'bg-slate-800 border-emerald-500/50 shadow-emerald-900/10 ring-1 ring-emerald-500/20' : 'bg-slate-900 border-slate-800 opacity-90'}
+                    ${isCompleted ? 'border-emerald-900/30 bg-emerald-900/5' : ''}
+                `}
+                                onClick={() => !isActive && setActiveExerciseIndex(index)}
+                            >
+                                {/* Status Strip */}
+                                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isCompleted ? 'bg-emerald-500' : isActive ? 'bg-emerald-500/50' : 'bg-slate-700'}`}></div>
+
+                                <div className="p-4 pl-6">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div className="flex-1">
+                                            <h3 className={`font-bold text-lg mb-1 ${isCompleted ? 'text-emerald-400' : 'text-white'}`}>
+                                                {exercise.name}
+                                            </h3>
+                                            <p className="text-slate-400 text-sm mb-3">{exercise.muscleGroup}</p>
+
+                                            <div className="flex flex-wrap gap-2 text-xs font-mono">
+                                                <span className="bg-slate-950 text-slate-300 px-2 py-1 rounded border border-slate-700">
+                                                    {exercise.sets} Séries
+                                                </span>
+                                                <span className="bg-slate-950 text-slate-300 px-2 py-1 rounded border border-slate-700">
+                                                    {exercise.reps} Reps
+                                                </span>
+                                                <span className="bg-slate-950 text-slate-300 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
+                                                    <Clock size={10} /> {exercise.rest}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleComplete(index);
+                                            }}
+                                            className={`
+                                w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all
+                                ${isCompleted
+                                                    ? 'bg-emerald-500 border-emerald-500 text-slate-900'
+                                                    : 'border-slate-600 text-transparent hover:border-emerald-500'
+                                                }
+                            `}
+                                        >
+                                            <CheckCircle2 size={18} />
+                                        </button>
+                                    </div>
+
+                                    {/* Expandable Content handled by isActive */}
+                                    {isActive && (
+                                        <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-4 animate-in fade-in slide-in-from-top-2">
+
+                                            {/* Load Input */}
+                                            <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-700/50">
+                                                <label className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-2 block flex items-center gap-1">
+                                                    <Dumbbell size={12} /> Carga (Kg)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={exercise.load || ''}
+                                                    placeholder="Ex: 20kg (cada lado)"
+                                                    onChange={(e) => handleLoadChange(index, e.target.value)}
+                                                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                                                />
+                                            </div>
+
+                                            {/* Tip */}
+                                            {exercise.technique && (
+                                                <div className="text-sm text-slate-400 italic bg-slate-800/30 p-3 rounded-lg">
+                                                    💡 {exercise.technique}
+                                                </div>
+                                            )}
+
+                                            {/* Video Link */}
+                                            {exercise.videoQuery && (
+                                                <a
+                                                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(exercise.videoQuery)}`}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="block w-full text-center py-2.5 rounded-lg bg-red-600/10 text-red-400 hover:bg-red-600/20 text-xs font-bold uppercase tracking-wide transition-colors border border-red-900/30"
+                                                >
+                                                    Ver Execução no YouTube
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Finish Button */}
+                <div className="pt-4 sticky bottom-6">
+                    <button
+                        onClick={handleFinish}
+                        disabled={loading}
+                        className={`
+                    w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all
+                    ${loading ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-400 text-slate-900 hover:scale-[1.02] active:scale-[0.98]'}
+                `}
+                    >
+                        {loading ? (
+                            <>Salvando...</>
+                        ) : (
+                            <>
+                                <Save size={20} />
+                                Finalizar Treino
+                            </>
+                        )}
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    );
+};

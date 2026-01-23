@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, WorkoutPlan, DietPlan } from './types';
+import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, WorkoutPlan, DietPlan, WorkoutDayV2, WorkoutPlanV2 } from './types';
 import { App as CapApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { analyzeVideo, generateWorkoutPlan, generateDietPlan, resetGeminiInstance, regenerateWorkoutPlan, regenerateDietPlan, regenerateWorkoutPlanV2, regenerateDietPlanV2 } from './services/geminiService';
@@ -24,8 +24,9 @@ import { SubscriptionModal } from './components/SubscriptionModal';
 import { PaymentCallback } from './components/PaymentCallback';
 import { AnamnesisModal } from './components/AnamnesisModal';
 import EvolutionPhotosModal from './components/EvolutionPhotosModal';
-import { Camera, ClipboardList } from 'lucide-react';
+import { Camera, ClipboardList, PlayCircle } from 'lucide-react';
 import { getFullImageUrl } from './utils/imageUtils';
+import { WorkoutSession } from './components/WorkoutSession';
 
 // --- ICON MAPPING SYSTEM ---
 const EXERCISE_ICONS: Record<string, React.ReactNode> = {
@@ -416,6 +417,57 @@ const App: React.FC = () => {
   const [checkInDate, setCheckInDate] = useState(new Date().toISOString().split('T')[0]);
   const [checkInComment, setCheckInComment] = useState('');
   const [checkInLoading, setCheckInLoading] = useState(false);
+  // Interactive Workout Session State
+  const [activeWorkoutDay, setActiveWorkoutDay] = useState<WorkoutDayV2 | null>(null);
+
+  const handleStartSession = (day: WorkoutDayV2) => {
+    setActiveWorkoutDay(day);
+  };
+
+  const handleFinishSession = async (updatedDay: WorkoutDayV2) => {
+    if (!currentUser || savedWorkouts.length === 0) return;
+
+    try {
+      const currentWorkout = savedWorkouts[0];
+      const daysData: WorkoutPlanV2 = currentWorkout.daysData ? JSON.parse(currentWorkout.daysData) : { summary: {}, days: [] };
+
+      // Update the specific day in the structure
+      const updatedDays = daysData.days.map(d =>
+        d.dayOfWeek === updatedDay.dayOfWeek ? updatedDay : d
+      );
+
+      const newDaysData = { ...daysData, days: updatedDays };
+      const newDaysDataStr = JSON.stringify(newDaysData);
+
+      // Save to Backend
+      await apiService.updateStructuredTraining(currentUser.id, currentWorkout.id, newDaysDataStr);
+
+      // Update Local State
+      setSavedWorkouts(prev => {
+        const updated = [...prev];
+        updated[0] = { ...updated[0], daysData: newDaysDataStr };
+        return updated;
+      });
+
+      showToast('Progresso salvo com sucesso!', 'success');
+      setActiveWorkoutDay(null);
+
+      // Prompt for Check-in
+      triggerConfirm(
+        "Treino Finalizado!",
+        "Deseja registrar o check-in deste treino agora?",
+        () => {
+          setCheckInDate(new Date().toISOString().split('T')[0]);
+          setCheckInComment(`Treino de ${updatedDay.dayLabel} finalizado.`);
+          setShowCheckInModal(true);
+        }
+      );
+
+    } catch (error) {
+      console.error(error);
+      showToast('Erro ao salvar progresso.', 'error');
+    }
+  };
 
   // Forms
   const [workoutFormData, setWorkoutFormData] = useState({
@@ -1475,9 +1527,22 @@ const App: React.FC = () => {
         workoutDocument,
         workoutPhoto
       );
+
+      // --- CRITICAL FIX: Extract Structured Data for Interactive Mode ---
+      let daysDataStr: string | undefined = undefined;
+      const match = planHtml.match(/<!-- DATA_JSON_START -->([\s\S]*?)<!-- DATA_JSON_END -->/);
+      if (match && match[1]) {
+        try {
+          // Validate JSON integrity
+          JSON.parse(match[1]);
+          daysDataStr = match[1];
+        } catch (e) {
+          console.warn("Failed to parse hidden JSON from workout plan", e);
+        }
+      }
+
       // Usa apiService para criar e refresh, sem fallbacks quebrados
-      // Usa apiService para criar e refresh, sem fallbacks quebrados
-      await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal);
+      await apiService.createTraining(currentUser.id, planHtml, workoutFormData.goal, daysDataStr);
 
       // CONSUME CREDIT LOGIC
       const isUnlimited = currentUser.role === 'admin' || currentUser.role === 'personal' || currentUser.role === 'professor'
@@ -1810,6 +1875,35 @@ const App: React.FC = () => {
           </div>
         </div>
         <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
+          {/* Interactive Workout List (Hybrid Mode) */}
+          {savedWorkouts[0]?.daysData && (
+            <div className="mb-8 grid gap-4 grid-cols-1 md:grid-cols-2">
+              {(() => {
+                try {
+                  const parsedData: any = JSON.parse(savedWorkouts[0].daysData);
+                  return parsedData.days.map((day: any, idx: number) => (
+                    <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${day.isRestDay ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm'}`}>
+                      <div>
+                        <h4 className="font-bold text-slate-800">{day.dayLabel}</h4>
+                        <p className="text-sm text-slate-500">{day.trainingType}</p>
+                      </div>
+                      {!day.isRestDay && (
+                        <button
+                          onClick={() => handleStartSession(day)}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-900/20 shadow-lg"
+                        >
+                          <PlayCircle size={18} /> Iniciar
+                        </button>
+                      )}
+                      {day.isRestDay && <span className="text-xs font-bold px-2 py-1 bg-slate-300 text-slate-600 rounded">DESCANSO</span>}
+                    </div>
+                  ));
+                } catch (e) {
+                  return null;
+                }
+              })()}
+            </div>
+          )}
           <style>{`
                  #workout-view-content { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
                  @media print {

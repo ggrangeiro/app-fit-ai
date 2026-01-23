@@ -1885,19 +1885,57 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                 ) : (
                                     <div className="space-y-2">
                                         {professors.map(prof => (
-                                            <div key={prof.id} className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl hover:bg-slate-800 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center">
-                                                        <span className="text-purple-400 font-bold">{prof.name?.[0]?.toUpperCase() || 'P'}</span>
+                                            <div key={prof.id} className="flex flex-col p-4 bg-slate-800/50 rounded-xl hover:bg-slate-800 transition-colors gap-3">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center">
+                                                            <span className="text-purple-400 font-bold">{prof.name?.[0]?.toUpperCase() || 'P'}</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-white font-medium">{prof.name}</p>
+                                                            <p className="text-xs text-slate-500">{prof.email}</p>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-white font-medium">{prof.name}</p>
-                                                        <p className="text-xs text-slate-500">{prof.email}</p>
-                                                    </div>
+                                                    {prof.phone && (
+                                                        <span className="text-xs text-slate-400">{prof.phone}</span>
+                                                    )}
                                                 </div>
-                                                {prof.phone && (
-                                                    <span className="text-xs text-slate-400">{prof.phone}</span>
-                                                )}
+
+                                                <div className="flex gap-2 border-t border-slate-700/50 pt-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedUser({ ...prof } as any); // Cast as any/User to avoid strict type issues if User type varies
+                                                            setShowResetPasswordModal(true);
+                                                        }}
+                                                        className="flex-1 py-2 bg-slate-700/50 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1"
+                                                    >
+                                                        <Key className="w-3 h-3" /> Senha
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            triggerConfirm(
+                                                                'Excluir Professor',
+                                                                `Tem certeza que deseja excluir a conta de "${prof.name}"?`,
+                                                                async () => {
+                                                                    setProcessing(true);
+                                                                    try {
+                                                                        await apiService.deleteUser(prof.id);
+                                                                        setProfessors(prev => prev.filter(p => p.id !== prof.id));
+                                                                        showToast('Professor excluído!', 'success');
+                                                                    } catch (err: any) {
+                                                                        showToast("Erro: " + err.message, 'error');
+                                                                    } finally {
+                                                                        setProcessing(false);
+                                                                    }
+                                                                },
+                                                                true
+                                                            );
+                                                        }}
+                                                        className="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" /> Excluir
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>

@@ -8,6 +8,7 @@ interface WeeklyCheckInTrackerProps {
     userId: string;
     onOpenCheckIn: (date: string) => void;
     showToast: (message: string, type?: ToastType) => void;
+    refreshTrigger?: number; // New prop to force refresh
 }
 
 // Helper to calculate Monday of a week based on offset
@@ -83,7 +84,8 @@ const generateMockStreakData = (): StreakData => {
 export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     userId,
     onOpenCheckIn,
-    showToast
+    showToast,
+    refreshTrigger = 0
 }) => {
     const [weekOffset, setWeekOffset] = useState(0);
     const [weekData, setWeekData] = useState<WeeklyCheckInData | null>(null);
@@ -125,7 +127,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
         } finally {
             setLoading(false);
         }
-    }, [userId, weekOffset]); // Removed streakData dependency
+    }, [userId, weekOffset, refreshTrigger]); // Added refreshTrigger dependency
 
     useEffect(() => {
         fetchData();

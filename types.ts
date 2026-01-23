@@ -316,6 +316,7 @@ export interface ExerciseV2 {
   rest: string;
   technique?: string;
   videoQuery: string;
+  load?: string; // Carga sugerida/atualizada
 }
 
 export interface WorkoutDayV2 {

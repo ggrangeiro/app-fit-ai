@@ -393,7 +393,7 @@ export const apiService = {
     },
 
     // --- TREINOS ---
-    createTraining: async (userId: string | number, content: string, goal: string) => {
+    createTraining: async (userId: string | number, content: string, goal: string, daysData?: string) => {
         return await nativeFetch({
             method: 'POST',
             url: `${API_BASE_URL}/api/treinos/`,
@@ -402,7 +402,8 @@ export const apiService = {
                 userId: String(userId),
                 goal: goal,
                 data: new Date().toISOString().split('T')[0],
-                content: content
+                content: content,
+                daysData: daysData
             }
         });
     },
@@ -416,7 +417,7 @@ export const apiService = {
                 userId: String(userId),
                 goal: goal,
                 data: new Date().toISOString().split('T')[0],
-                daysData: daysData // JSON string containing adherence to contract
+                daysData: daysData
             }
         });
     },
@@ -428,6 +429,19 @@ export const apiService = {
             params: getAuthQueryParams()
         });
         return Array.isArray(data) ? data : (data.trainings || []);
+    },
+
+    updateStructuredTraining: async (userId: string | number, trainingId: number, daysData: string, observations?: string) => {
+        return await nativeFetch({
+            method: 'PUT',
+            url: `${API_BASE_URL}/api/treinos/${trainingId}`,
+            params: getAuthQueryParams(),
+            data: {
+                userId: String(userId),
+                daysData: daysData,
+                observations: observations
+            }
+        });
     },
 
     deleteTraining: async (_userId: string | number, trainingId: number) => {
