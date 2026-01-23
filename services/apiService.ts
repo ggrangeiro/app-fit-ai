@@ -393,6 +393,16 @@ export const apiService = {
     },
 
     // --- TREINOS ---
+    // Salvar Execução de Treino (V2 - Novo Flow)
+    saveWorkoutExecution: async (execution: any) => {
+        return await nativeFetch({
+            method: 'POST',
+            url: `${API_BASE_URL}/api/v2/workout-executions`,
+            params: getAuthQueryParams(),
+            data: execution
+        });
+    },
+
     createTraining: async (userId: string | number, content: string, goal: string, daysData?: string) => {
         return await nativeFetch({
             method: 'POST',
@@ -423,12 +433,25 @@ export const apiService = {
     },
 
     getTrainings: async (userId: string | number) => {
+        // CACHE BUSTER: Force refresh for mobile
+        const params: any = getAuthQueryParams();
+        params._t = Date.now();
+
         const data = await nativeFetch({
             method: 'GET',
             url: `${API_BASE_URL}/api/treinos/${userId}`,
-            params: getAuthQueryParams()
+            params: params
         });
         return Array.isArray(data) ? data : (data.trainings || []);
+    },
+
+    getTrainingsV2: async (userId: string | number) => {
+        const data = await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/v2/treinos/${userId}`,
+            params: getAuthQueryParams()
+        });
+        return Array.isArray(data) ? data : [];
     },
 
     updateStructuredTraining: async (userId: string | number, trainingId: number, daysData: string, observations?: string) => {
@@ -875,5 +898,23 @@ export const apiService = {
             url: `${API_BASE_URL}/api/fotos-evolucao/${fotoId}`,
             params: getAuthQueryParams()
         });
+    },
+
+    // ===============================================
+    // ========== EXERCISE LOAD HISTORY ==============
+    // ===============================================
+
+    getLastUsedLoads: async (userId: string | number): Promise<Record<string, { actualLoad: string; executedAt: number }>> => {
+        try {
+            const data = await nativeFetch({
+                method: 'GET',
+                url: `${API_BASE_URL}/api/v2/exercises/last-loads`,
+                params: { ...getAuthQueryParams(), userId: String(userId) }
+            });
+            return data.loads || {};
+        } catch (e) {
+            console.warn("Erro ao buscar últimas cargas:", e);
+            return {};
+        }
     }
 };
