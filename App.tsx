@@ -1082,12 +1082,31 @@ const App: React.FC = () => {
         // Se já tem daysData, usar
         if (w.daysData || w.days_data) return w;
 
-        // Encontrar V2 correspondente pelo título no conteúdo HTML
-        const v2Match = workoutsV2.find((v2: any) =>
+        // Estratégia 1: Match por título no conteúdo HTML
+        let v2Match = workoutsV2.find((v2: any) =>
           v2.title && w.content?.includes(v2.title.split(' - ')[0])
         );
 
+        // Estratégia 2: Match por data de criação (dentro de 2 minutos)
+        if (!v2Match && w.createdAt) {
+          const v1Date = new Date(w.createdAt).getTime();
+          v2Match = workoutsV2.find((v2: any) => {
+            if (!v2.createdAt) return false;
+            const v2Date = new Date(v2.createdAt).getTime();
+            const diffMs = Math.abs(v1Date - v2Date);
+            return diffMs < 2 * 60 * 1000; // 2 minutos
+          });
+        }
+
+        // Estratégia 3: Match por goal (usar o V2 mais recente com mesmo goal)
+        if (!v2Match && w.goal) {
+          v2Match = workoutsV2.find((v2: any) =>
+            v2.title?.toLowerCase().includes(w.goal.toLowerCase())
+          );
+        }
+
         if (v2Match?.daysData) {
+          console.log('[DEBUG] Merged V1 id', w.id, 'with V2 id', v2Match.id);
           return { ...w, daysData: v2Match.daysData };
         }
         return w;
