@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Flame, Check, Calendar, Loader2, Target } from 'lucide-react';
 import { apiService } from '../services/apiService';
 import { WeeklyCheckInData, StreakData, WeeklyCheckInDay } from '../types';
@@ -9,7 +9,6 @@ interface WeeklyCheckInTrackerProps {
     onOpenCheckIn: (date: string) => void;
     showToast: (message: string, type?: ToastType) => void;
     refreshTrigger?: number; // New prop to force refresh
-    weeklyGoal?: number; // Dynamic goal from workout plan (counts non-rest days)
 }
 
 // Helper to calculate Monday of a week based on offset
@@ -86,8 +85,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     userId,
     onOpenCheckIn,
     showToast,
-    refreshTrigger = 0,
-    weeklyGoal: propWeeklyGoal
+    refreshTrigger = 0
 }) => {
     const [weekOffset, setWeekOffset] = useState(0);
     const [weekData, setWeekData] = useState<WeeklyCheckInData | null>(null);
@@ -135,11 +133,6 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
         fetchData();
     }, [fetchData]);
 
-    // Calculate effective weekly goal - prioritize prop value over API value
-    const effectiveWeeklyGoal = useMemo(() => {
-        return propWeeklyGoal ?? weekData?.weeklyGoal ?? 5;
-    }, [propWeeklyGoal, weekData?.weeklyGoal]);
-
     const handlePrevWeek = () => setWeekOffset(prev => prev - 1);
     const handleNextWeek = () => {
         // Don't allow navigating to future weeks
@@ -185,10 +178,10 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     };
 
     const progressPercentage = weekData
-        ? Math.min((weekData.totalCheckIns / effectiveWeeklyGoal) * 100, 100)
+        ? Math.min((weekData.totalCheckIns / (weekData?.weeklyGoal || 5)) * 100, 100)
         : 0;
 
-    const goalReached = weekData ? weekData.totalCheckIns >= effectiveWeeklyGoal : false;
+    const goalReached = weekData ? weekData.totalCheckIns >= (weekData?.weeklyGoal || 5) : false;
 
     return (
         <div className="w-full max-w-5xl mb-8">
@@ -261,7 +254,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
                                     <span className="text-xs text-slate-400 font-medium">Meta semanal</span>
                                 </div>
                                 <span className={`text-xs font-bold ${goalReached ? 'text-emerald-400' : 'text-slate-300'}`}>
-                                    {weekData?.totalCheckIns || 0}/{effectiveWeeklyGoal}
+                                    {weekData?.totalCheckIns || 0}/{(weekData?.weeklyGoal || 5)}
                                     {goalReached && <span className="ml-1">✨</span>}
                                 </span>
                             </div>
