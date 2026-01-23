@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Flame, Check, Calendar, Loader2, Target } from 'lucide-react';
 import { apiService } from '../services/apiService';
 import { WeeklyCheckInData, StreakData, WeeklyCheckInDay } from '../types';
@@ -135,12 +135,10 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
         fetchData();
     }, [fetchData]);
 
-    // Apply weeklyGoal from prop without re-fetching data
-    useEffect(() => {
-        if (propWeeklyGoal && weekData) {
-            setWeekData(prev => prev ? { ...prev, weeklyGoal: propWeeklyGoal } : prev);
-        }
-    }, [propWeeklyGoal]);
+    // Calculate effective weekly goal - prioritize prop value over API value
+    const effectiveWeeklyGoal = useMemo(() => {
+        return propWeeklyGoal ?? weekData?.weeklyGoal ?? 5;
+    }, [propWeeklyGoal, weekData?.weeklyGoal]);
 
     const handlePrevWeek = () => setWeekOffset(prev => prev - 1);
     const handleNextWeek = () => {
@@ -187,10 +185,10 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     };
 
     const progressPercentage = weekData
-        ? Math.min((weekData.totalCheckIns / weekData.weeklyGoal) * 100, 100)
+        ? Math.min((weekData.totalCheckIns / effectiveWeeklyGoal) * 100, 100)
         : 0;
 
-    const goalReached = weekData ? weekData.totalCheckIns >= weekData.weeklyGoal : false;
+    const goalReached = weekData ? weekData.totalCheckIns >= effectiveWeeklyGoal : false;
 
     return (
         <div className="w-full max-w-5xl mb-8">
@@ -263,7 +261,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
                                     <span className="text-xs text-slate-400 font-medium">Meta semanal</span>
                                 </div>
                                 <span className={`text-xs font-bold ${goalReached ? 'text-emerald-400' : 'text-slate-300'}`}>
-                                    {weekData?.totalCheckIns || 0}/{weekData?.weeklyGoal || 5}
+                                    {weekData?.totalCheckIns || 0}/{effectiveWeeklyGoal}
                                     {goalReached && <span className="ml-1">✨</span>}
                                 </span>
                             </div>
