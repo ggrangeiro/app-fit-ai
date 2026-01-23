@@ -2,7 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, WorkoutPlan, DietPlan, WorkoutDayV2, WorkoutPlanV2 } from './types';
 import { App as CapApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
-import { analyzeVideo, generateWorkoutPlan, generateDietPlan, resetGeminiInstance, regenerateWorkoutPlan, regenerateDietPlan, regenerateWorkoutPlanV2, regenerateDietPlanV2 } from './services/geminiService';
+import {
+  analyzeVideo,
+  generateWorkoutPlan,
+  generateDietPlan,
+  resetGeminiInstance,
+  regenerateWorkoutPlan,
+  regenerateDietPlan,
+  regenerateWorkoutPlanV2,
+  regenerateDietPlanV2,
+  extractWorkoutDataFromHtml
+} from './services/geminiService';
 import { compressVideo } from './utils/videoUtils';
 import { MockDataService } from './services/mockDataService';
 import { apiService } from './services/apiService'; // NEW API SERVICE
@@ -12,7 +22,7 @@ import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import ResetPassword from './components/ResetPassword';
 import AdminDashboard from './components/AdminDashboard';
-import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check, Share2, CheckCircle, ThumbsUp, RefreshCw, MessageCircle } from 'lucide-react';
+import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check, Share2, CheckCircle, ThumbsUp, RefreshCw, MessageCircle, Wand2 } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import { OnboardingGuide } from './components/OnboardingGuide';
 import Toast, { ToastType } from './components/Toast';
@@ -400,12 +410,15 @@ const App: React.FC = () => {
   const [loadingWorkouts, setLoadingWorkouts] = useState(false);
   const [savedDiets, setSavedDiets] = useState<DietPlan[]>([]);
   const [loadingDiets, setLoadingDiets] = useState(false);
+  const [previousLoads, setPreviousLoads] = useState<Record<string, { actualLoad: string; executedAt: number }>>({});
 
   // Modal States
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [showGenerateWorkoutForm, setShowGenerateWorkoutForm] = useState(false);
   const [generatingWorkout, setGeneratingWorkout] = useState(false);
+  const [upgradingWorkout, setUpgradingWorkout] = useState(false); // NEW: Upgrade state
   const [viewingWorkoutHtml, setViewingWorkoutHtml] = useState<string | null>(null);
+  const [viewingDaysData, setViewingDaysData] = useState<string | null>(null); // NEW: To handle immediate preview of V2 data
   const [showPaymentCallback, setShowPaymentCallback] = useState(false);
   const [showDietModal, setShowDietModal] = useState(false);
   const [showGenerateDietForm, setShowGenerateDietForm] = useState(false);
@@ -420,7 +433,13 @@ const App: React.FC = () => {
   // Interactive Workout Session State
   const [activeWorkoutDay, setActiveWorkoutDay] = useState<WorkoutDayV2 | null>(null);
 
-  const handleStartSession = (day: WorkoutDayV2) => {
+  const handleStartSession = async (day: WorkoutDayV2) => {
+    if (currentUser) {
+      // Fetch previous loads silently (or with small loading?)
+      apiService.getLastUsedLoads(currentUser.id).then(loads => {
+        setPreviousLoads(loads);
+      }).catch(err => console.warn('Failed to fetch lasts loads', err));
+    }
     setActiveWorkoutDay(day);
   };
 
@@ -429,43 +448,63 @@ const App: React.FC = () => {
 
     try {
       const currentWorkout = savedWorkouts[0];
-      const daysData: WorkoutPlanV2 = currentWorkout.daysData ? JSON.parse(currentWorkout.daysData) : { summary: {}, days: [] };
 
-      // Update the specific day in the structure
+      // 1. Save Execution Data (V2)
+      const executionPayload = {
+        userId: currentUser.id,
+        workoutId: currentWorkout.id,
+        dayOfWeek: updatedDay.dayOfWeek,
+        executedAt: Date.now(),
+        exercises: updatedDay.exercises.map(ex => ({
+          exerciseName: ex.name,
+          setsCompleted: ex.sets,
+          actualLoad: ex.load
+        }))
+      };
+
+      await apiService.saveWorkoutExecution(executionPayload);
+
+      // 2. Update Local Structure (to keep UI in sync if user re-opens)
+      const daysData: WorkoutPlanV2 = currentWorkout.daysData ? JSON.parse(currentWorkout.daysData) : { summary: {}, days: [] };
       const updatedDays = daysData.days.map(d =>
         d.dayOfWeek === updatedDay.dayOfWeek ? updatedDay : d
       );
-
       const newDaysData = { ...daysData, days: updatedDays };
       const newDaysDataStr = JSON.stringify(newDaysData);
 
-      // Save to Backend
+      // Only if we want to also persist the modified plan to DB (Optional in V2, but good for "current state")
+      // Currently V2 relies on Execution History for values, but saving to plan acts as a cache.
       await apiService.updateStructuredTraining(currentUser.id, currentWorkout.id, newDaysDataStr);
 
-      // Update Local State
       setSavedWorkouts(prev => {
         const updated = [...prev];
         updated[0] = { ...updated[0], daysData: newDaysDataStr };
         return updated;
       });
 
-      showToast('Progresso salvo com sucesso!', 'success');
+      showToast('Treino salvo com sucesso!', 'success');
       setActiveWorkoutDay(null);
 
-      // Prompt for Check-in
-      triggerConfirm(
-        "Treino Finalizado!",
-        "Deseja registrar o check-in deste treino agora?",
-        () => {
-          setCheckInDate(new Date().toISOString().split('T')[0]);
-          setCheckInComment(`Treino de ${updatedDay.dayLabel} finalizado.`);
-          setShowCheckInModal(true);
-        }
+      // 3. Auto Check-in
+      const todayDate = new Date().toISOString().split('T')[0];
+      await apiService.createCheckIn(
+        currentUser.id,
+        currentWorkout.id,
+        todayDate,
+        `Treino de ${updatedDay.dayLabel} finalizado com sucesso.`
       );
+
+      setCheckInDate(todayDate);
+      // setCheckInComment(...); 
+      // Instead of showing modal, just show success toast for check-in
+      showToast('Check-in realizado automaticamente! 💪', 'success');
+
+      // Refresh check-ins
+      setCheckInUpdateTrigger(prev => prev + 1);
 
     } catch (error) {
       console.error(error);
-      showToast('Erro ao salvar progresso.', 'error');
+      showToast('Erro ao salvar treino.', 'error');
     }
   };
 
@@ -617,6 +656,7 @@ const App: React.FC = () => {
       if (showWorkoutModal) {
         setShowWorkoutModal(false);
         setViewingWorkoutHtml(null);
+        setViewingDaysData(null);
         return;
       }
       if (showDietModal) {
@@ -1576,6 +1616,7 @@ const App: React.FC = () => {
       setShowGenerateWorkoutForm(false);
       resetWorkoutForm();
       setViewingWorkoutHtml(planHtml);
+      setViewingDaysData(daysDataStr || null); // Set immediate V2 data
       setShowWorkoutModal(true);
 
     } catch (err: any) {
@@ -1722,6 +1763,7 @@ const App: React.FC = () => {
           setSavedWorkouts([]);
           setShowWorkoutModal(false);
           setViewingWorkoutHtml(null);
+          setViewingDaysData(null);
           showToast("Treino removido com sucesso.", 'success');
         } catch (e) {
           showToast("Erro ao remover treino.", 'error');
@@ -1751,6 +1793,43 @@ const App: React.FC = () => {
       },
       true
     );
+  };
+
+  // --- UPGRADE LEGACY WORKOUT ---
+  const handleUpgradeWorkout = async () => {
+    if (!currentUser || savedWorkouts.length === 0) return;
+    const currentWorkout = savedWorkouts[0];
+
+    setUpgradingWorkout(true);
+    try {
+      const extractedData = await extractWorkoutDataFromHtml(
+        currentWorkout.content,
+        currentUser.id,
+        currentUser.role
+      );
+
+      const daysDataStr = JSON.stringify(extractedData);
+
+      // Save to Backend
+      await apiService.updateStructuredTraining(
+        currentUser.id,
+        currentWorkout.id,
+        daysDataStr
+      );
+
+      // Update Local State immediately
+      setViewingDaysData(daysDataStr);
+      showToast("Treino atualizado para Modo Interativo!", 'success');
+
+      // Refresh background
+      fetchUserWorkouts(currentUser.id);
+
+    } catch (error) {
+      console.error("Upgrade failed", error);
+      showToast("Falha ao converter treino. Tente novamente.", 'error');
+    } finally {
+      setUpgradingWorkout(false);
+    }
   };
 
   const handleGoBackToSelect = () => {
@@ -1831,12 +1910,19 @@ const App: React.FC = () => {
     />
   );
 
+  // Refresh workouts when modal opens to ensure sync
+  useEffect(() => {
+    if (showWorkoutModal && currentUser) {
+      fetchUserWorkouts(currentUser.id);
+    }
+  }, [showWorkoutModal]);
+
   const renderWorkoutModal = () => (
     <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
       <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
         <div className="flex justify-between items-center max-w-7xl mx-auto mb-6">
           <button
-            onClick={() => { setShowWorkoutModal(false); setViewingWorkoutHtml(null); resetWorkoutForm(); }}
+            onClick={() => { setShowWorkoutModal(false); setViewingWorkoutHtml(null); setViewingDaysData(null); resetWorkoutForm(); }}
             className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" /> <span className="hidden sm:inline">Voltar</span>
@@ -1875,35 +1961,69 @@ const App: React.FC = () => {
           </div>
         </div>
         <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
+
           {/* Interactive Workout List (Hybrid Mode) */}
-          {savedWorkouts[0]?.daysData && (
-            <div className="mb-8 grid gap-4 grid-cols-1 md:grid-cols-2">
-              {(() => {
-                try {
-                  const parsedData: any = JSON.parse(savedWorkouts[0].daysData);
-                  return parsedData.days.map((day: any, idx: number) => (
-                    <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${day.isRestDay ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm'}`}>
-                      <div>
-                        <h4 className="font-bold text-slate-800">{day.dayLabel}</h4>
-                        <p className="text-sm text-slate-500">{day.trainingType}</p>
+          {(() => {
+            const currentWorkout = savedWorkouts[0];
+            // Fallback: Try to extract JSON from HTML if explicit daysData is missing
+            const embeddedJson = currentWorkout?.content?.match(/<!-- DATA_JSON_START -->([\s\S]*?)<!-- DATA_JSON_END -->/)?.[1];
+            // ROBUST CHECK: Check daysData (camel) AND days_data (snake)
+            const activeDaysData = viewingDaysData || currentWorkout?.daysData || currentWorkout?.days_data || embeddedJson;
+
+            // SHOW UPGRADE BUTTON IF NO DATA
+            if (!activeDaysData && currentWorkout) {
+              return (
+                <div className="mb-8 p-6 bg-slate-800 rounded-2xl border border-slate-700 text-center">
+                  <div className="flex justify-center mb-3">
+                    <Sparkles className="w-10 h-10 text-amber-400 animate-pulse" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2">Ativar Modo Interativo</h3>
+                  <p className="text-slate-400 mb-6 max-w-md mx-auto">
+                    Este treino foi criado em uma versão anterior. A Inteligência Artificial pode ler o conteúdo e criar a ficha interativa automaticamente para você.
+                  </p>
+                  <button
+                    onClick={handleUpgradeWorkout}
+                    disabled={upgradingWorkout}
+                    className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-6 py-3 rounded-xl transition-all shadow-lg flex items-center gap-2 mx-auto"
+                  >
+                    {upgradingWorkout ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
+                    {upgradingWorkout ? "Atualizando..." : "Converter Agora (Grátis)"}
+                  </button>
+                </div>
+              );
+            }
+
+            if (activeDaysData) {
+              try {
+                const parsedData: any = JSON.parse(activeDaysData);
+                return (
+                  <div className="mb-8 grid gap-4 grid-cols-1 md:grid-cols-2 animate-in fade-in slide-in-from-top-4">
+                    {parsedData.days.map((day: any, idx: number) => (
+                      <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${day.isRestDay ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
+                        <div>
+                          <h4 className="font-bold text-slate-800">{day.dayLabel}</h4>
+                          <p className="text-sm text-slate-500">{day.trainingType}</p>
+                        </div>
+                        {!day.isRestDay && (
+                          <button
+                            onClick={() => handleStartSession(day)}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-900/20 shadow-lg active:scale-95"
+                          >
+                            <PlayCircle size={18} /> Iniciar
+                          </button>
+                        )}
+                        {day.isRestDay && <span className="text-xs font-bold px-2 py-1 bg-slate-300 text-slate-600 rounded">DESCANSO</span>}
                       </div>
-                      {!day.isRestDay && (
-                        <button
-                          onClick={() => handleStartSession(day)}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-900/20 shadow-lg"
-                        >
-                          <PlayCircle size={18} /> Iniciar
-                        </button>
-                      )}
-                      {day.isRestDay && <span className="text-xs font-bold px-2 py-1 bg-slate-300 text-slate-600 rounded">DESCANSO</span>}
-                    </div>
-                  ));
-                } catch (e) {
-                  return null;
-                }
-              })()}
-            </div>
-          )}
+                    ))}
+                  </div>
+                );
+              } catch (e) {
+                console.warn('Failed to parse daysData', e);
+                return null;
+              }
+            }
+            return null;
+          })()}
           <style>{`
                  #workout-view-content { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
                  @media print {
@@ -3095,6 +3215,15 @@ const App: React.FC = () => {
       </main >
 
       {/* --- MODALS --- */}
+      {activeWorkoutDay && (
+        <WorkoutSession
+          dayData={activeWorkoutDay}
+          dayLabel={activeWorkoutDay.dayLabel}
+          onFinish={handleFinishSession}
+          onCancel={() => setActiveWorkoutDay(null)}
+          previousLoads={previousLoads}
+        />
+      )}
       < SubscriptionModal
         isOpen={showPlansModal}
         onClose={() => setShowPlansModal(false)}
