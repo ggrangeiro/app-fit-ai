@@ -456,8 +456,9 @@ const App: React.FC = () => {
         workoutId: workoutIdForExecution,
         dayOfWeek: updatedDay.dayOfWeek,
         executedAt: Date.now(),
-        exercises: updatedDay.exercises.map(ex => ({
+        exercises: updatedDay.exercises.map((ex, index) => ({
           exerciseName: ex.name,
+          order: ex.order || index + 1,
           setsCompleted: ex.sets,
           actualLoad: ex.load
         }))
