@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User } from '../types';
 import { apiService } from '../services/apiService';
 import { secureStorage } from '../utils/secureStorage';
-import { Dumbbell, ArrowRight, Lock, Mail, User as UserIcon, Phone, X, CheckCircle, Loader2, Medal, Crown, MessageCircle } from 'lucide-react';
+import { Dumbbell, ArrowRight, Lock, Mail, User as UserIcon, Phone, X, CheckCircle, Loader2, Medal, Crown, MessageCircle, Eye, EyeOff } from 'lucide-react';
 import { ToastType } from './Toast';
 
 interface LoginProps {
@@ -18,6 +18,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +57,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
         if (!name.trim()) throw new Error("Por favor, digite seu nome.");
         if (!phone.trim()) throw new Error("Por favor, digite seu telefone.");
         if (!password.trim()) throw new Error("Por favor, digite uma senha.");
+        if (password !== confirmPassword) throw new Error("As senhas não conferem.");
 
         // Usa o novo serviço de cadastro V2
         // Nota: Cadastro público cria como 'user' por padrão.
@@ -94,7 +98,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
     setName('');
     setPhone('');
     setPassword('');
+    setConfirmPassword('');
     setRole('user');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -263,15 +270,54 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
               <div className="relative">
                 <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                  className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-12 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-3.5 text-slate-500 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
             </div>
+
+            {isRegistering && (
+              <div className="space-y-1 animate-in slide-in-from-top-4 duration-300">
+                <label className="text-sm font-medium text-slate-300 ml-1">Confirmar Senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className={`w-full bg-slate-800/50 border rounded-xl py-3 pl-12 pr-12 text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all ${isRegistering && confirmPassword && password !== confirmPassword
+                      ? 'border-red-500 focus:ring-red-500/50 focus:border-red-500'
+                      : 'border-slate-700 focus:ring-blue-500/50 focus:border-blue-500'
+                      }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-4 top-3.5 text-slate-500 hover:text-white transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {isRegistering && confirmPassword && password !== confirmPassword && (
+                  <p className="text-red-400 text-xs ml-1 animate-in slide-in-from-top-1">
+                    As senhas não coincidem
+                  </p>
+                )}
+              </div>
+            )}
 
             {error && (
               <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-200 text-sm text-center animate-in fade-in">
@@ -281,9 +327,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (isRegistering && (!name.trim() || !phone.trim() || !email.trim() || !password || !confirmPassword || password !== confirmPassword))}
               className={`
                       mt-2 w-full font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98] flex items-center justify-center gap-2
+                      ${(isRegistering && (!name.trim() || !phone.trim() || !email.trim() || !password || !confirmPassword || password !== confirmPassword)) ? 'opacity-50 cursor-not-allowed' : ''}
                       ${isRegistering
                   ? (role === 'user'
                     ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white'
