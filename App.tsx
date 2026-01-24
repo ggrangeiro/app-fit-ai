@@ -2079,8 +2079,8 @@ const App: React.FC = () => {
                     {parsedData.days.map((day: any, idx: number) => (
                       <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${(day.isRestDay || day.is_rest_day) ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
                         <div>
-                          <h4 className="font-bold text-slate-800">{day.dayLabel || day.day_label || `Dia ${idx + 1}`}</h4>
-                          <p className="text-sm text-slate-500">{day.trainingType || day.training_type || ''}</p>
+                          <h4 className="font-bold text-slate-800">{day.trainingType || day.training_type || day.dayLabel || day.day_label || `Dia ${idx + 1}`}</h4>
+                          <p className="text-sm text-slate-500">{day.dayLabel || day.day_label || ''}</p>
                         </div>
                         {!(day.isRestDay || day.is_rest_day) && (
                           <button
