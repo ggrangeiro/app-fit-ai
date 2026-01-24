@@ -1107,11 +1107,8 @@ const App: React.FC = () => {
         apiService.getTrainingsV2(userId).catch(() => []) // Fallback se V2 falhar
       ]);
 
-      // Mesclar daysData do V2 no V1
+      // Mesclar daysData do V2 no V1 e sempre buscar v2Id
       const mergedWorkouts = workoutsV1.map((w: any) => {
-        // Se já tem daysData, usar
-        if (w.daysData || w.days_data) return w;
-
         // Estratégia 1: Match por título no conteúdo HTML
         let v2Match = workoutsV2.find((v2: any) =>
           v2.title && w.content?.includes(v2.title.split(' - ')[0])
@@ -1135,9 +1132,19 @@ const App: React.FC = () => {
           );
         }
 
-        if (v2Match?.daysData) {
+        // Estratégia 4: Se ainda não encontrou, usar o primeiro V2 disponível
+        if (!v2Match && workoutsV2.length > 0) {
+          v2Match = workoutsV2[0];
+        }
+
+        if (v2Match) {
           console.log('[DEBUG] Merged V1 id', w.id, 'with V2 id', v2Match.id);
-          return { ...w, daysData: v2Match.daysData, v2Id: v2Match.id };
+          // Sempre pegar v2Id, e daysData se não existir no V1
+          return {
+            ...w,
+            daysData: w.daysData || w.days_data || v2Match.daysData,
+            v2Id: v2Match.id
+          };
         }
         return w;
       });
