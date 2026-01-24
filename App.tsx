@@ -473,12 +473,12 @@ const App: React.FC = () => {
 
       // 1. Save Execution Data (V2) - Use v2Id for foreign key constraint
       const workoutIdForExecution = currentWorkout.v2Id || currentWorkout.id;
-      // Support both formats: { name, status } and { dayOfWeek, dayLabel }
-      const dayIdentifier = (updatedDay as any).name || updatedDay.dayOfWeek || updatedDay.dayLabel || 'unknown';
+      // Use day index (1, 2, 3...) as dayOfWeek identifier for backend
+      const dayIndex = (updatedDay as any)._dayIndex || '1';
       const executionPayload = {
         userId: currentUser.id,
         workoutId: workoutIdForExecution,
-        dayOfWeek: dayIdentifier,
+        dayOfWeek: String(dayIndex),
         executedAt: Date.now(),
         exercises: updatedDay.exercises.map((ex, index) => ({
           exerciseName: ex.name,
@@ -2095,7 +2095,7 @@ const App: React.FC = () => {
                         </div>
                         {!isRest && (
                           <button
-                            onClick={() => handleStartSession(day)}
+                            onClick={() => handleStartSession({ ...day, _dayIndex: idx + 1 })}
                             className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-900/20 shadow-lg active:scale-95"
                           >
                             <PlayCircle size={18} /> Iniciar
