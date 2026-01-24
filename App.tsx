@@ -2077,12 +2077,12 @@ const App: React.FC = () => {
                 return (
                   <div className="mb-8 grid gap-4 grid-cols-1 md:grid-cols-2 animate-in fade-in slide-in-from-top-4">
                     {parsedData.days.map((day: any, idx: number) => (
-                      <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${day.isRestDay ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
+                      <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${(day.isRestDay || day.is_rest_day) ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
                         <div>
-                          <h4 className="font-bold text-slate-800">{day.dayLabel}</h4>
-                          <p className="text-sm text-slate-500">{day.trainingType}</p>
+                          <h4 className="font-bold text-slate-800">{day.dayLabel || day.day_label || `Dia ${idx + 1}`}</h4>
+                          <p className="text-sm text-slate-500">{day.trainingType || day.training_type || ''}</p>
                         </div>
-                        {!day.isRestDay && (
+                        {!(day.isRestDay || day.is_rest_day) && (
                           <button
                             onClick={() => handleStartSession(day)}
                             className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-900/20 shadow-lg active:scale-95"
@@ -2090,7 +2090,7 @@ const App: React.FC = () => {
                             <PlayCircle size={18} /> Iniciar
                           </button>
                         )}
-                        {day.isRestDay && <span className="text-xs font-bold px-2 py-1 bg-slate-300 text-slate-600 rounded">DESCANSO</span>}
+                        {(day.isRestDay || day.is_rest_day) && <span className="text-xs font-bold px-2 py-1 bg-slate-300 text-slate-600 rounded">DESCANSO</span>}
                       </div>
                     ))}
                   </div>
