@@ -2073,10 +2073,13 @@ const App: React.FC = () => {
 
             if (activeDaysData) {
               try {
-                const parsedData: any = JSON.parse(activeDaysData);
+                const rawParsed: any = JSON.parse(activeDaysData);
+                // Handle both formats: { days: [...] } or direct array
+                const parsedDays = Array.isArray(rawParsed) ? rawParsed : (rawParsed.days || []);
+                console.log('[DEBUG] Parsed workout days:', JSON.stringify(parsedDays[0], null, 2));
                 return (
                   <div className="mb-8 grid gap-4 grid-cols-1 md:grid-cols-2 animate-in fade-in slide-in-from-top-4">
-                    {parsedData.days.map((day: any, idx: number) => (
+                    {parsedDays.map((day: any, idx: number) => (
                       <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${(day.isRestDay || day.is_rest_day) ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
                         <div>
                           <h4 className="font-bold text-slate-800">{day.trainingType || day.training_type || day.dayLabel || day.day_label || `Dia ${idx + 1}`}</h4>
