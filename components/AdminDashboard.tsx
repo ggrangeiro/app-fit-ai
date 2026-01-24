@@ -1629,7 +1629,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     <p className="text-sm text-slate-500">Plano gerado para: {selectedUser?.name}</p>
                                 </div>
 
-                                <div id="admin-plan-view" dangerouslySetInnerHTML={{ __html: viewingPlan.content }} />
+                                <div id="admin-plan-view" dangerouslySetInnerHTML={{ __html: viewingPlan.content.split('<!-- DATA_JSON_START -->')[0] }} />
 
                                 <div className="mt-8 pt-4 border-t border-slate-200 text-center text-xs text-slate-400">
                                     Documento gerado automaticamente por FitAI Analyzer. Acompanhamento profissional recomendado.

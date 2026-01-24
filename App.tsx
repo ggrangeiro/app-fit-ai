@@ -2096,21 +2096,22 @@ const App: React.FC = () => {
                       const isRest = day.status === 'rest' || day.isRestDay || day.is_rest_day;
                       const title = day.name || day.trainingType || day.training_type || day.dayLabel || day.day_label || `Dia ${idx + 1}`;
                       return (
-                      <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${isRest ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
-                        <div>
-                          <h4 className="font-bold text-slate-800">{title}</h4>
+                        <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${isRest ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
+                          <div>
+                            <h4 className="font-bold text-slate-800">{title}</h4>
+                          </div>
+                          {!isRest && (
+                            <button
+                              onClick={() => handleStartSession({ ...day, _dayIndex: idx + 1 })}
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-900/20 shadow-lg active:scale-95"
+                            >
+                              <PlayCircle size={18} /> Iniciar
+                            </button>
+                          )}
+                          {isRest && <span className="text-xs font-bold px-2 py-1 bg-slate-300 text-slate-600 rounded">DESCANSO</span>}
                         </div>
-                        {!isRest && (
-                          <button
-                            onClick={() => handleStartSession({ ...day, _dayIndex: idx + 1 })}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-900/20 shadow-lg active:scale-95"
-                          >
-                            <PlayCircle size={18} /> Iniciar
-                          </button>
-                        )}
-                        {isRest && <span className="text-xs font-bold px-2 py-1 bg-slate-300 text-slate-600 rounded">DESCANSO</span>}
-                      </div>
-                    );})}
+                      );
+                    })}
                   </div>
                 );
               } catch (e) {
@@ -2130,7 +2131,7 @@ const App: React.FC = () => {
                    .no-print { display: none !important; }
                  }
              `}</style>
-          <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: viewingWorkoutHtml || (savedWorkouts[0]?.content || '') }} />
+          <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: (viewingWorkoutHtml || (savedWorkouts[0]?.content || '')).split('<!-- DATA_JSON_START -->')[0] }} />
         </div>
       </div>
       {showRedoModal && (
