@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, WorkoutPlan, DietPlan, WorkoutDayV2, WorkoutPlanV2 } from './types';
 import { App as CapApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
@@ -411,6 +411,28 @@ const App: React.FC = () => {
   const [savedDiets, setSavedDiets] = useState<DietPlan[]>([]);
   const [loadingDiets, setLoadingDiets] = useState(false);
   const [previousLoads, setPreviousLoads] = useState<Record<string, { actualLoad: string; executedAt: number }>>({});
+
+  // Calculate weekly goal based on training days from the active workout plan
+  const calculatedWeeklyGoal = useMemo(() => {
+    if (savedWorkouts.length > 0) {
+      try {
+        const sortedPlans = [...savedWorkouts].sort((a, b) => b.id - a.id);
+        const activePlan = sortedPlans[0];
+        if (activePlan.daysData) {
+          const parsed = typeof activePlan.daysData === 'string'
+            ? JSON.parse(activePlan.daysData)
+            : activePlan.daysData;
+          if (parsed && Array.isArray(parsed.days)) {
+            const trainingDays = parsed.days.filter((d: any) => !d.isRestDay).length;
+            if (trainingDays > 0) return trainingDays;
+          }
+        }
+      } catch (e) {
+        console.warn("Error parsing workout V2 for goal calculation", e);
+      }
+    }
+    return 5; // Default to 5 days
+  }, [savedWorkouts]);
 
   // Modal States
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
@@ -2848,6 +2870,7 @@ const App: React.FC = () => {
                 onOpenCheckIn={(date) => { setCheckInDate(date); setShowCheckInModal(true); }}
                 showToast={showToast}
                 refreshTrigger={checkInUpdateTrigger}
+                weeklyGoal={calculatedWeeklyGoal}
               />
             )}
 

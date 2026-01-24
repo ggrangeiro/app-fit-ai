@@ -9,6 +9,7 @@ interface WeeklyCheckInTrackerProps {
     onOpenCheckIn: (date: string) => void;
     showToast: (message: string, type?: ToastType) => void;
     refreshTrigger?: number; // New prop to force refresh
+    weeklyGoal?: number; // Training days per week from workout plan
 }
 
 // Helper to calculate Monday of a week based on offset
@@ -85,7 +86,8 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     userId,
     onOpenCheckIn,
     showToast,
-    refreshTrigger = 0
+    refreshTrigger = 0,
+    weeklyGoal = 5
 }) => {
     const [weekOffset, setWeekOffset] = useState(0);
     const [weekData, setWeekData] = useState<WeeklyCheckInData | null>(null);
@@ -177,11 +179,15 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
         return 'empty';
     };
 
+    // Use the weeklyGoal prop (calculated from workout plan) as priority,
+    // fallback to API weekData.weeklyGoal, then to default 5
+    const effectiveWeeklyGoal = weeklyGoal || weekData?.weeklyGoal || 5;
+
     const progressPercentage = weekData
-        ? Math.min((weekData.totalCheckIns / (weekData?.weeklyGoal || 5)) * 100, 100)
+        ? Math.min((weekData.totalCheckIns / effectiveWeeklyGoal) * 100, 100)
         : 0;
 
-    const goalReached = weekData ? weekData.totalCheckIns >= (weekData?.weeklyGoal || 5) : false;
+    const goalReached = weekData ? weekData.totalCheckIns >= effectiveWeeklyGoal : false;
 
     return (
         <div className="w-full max-w-5xl mb-8">
@@ -254,7 +260,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
                                     <span className="text-xs text-slate-400 font-medium">Meta semanal</span>
                                 </div>
                                 <span className={`text-xs font-bold ${goalReached ? 'text-emerald-400' : 'text-slate-300'}`}>
-                                    {weekData?.totalCheckIns || 0}/{(weekData?.weeklyGoal || 5)}
+                                    {weekData?.totalCheckIns || 0}/{effectiveWeeklyGoal}
                                     {goalReached && <span className="ml-1">✨</span>}
                                 </span>
                             </div>
