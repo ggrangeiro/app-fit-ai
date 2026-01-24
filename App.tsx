@@ -473,10 +473,12 @@ const App: React.FC = () => {
 
       // 1. Save Execution Data (V2) - Use v2Id for foreign key constraint
       const workoutIdForExecution = currentWorkout.v2Id || currentWorkout.id;
+      // Support both formats: { name, status } and { dayOfWeek, dayLabel }
+      const dayIdentifier = (updatedDay as any).name || updatedDay.dayOfWeek || updatedDay.dayLabel || 'unknown';
       const executionPayload = {
         userId: currentUser.id,
         workoutId: workoutIdForExecution,
-        dayOfWeek: updatedDay.dayOfWeek,
+        dayOfWeek: dayIdentifier,
         executedAt: Date.now(),
         exercises: updatedDay.exercises.map((ex, index) => ({
           exerciseName: ex.name,
@@ -490,9 +492,12 @@ const App: React.FC = () => {
 
       // 2. Update Local Structure (to keep UI in sync if user re-opens)
       const daysData: WorkoutPlanV2 = currentWorkout.daysData ? JSON.parse(currentWorkout.daysData) : { summary: {}, days: [] };
-      const updatedDays = daysData.days.map(d =>
-        d.dayOfWeek === updatedDay.dayOfWeek ? updatedDay : d
-      );
+      const updatedDays = daysData.days.map((d: any) => {
+        // Match by name or dayOfWeek
+        const dId = d.name || d.dayOfWeek;
+        const updId = (updatedDay as any).name || updatedDay.dayOfWeek;
+        return dId === updId ? updatedDay : d;
+      });
       const newDaysData = { ...daysData, days: updatedDays };
       const newDaysDataStr = JSON.stringify(newDaysData);
 
@@ -511,11 +516,12 @@ const App: React.FC = () => {
 
       // 3. Auto Check-in
       const todayDate = new Date().toISOString().split('T')[0];
+      const dayName = (updatedDay as any).name || updatedDay.dayLabel || 'treino';
       await apiService.createCheckIn(
         currentUser.id,
         currentWorkout.id,
         todayDate,
-        `Treino de ${updatedDay.dayLabel} finalizado com sucesso.`
+        `Treino de ${dayName} finalizado com sucesso.`
       );
 
       setCheckInDate(todayDate);
