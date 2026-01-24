@@ -1207,6 +1207,13 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [step, selectedExercise, exercisesList]);
 
+  // Refresh workouts when modal opens to ensure sync
+  useEffect(() => {
+    if (showWorkoutModal && currentUser) {
+      fetchUserWorkouts(currentUser.id);
+    }
+  }, [showWorkoutModal]);
+
 
   const handleLogin = (user: User) => {
     console.log('[DEBUG] handleLogin - Incoming User:', user);
@@ -1987,13 +1994,6 @@ const App: React.FC = () => {
       }}
     />
   );
-
-  // Refresh workouts when modal opens to ensure sync
-  useEffect(() => {
-    if (showWorkoutModal && currentUser) {
-      fetchUserWorkouts(currentUser.id);
-    }
-  }, [showWorkoutModal]);
 
   const renderWorkoutModal = () => (
     <div className="fixed inset-0 z-[100] bg-slate-900/95 overflow-y-auto animate-in fade-in backdrop-blur-sm">
