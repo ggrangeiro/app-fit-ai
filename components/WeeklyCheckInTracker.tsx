@@ -92,6 +92,43 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     const [streakData, setStreakData] = useState<StreakData | null>(null);
     const [loading, setLoading] = useState(true);
     const [useMockData, setUseMockData] = useState(false);
+    const [calculatedGoal, setCalculatedGoal] = useState<number>(5);
+
+    // Fetch workout data to calculate weekly goal (non-rest days count)
+    useEffect(() => {
+        let isMounted = true;
+        const fetchWorkoutGoal = async () => {
+            try {
+                const workouts = await apiService.getTrainingsV2(userId);
+                if (!isMounted) return;
+
+                if (workouts && workouts.length > 0) {
+                    // Sort by ID to get the most recent
+                    const sorted = [...workouts].sort((a: any, b: any) => b.id - a.id);
+                    const latest = sorted[0];
+
+                    if (latest?.daysData) {
+                        const parsed = typeof latest.daysData === 'string'
+                            ? JSON.parse(latest.daysData)
+                            : latest.daysData;
+
+                        if (parsed?.days && Array.isArray(parsed.days)) {
+                            const trainingDays = parsed.days.filter((d: any) => !d.isRestDay).length;
+                            if (trainingDays > 0) {
+                                setCalculatedGoal(trainingDays);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // Silently fail, keep default goal of 5
+                console.warn('Failed to fetch workout for goal calculation:', e);
+            }
+        };
+
+        fetchWorkoutGoal();
+        return () => { isMounted = false; };
+    }, [userId]);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -178,10 +215,10 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     };
 
     const progressPercentage = weekData
-        ? Math.min((weekData.totalCheckIns / (weekData?.weeklyGoal || 5)) * 100, 100)
+        ? Math.min((weekData.totalCheckIns / calculatedGoal) * 100, 100)
         : 0;
 
-    const goalReached = weekData ? weekData.totalCheckIns >= (weekData?.weeklyGoal || 5) : false;
+    const goalReached = weekData ? weekData.totalCheckIns >= calculatedGoal : false;
 
     return (
         <div className="w-full max-w-5xl mb-8">
@@ -254,7 +291,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
                                     <span className="text-xs text-slate-400 font-medium">Meta semanal</span>
                                 </div>
                                 <span className={`text-xs font-bold ${goalReached ? 'text-emerald-400' : 'text-slate-300'}`}>
-                                    {weekData?.totalCheckIns || 0}/{(weekData?.weeklyGoal || 5)}
+                                    {weekData?.totalCheckIns || 0}/{calculatedGoal}
                                     {goalReached && <span className="ml-1">✨</span>}
                                 </span>
                             </div>
