@@ -57,6 +57,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets' | 'team'>('users');
     const [users, setUsers] = useState<User[]>([]);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [userListTab, setUserListTab] = useState<'students' | 'personals' | 'professors'>('students'); // Novo estado para abas mobile
     const [isLoadingUsers, setIsLoadingUsers] = useState(false); // Novo estado de loading
 
     const [userHistoryList, setUserHistoryList] = useState<ExerciseRecord[]>([]);
@@ -2250,6 +2251,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     </button>
                                 </div>
                             </div>
+
+                            {/* TABS FOR ADMIN (MOBILE) */}
+                            {!isPersonal && (
+                                <div className="flex p-1 bg-slate-800/60 border border-slate-700 rounded-xl mb-4">
+                                    <button
+                                        onClick={() => setUserListTab('students')}
+                                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userListTab === 'students' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+                                    >
+                                        Alunos
+                                    </button>
+                                    <button
+                                        onClick={() => setUserListTab('personals')}
+                                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userListTab === 'personals' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+                                    >
+                                        Personais
+                                    </button>
+                                    <button
+                                        onClick={() => setUserListTab('professors')}
+                                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userListTab === 'professors' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+                                    >
+                                        Professores
+                                    </button>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar">
                                 {isLoadingUsers ? (
                                     <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-80">
@@ -2263,7 +2289,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                             {isPersonal ? 'Você ainda não tem alunos cadastrados.' : 'Nenhum usuário encontrado no backend.'}
                                         </div>}
 
-                                        {users.filter(u => isPersonal ? u.role === 'user' : u.role !== 'admin').map(user => {
+                                        {users.filter(u => {
+                                            if (isPersonal) return u.role === 'user';
+
+                                            // Admin Filters
+                                            if (userListTab === 'students' && u.role !== 'user') return false;
+                                            if (userListTab === 'personals' && !['personal', 'admin'].includes(u.role)) return false;
+                                            if (userListTab === 'professors' && u.role !== 'professor') return false;
+
+                                            return true;
+                                        }).map(user => {
                                             return (
                                                 <div key={user.id} onClick={() => setSelectedUser(user)} className="bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800 hover:border-blue-500/50 rounded-2xl p-5 cursor-pointer transition-all group">
                                                     <div className="flex justify-between items-start mb-3">
