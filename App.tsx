@@ -2076,16 +2076,18 @@ const App: React.FC = () => {
                 const rawParsed: any = JSON.parse(activeDaysData);
                 // Handle both formats: { days: [...] } or direct array
                 const parsedDays = Array.isArray(rawParsed) ? rawParsed : (rawParsed.days || []);
-                console.log('[DEBUG] Parsed workout days:', JSON.stringify(parsedDays[0], null, 2));
                 return (
                   <div className="mb-8 grid gap-4 grid-cols-1 md:grid-cols-2 animate-in fade-in slide-in-from-top-4">
-                    {parsedDays.map((day: any, idx: number) => (
-                      <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${(day.isRestDay || day.is_rest_day) ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
+                    {parsedDays.map((day: any, idx: number) => {
+                      // Support both formats: { name, status } and { dayLabel, trainingType, isRestDay }
+                      const isRest = day.status === 'rest' || day.isRestDay || day.is_rest_day;
+                      const title = day.name || day.trainingType || day.training_type || day.dayLabel || day.day_label || `Dia ${idx + 1}`;
+                      return (
+                      <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${isRest ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
                         <div>
-                          <h4 className="font-bold text-slate-800">{day.trainingType || day.training_type || day.dayLabel || day.day_label || `Dia ${idx + 1}`}</h4>
-                          <p className="text-sm text-slate-500">{day.dayLabel || day.day_label || ''}</p>
+                          <h4 className="font-bold text-slate-800">{title}</h4>
                         </div>
-                        {!(day.isRestDay || day.is_rest_day) && (
+                        {!isRest && (
                           <button
                             onClick={() => handleStartSession(day)}
                             className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-900/20 shadow-lg active:scale-95"
@@ -2093,9 +2095,9 @@ const App: React.FC = () => {
                             <PlayCircle size={18} /> Iniciar
                           </button>
                         )}
-                        {(day.isRestDay || day.is_rest_day) && <span className="text-xs font-bold px-2 py-1 bg-slate-300 text-slate-600 rounded">DESCANSO</span>}
+                        {isRest && <span className="text-xs font-bold px-2 py-1 bg-slate-300 text-slate-600 rounded">DESCANSO</span>}
                       </div>
-                    ))}
+                    );})}
                   </div>
                 );
               } catch (e) {
