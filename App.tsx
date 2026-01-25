@@ -2583,7 +2583,8 @@ const App: React.FC = () => {
             )}
           </div>
           <div className="flex items-center gap-4">
-            {currentUser && (
+            {/* Notification Center - Only for Personal and Professor */}
+            {currentUser && (currentUser.role === 'personal' || currentUser.role === 'professor') && (
               <div className="flex items-center justify-center mr-2">
                 <NotificationCenter currentUser={currentUser} />
               </div>
