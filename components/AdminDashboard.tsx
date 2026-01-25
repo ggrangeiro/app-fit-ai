@@ -7,7 +7,7 @@ import { compressVideo } from '../utils/videoUtils';
 import { shareAsPdf } from '../utils/pdfUtils';
 import { ResultView } from './ResultView';
 import LoadingScreen from './LoadingScreen';
-import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock, Trash2, UsersRound, BarChart3, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock, Trash2, UsersRound, BarChart3, ThumbsUp, ThumbsDown, MessageCircle } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 import { AnamnesisModal } from './AnamnesisModal';
@@ -16,6 +16,7 @@ import { ClipboardList, Camera } from 'lucide-react';
 import { getFullImageUrl } from '../utils/imageUtils';
 import { InsightsTab } from './InsightsTab';
 import { TrendingUp } from 'lucide-react';
+import { NotificationCenter } from './NotificationCenter';
 
 // LISTA FIXA DE EXERCÍCIOS PARA O PERSONAL (SUBSTITUI CHAMADA DE API)
 const FIXED_EXERCISES_LIST = [
@@ -70,6 +71,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshData, onUpdateUser }) => {
+    console.log("Rendering AdminDashboard... User:", currentUser.id);
     const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets' | 'team' | 'insights'>('users');
     const [users, setUsers] = useState<User[]>([]);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -1738,6 +1740,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                 )
             }
 
+
+
             <div className="flex flex-col md:flex-row gap-6 h-full min-h-[600px]">
                 {/* Sidebar */}
                 <div className="md:w-64 flex flex-col gap-2">
@@ -2317,15 +2321,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     </div>
                                 ) : (
                                     <div>
-                                        {users.length === 0 && <div className="text-slate-500 col-span-full text-center py-10">
+                                        {users.length === 0 && userListTab !== 'professors' && <div className="text-slate-500 col-span-full text-center py-10">
                                             {isPersonal ? 'Você ainda não tem alunos cadastrados.' : 'Nenhum usuário encontrado no backend.'}
                                         </div>}
 
-                                        {users.filter(u => {
+                                        {(isPersonal && userListTab === 'professors' ? professors : users).filter(u => {
                                             // LOGIC FOR PERSONAL (MANAGER)
                                             if (isPersonal) {
                                                 if (userListTab === 'students') return u.role === 'user';
-                                                if (userListTab === 'professors') return u.role === 'professor';
+                                                if (userListTab === 'professors') return true; // Já estamos usando a lista de professores
                                                 // Fallback default
                                                 return u.role === 'user';
                                             }
@@ -2429,15 +2433,46 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                             )}
                                         </div>
 
-                                        {selectedUser.phone && (
-                                            <a
-                                                href={`tel:${selectedUser.phone.replace(/\D/g, '')}`}
-                                                className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors mb-6 group"
-                                            >
-                                                <Phone className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
-                                                <span>{selectedUser.phone}</span>
-                                            </a>
-                                        )}
+                                        {/* FEEDBACK STATS & CONTACT */}
+                                        <div className="flex items-center gap-4 mb-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20" title="Avaliações Positivas">
+                                                    <ThumbsUp className="w-3.5 h-3.5 text-emerald-400" />
+                                                    <span className="text-sm font-bold text-white">
+                                                        {checkIns.filter(c => c.feedback === 'like').length}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-1 bg-rose-500/10 px-2 py-1 rounded-lg border border-rose-500/20" title="Avaliações Negativas">
+                                                    <ThumbsDown className="w-3.5 h-3.5 text-rose-400" />
+                                                    <span className="text-sm font-bold text-white">
+                                                        {checkIns.filter(c => c.feedback === 'dislike').length}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {selectedUser.phone && (
+                                                <div className="flex items-center gap-2">
+                                                    <a
+                                                        href={`tel:${selectedUser.phone.replace(/\D/g, '')}`}
+                                                        className="p-2 bg-slate-700/50 hover:bg-slate-700 text-emerald-400 rounded-lg transition-colors border border-slate-600/50"
+                                                        title="Ligar"
+                                                    >
+                                                        <Phone className="w-4 h-4" />
+                                                    </a>
+                                                    <a
+                                                        href={`https://wa.me/${selectedUser.phone.replace(/\D/g, '')}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors shadow-lg shadow-emerald-900/20"
+                                                    >
+                                                        <MessageCircle className="w-3.5 h-3.5" />
+                                                        WhatsApp
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
+
+
 
                                         {/* PERMISSIONS CARD */}
                                         <div className="mb-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">

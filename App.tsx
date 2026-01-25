@@ -22,6 +22,7 @@ import { ResultView } from './components/ResultView';
 import Login from './components/Login';
 import ResetPassword from './components/ResetPassword';
 import AdminDashboard from './components/AdminDashboard';
+import { NotificationCenter } from './components/NotificationCenter';
 import { Video, UploadCloud, Loader2, ArrowRight, Lightbulb, Sparkles, Smartphone, Zap, LogOut, User as UserIcon, ScanLine, Scale, Image as ImageIcon, AlertTriangle, ShieldCheck, RefreshCcw, X, History, Lock, HelpCircle, Dumbbell, Calendar, Trash2, Printer, ArrowLeft, Utensils, Flame, Shield, Activity, Timer, ChevronDown, CheckCircle2, Coins, Check, Share2, CheckCircle, ThumbsUp, RefreshCw, MessageCircle, Wand2 } from 'lucide-react';
 import { EvolutionModal } from './components/EvolutionModal';
 import { OnboardingGuide } from './components/OnboardingGuide';
@@ -2582,6 +2583,11 @@ const App: React.FC = () => {
             )}
           </div>
           <div className="flex items-center gap-4">
+            {currentUser && (
+              <div className="flex items-center justify-center mr-2">
+                <NotificationCenter currentUser={currentUser} />
+              </div>
+            )}
             {currentUser && (
               <button
                 onClick={handleRefreshUser}

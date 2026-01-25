@@ -798,6 +798,31 @@ export const apiService = {
         });
     },
 
+    // --- NOTIFICAÇÕES ---
+    getNotifications: async (requesterId: string | number) => {
+        return await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/notifications`,
+            params: getAuthQueryParams()
+        });
+    },
+
+    deleteNotification: async (id: number) => {
+        return await nativeFetch({
+            method: 'DELETE',
+            url: `${API_BASE_URL}/api/notifications/${id}`,
+            params: getAuthQueryParams()
+        });
+    },
+
+    clearAllNotifications: async (requesterId: string | number) => {
+        return await nativeFetch({
+            method: 'DELETE',
+            url: `${API_BASE_URL}/api/notifications/all`,
+            params: getAuthQueryParams()
+        });
+    },
+
     getProfessorsSummary: async (
         managerId: string | number,
         period: 'day' | 'week' | 'month' = 'week'

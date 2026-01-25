@@ -301,6 +301,11 @@ export interface ProfessorSummary {
   totals: ProfessorStats;
 }
 
+export interface ProfessorWithStats extends User {
+  stats?: ProfessorStats;
+  lastActivity?: string;
+}
+
 // --- V2 STRUCTURED DATA TYPES ---
 
 export interface SecurityAdjustment {
@@ -410,11 +415,32 @@ export interface EvolutionPhoto {
 // ========== INSIGHTS TYPES =====================
 // ===============================================
 
+export interface FeedbackStats {
+  likes: number;
+  dislikes: number;
+}
+
+export interface FeedbackSummary {
+  week: FeedbackStats;
+  month: FeedbackStats;
+  year: FeedbackStats;
+}
+
+export interface FeedbackDetail {
+  studentName: string;
+  workoutName: string;
+  professorName: string;
+  feedbackType: string;
+  timestamp: number;
+}
+
 export interface InsightResponse {
   dayDistribution: Record<string, number>;
   hourDistribution: Record<string, number>;
   topWorkouts: TopWorkoutDTO[];
   topStudents: TopStudentDTO[];
+  feedbackSummary?: FeedbackSummary;
+  feedbackDetails?: FeedbackDetail[];
 }
 
 export interface TopWorkoutDTO {
@@ -427,4 +453,15 @@ export interface TopStudentDTO {
   name: string;
   avatar?: string;
   checkinCount: number;
+}
+
+export interface Notification {
+  id: number;
+  recipientId: number;
+  studentId: number;
+  studentName: string;
+  type: string; // 'CHECKIN' | 'PHOTO' | 'ALERT'
+  message: string;
+  timestamp: number;
+  isRead: boolean;
 }
