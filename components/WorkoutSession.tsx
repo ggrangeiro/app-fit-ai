@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { WorkoutDayV2, ExerciseV2, WorkoutPlanV2 } from '../types';
-import { ArrowLeft, Clock, Info, CheckCircle2, Save, Play, Dumbbell } from 'lucide-react';
+import { ArrowLeft, Clock, Info, CheckCircle2, Save, Play, Dumbbell, ThumbsUp, ThumbsDown } from 'lucide-react';
 
 interface WorkoutSessionProps {
     dayData: WorkoutDayV2;
-    onFinish: (updatedDayData: WorkoutDayV2) => void;
+    onFinish: (updatedDayData: WorkoutDayV2, feedback?: 'like' | 'dislike') => void;
     onCancel: () => void;
     dayLabel: string;
     previousLoads?: Record<string, { actualLoad: string; executedAt: number }>;
@@ -15,6 +15,7 @@ export const WorkoutSession: React.FC<WorkoutSessionProps> = ({ dayData, onFinis
     const [completedExercises, setCompletedExercises] = useState<Set<number>>(new Set());
     const [activeExerciseIndex, setActiveExerciseIndex] = useState<number>(0);
     const [loading, setLoading] = useState(false);
+    const [showFeedback, setShowFeedback] = useState(false);
 
     useEffect(() => {
         // Initialize exercises from props, ensuring deep copy
@@ -56,14 +57,17 @@ export const WorkoutSession: React.FC<WorkoutSessionProps> = ({ dayData, onFinis
     };
 
     const handleFinish = () => {
+        setShowFeedback(true);
+    };
+
+    const confirmFinish = (feedback: 'like' | 'dislike') => {
         setLoading(true);
-        // Simulate a small delay for UX
         setTimeout(() => {
             const updatedDay: WorkoutDayV2 = {
                 ...dayData,
                 exercises: exercises
             };
-            onFinish(updatedDay);
+            onFinish(updatedDay, feedback);
             setLoading(false);
         }, 500);
     };
@@ -257,6 +261,44 @@ export const WorkoutSession: React.FC<WorkoutSessionProps> = ({ dayData, onFinis
                 </div>
 
             </div>
+            {/* Feedback Modal */}
+            {showFeedback && (
+                <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl">
+                        <h3 className="text-2xl font-bold text-white mb-2">Como foi o treino?</h3>
+                        <p className="text-slate-400 mb-8">Seu feedback ajuda a melhorar as próximas sugestões.</p>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <button
+                                onClick={() => confirmFinish('like')}
+                                className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl bg-slate-800 border border-slate-700 hover:bg-emerald-500/10 hover:border-emerald-500 hover:text-emerald-500 transition-all group"
+                            >
+                                <div className="p-4 rounded-full bg-slate-950 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors">
+                                    <ThumbsUp size={32} />
+                                </div>
+                                <span className="font-bold">Curti</span>
+                            </button>
+
+                            <button
+                                onClick={() => confirmFinish('dislike')}
+                                className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl bg-slate-800 border border-slate-700 hover:bg-red-500/10 hover:border-red-500 hover:text-red-500 transition-all group"
+                            >
+                                <div className="p-4 rounded-full bg-slate-950 group-hover:bg-red-500 group-hover:text-slate-950 transition-colors">
+                                    <ThumbsDown size={32} />
+                                </div>
+                                <span className="font-bold">Não Curti</span>
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={() => setShowFeedback(false)}
+                            className="mt-6 text-slate-500 text-sm hover:text-white transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

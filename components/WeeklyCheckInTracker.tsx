@@ -158,9 +158,28 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
             return;
         }
 
-        if (day.hasCheckIn && day.checkIn?.comment) {
-            // Show comment as toast
-            showToast(`💬 "${day.checkIn.comment}"`, 'info');
+        if (day.hasCheckIn) {
+            let msg = '';
+            // Workout Name
+            if (day.checkIn?.workoutName) {
+                msg += `🏋️ ${day.checkIn.workoutName}`;
+            } else {
+                msg += `🏋️ Treino Concluído`;
+            }
+
+            // Feedback
+            if (day.checkIn?.feedback === 'like') {
+                msg += ` • 👍 Gostou`;
+            } else if (day.checkIn?.feedback === 'dislike') {
+                msg += ` • 👎 Não gostou`;
+            }
+
+            // Comment
+            if (day.checkIn?.comment) {
+                msg += `\n💬 "${day.checkIn.comment}"`;
+            }
+
+            showToast(msg, 'info');
         } else if (!day.hasCheckIn && (isToday || isPast)) {
             // Open check-in modal with pre-selected date
             onOpenCheckIn(day.date);

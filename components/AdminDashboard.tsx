@@ -7,13 +7,15 @@ import { compressVideo } from '../utils/videoUtils';
 import { shareAsPdf } from '../utils/pdfUtils';
 import { ResultView } from './ResultView';
 import LoadingScreen from './LoadingScreen';
-import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock, Trash2, UsersRound, BarChart3 } from 'lucide-react';
+import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock, Trash2, UsersRound, BarChart3, ThumbsUp, ThumbsDown } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 import { AnamnesisModal } from './AnamnesisModal';
 import { AICustomizationModal } from './AICustomizationModal';
 import { ClipboardList, Camera } from 'lucide-react';
 import { getFullImageUrl } from '../utils/imageUtils';
+import { InsightsTab } from './InsightsTab';
+import { TrendingUp } from 'lucide-react';
 
 // LISTA FIXA DE EXERCÍCIOS PARA O PERSONAL (SUBSTITUI CHAMADA DE API)
 const FIXED_EXERCISES_LIST = [
@@ -47,6 +49,20 @@ const FIXED_EXERCISES_LIST = [
     { exercicio: "Tríceps Banco (Dips)", id: 569, nomeExibicao: "Tríceps banco (dips)" }
 ];
 
+const formatDateSafe = (dateVal: string | number | undefined | null) => {
+    if (!dateVal) return '';
+    try {
+        const d = new Date(dateVal);
+        if (isNaN(d.getTime())) return '';
+        // Fix timezone issue by treating YYYY-MM-DD as UTC if string length is 10
+        if (typeof dateVal === 'string' && dateVal.length === 10 && dateVal.includes('-')) {
+            const [y, m, d] = dateVal.split('-').map(Number);
+            return new Date(y, m - 1, d).toLocaleDateString('pt-BR');
+        }
+        return d.toLocaleDateString('pt-BR');
+    } catch { return ''; }
+};
+
 interface AdminDashboardProps {
     currentUser: User;
     onRefreshData?: () => void;
@@ -54,7 +70,7 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshData, onUpdateUser }) => {
-    const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets' | 'team'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets' | 'team' | 'insights'>('users');
     const [users, setUsers] = useState<User[]>([]);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [userListTab, setUserListTab] = useState<'students' | 'personals' | 'professors'>('students'); // Novo estado para abas mobile
@@ -408,9 +424,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
         }
     };
 
-    // Fetch team data when switching to team tab
+    // Fetch team data when switching to team tab or insights tab
     useEffect(() => {
-        if (activeTab === 'team' && currentUser.role === 'personal') {
+        if ((activeTab === 'team' || activeTab === 'insights') && currentUser.role === 'personal') {
             fetchTeamData();
         }
     }, [activeTab, summaryPeriod]);
@@ -1753,6 +1769,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                             </button>
                         )}
 
+                        {isManager && (
+                            <button
+                                onClick={() => setActiveTab('insights')}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all mt-2 ${activeTab === 'insights' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20' : 'text-slate-300 hover:bg-slate-800'}`}
+                            >
+                                <TrendingUp className="w-5 h-5" /> Insights
+                            </button>
+                        )}
+
                         {isAdmin && (
                             <>
                                 <button
@@ -1983,6 +2008,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                 )}
                             </div>
                         </div>
+                    )}
+
+                    {/* ===== INSIGHTS TAB (Personal Only) ===== */}
+                    {activeTab === 'insights' && isManager && (
+                        <InsightsTab professors={professors} user={currentUser} />
                     )}
 
                     {/* Create Professor Modal */}
@@ -2253,7 +2283,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                             </div>
 
                             {/* TABS FOR ADMIN (MOBILE) */}
-                            {!isPersonal && (
+                            {(isAdmin || isManager) && (
                                 <div className="flex p-1 bg-slate-800/60 border border-slate-700 rounded-xl mb-4">
                                     <button
                                         onClick={() => setUserListTab('students')}
@@ -2261,12 +2291,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                     >
                                         Alunos
                                     </button>
-                                    <button
-                                        onClick={() => setUserListTab('personals')}
-                                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userListTab === 'personals' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
-                                    >
-                                        Personais
-                                    </button>
+                                    {isAdmin && (
+                                        <button
+                                            onClick={() => setUserListTab('personals')}
+                                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userListTab === 'personals' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
+                                        >
+                                            Personais
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => setUserListTab('professors')}
                                         className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${userListTab === 'professors' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'}`}
@@ -2290,12 +2322,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                         </div>}
 
                                         {users.filter(u => {
-                                            if (isPersonal) return u.role === 'user';
+                                            // LOGIC FOR PERSONAL (MANAGER)
+                                            if (isPersonal) {
+                                                if (userListTab === 'students') return u.role === 'user';
+                                                if (userListTab === 'professors') return u.role === 'professor';
+                                                // Fallback default
+                                                return u.role === 'user';
+                                            }
 
-                                            // Admin Filters
-                                            if (userListTab === 'students' && u.role !== 'user') return false;
-                                            if (userListTab === 'personals' && !['personal', 'admin'].includes(u.role)) return false;
-                                            if (userListTab === 'professors' && u.role !== 'professor') return false;
+                                            // LOGIC FOR ADMIN
+                                            if (userListTab === 'students') return u.role === 'user';
+                                            if (userListTab === 'personals') return ['personal', 'admin'].includes(u.role);
+                                            if (userListTab === 'professors') return u.role === 'professor';
 
                                             return true;
                                         }).map(user => {
@@ -2560,11 +2598,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                                                     <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
                                                                                 </div>
                                                                                 <div>
-                                                                                    <p className="text-[11px] font-bold text-white uppercase tracking-tight">Realizado em:</p>
-                                                                                    <p className="text-xs text-slate-400">{new Date(checkIn.date).toLocaleDateString('pt-BR')}</p>
-                                                                                    <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
-                                                                                        {new Date(checkIn.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                                                    </span>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <p className="text-[11px] font-bold text-white uppercase tracking-tight">
+                                                                                            {checkIn.workoutName || 'Treino Concluído'}
+                                                                                        </p>
+                                                                                        {checkIn.feedback === 'like' && <ThumbsUp className="w-3 h-3 text-blue-400" />}
+                                                                                        {checkIn.feedback === 'dislike' && <ThumbsDown className="w-3 h-3 text-red-400" />}
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                                                        <p className="text-xs text-slate-400">{formatDateSafe(checkIn.data || checkIn.date)}</p>
+                                                                                        <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
+                                                                                            {new Date(checkIn.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                                                        </span>
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
                                                                         </div>

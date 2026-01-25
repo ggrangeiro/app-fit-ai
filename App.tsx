@@ -465,7 +465,7 @@ const App: React.FC = () => {
     setActiveWorkoutDay(day);
   };
 
-  const handleFinishSession = async (updatedDay: WorkoutDayV2) => {
+  const handleFinishSession = async (updatedDay: WorkoutDayV2, feedback?: 'like' | 'dislike') => {
     if (!currentUser || savedWorkouts.length === 0) return;
 
     try {
@@ -521,7 +521,8 @@ const App: React.FC = () => {
         currentUser.id,
         currentWorkout.id,
         todayDate,
-        `Treino de ${dayName} finalizado com sucesso.`
+        `Treino de ${dayName} finalizado com sucesso.`,
+        feedback
       );
 
       setCheckInDate(todayDate);

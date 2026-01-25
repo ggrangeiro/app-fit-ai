@@ -1,5 +1,5 @@
 import { CapacitorHttp, HttpResponse } from '@capacitor/core';
-import { DietGoalEntity, User, UserRole, AnalysisResult, ProfessorActivity, ProfessorSummary, PhotoCategory, EvolutionPhoto } from "../types";
+import { DietGoalEntity, User, UserRole, AnalysisResult, ProfessorActivity, ProfessorSummary, PhotoCategory, EvolutionPhoto, InsightResponse } from "../types";
 import { secureStorage } from "../utils/secureStorage";
 
 
@@ -611,7 +611,7 @@ export const apiService = {
     },
 
     // --- CHECK-INS ---
-    createCheckIn: async (userId: string | number, trainingId: number, data: string, comment?: string) => {
+    createCheckIn: async (userId: string | number, trainingId: number, data: string, comment?: string, feedback?: 'like' | 'dislike') => {
         return await nativeFetch({
             method: 'POST',
             url: `${API_BASE_URL}/api/checkins/`,
@@ -620,7 +620,8 @@ export const apiService = {
                 userId: String(userId),
                 trainingId,
                 data,
-                comment
+                comment,
+                feedback
             }
         });
     },
@@ -923,5 +924,14 @@ export const apiService = {
             console.warn("Erro ao buscar últimas cargas:", e);
             return {};
         }
+    },
+
+    // --- INSIGHTS ---
+    getInsights: async (professorId: number | string, period: 'WEEK' | 'MONTH' | 'YEAR' | 'ALL' = 'WEEK'): Promise<InsightResponse | null> => {
+        return await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/insights/professor/${professorId}`,
+            params: { ...getAuthQueryParams(), period }
+        });
     }
 };

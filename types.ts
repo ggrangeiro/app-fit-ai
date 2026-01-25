@@ -202,10 +202,14 @@ export interface WorkoutCheckIn {
   userId: string;     // ID do aluno
   workoutId: number;  // ID do treino/ficha realizado
   date: string;       // Data da realização (formato YYYY-MM-DD)
+  data?: string;      // Compatibility with backend response (pt-br)
   status: 'completed';// Fixo em 'completed'
   timestamp: number;  // Unix timestamp (ms) do momento do registro
   comment?: string;   // Comentário opcional (string)
+  feedback?: string;
+  workoutName?: string;
 }
+
 
 // --- WEEKLY CHECK-IN TRACKER TYPES ---
 
@@ -218,6 +222,8 @@ export interface WeeklyCheckInDay {
     id: string;
     timestamp: number;
     comment?: string;
+    feedback?: string;
+    workoutName?: string;
   } | null;
 }
 
@@ -398,4 +404,27 @@ export interface EvolutionPhoto {
   photoDate: string;  // YYYY-MM-DD
   createdAt: string;
   uploadedBy: number;
+}
+
+// ===============================================
+// ========== INSIGHTS TYPES =====================
+// ===============================================
+
+export interface InsightResponse {
+  dayDistribution: Record<string, number>;
+  hourDistribution: Record<string, number>;
+  topWorkouts: TopWorkoutDTO[];
+  topStudents: TopStudentDTO[];
+}
+
+export interface TopWorkoutDTO {
+  name: string;
+  count: number;
+}
+
+export interface TopStudentDTO {
+  userId: string;
+  name: string;
+  avatar?: string;
+  checkinCount: number;
 }
