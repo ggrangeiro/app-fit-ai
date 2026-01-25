@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, User as UserIcon, Scale, Heart, Dumbbell, Utensils, Sparkles, Target, Save, Loader2, AlertCircle, ChevronRight, ChevronLeft } from 'lucide-react';
+import { X, User as UserIcon, Scale, Heart, Dumbbell, Utensils, Sparkles, Target, Save, Loader2, AlertCircle, ChevronRight, ChevronLeft, Upload, FileText, CheckCircle2 } from 'lucide-react';
 import { User, Anamnesis } from '../types';
 import { apiService } from '../services/apiService';
+import { extractAnamnesisFromDocument, extractAnamnesisFromGoogleDocs } from '../services/geminiService';
 
 interface AnamnesisModalProps {
     isOpen: boolean;
@@ -92,6 +93,105 @@ export const AnamnesisModal: React.FC<AnamnesisModalProps> = ({ isOpen, onClose,
     });
 
     const [saving, setSaving] = useState(false);
+
+    // --- AI EXTRACTION STATE ---
+    const [documentFile, setDocumentFile] = useState<File | null>(null);
+    const [isExtracting, setIsExtracting] = useState(false);
+    const [extractionError, setExtractionError] = useState<string | null>(null);
+    const [showGoogleDocsInput, setShowGoogleDocsInput] = useState(false);
+    const [googleDocsUrl, setGoogleDocsUrl] = useState('');
+    const [showExtractionSuccess, setShowExtractionSuccess] = useState(false);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleDocumentUpload = async (file: File) => {
+        setDocumentFile(file);
+        setIsExtracting(true);
+        setExtractionError(null);
+        setShowExtractionSuccess(false);
+
+        try {
+            const { extractedData } = await extractAnamnesisFromDocument(file, user.id, user.role || 'user');
+            applyExtractedData(extractedData);
+        } catch (error: any) {
+            console.error("Erro ao extrair dados do documento:", error);
+            setExtractionError(error.message || "Erro ao processar documento.");
+        } finally {
+            setIsExtracting(false);
+        }
+    };
+
+    const handleGoogleDocsSubmit = async () => {
+        if (!googleDocsUrl.trim()) {
+            setExtractionError("Por favor, insira a URL do Google Docs.");
+            return;
+        }
+
+        setIsExtracting(true);
+        setExtractionError(null);
+        setShowExtractionSuccess(false);
+
+        try {
+            const { extractedData } = await extractAnamnesisFromGoogleDocs(googleDocsUrl, user.id, user.role || 'user');
+            applyExtractedData(extractedData);
+            setShowGoogleDocsInput(false);
+            setGoogleDocsUrl('');
+        } catch (error: any) {
+            console.error("Erro ao extrair dados do Google Docs:", error);
+            setExtractionError(error.message || "Erro ao processar Google Docs.");
+        } finally {
+            setIsExtracting(false);
+        }
+    };
+
+    const applyExtractedData = (extracted: Partial<Anamnesis>) => {
+        setFormData(prev => {
+            const merged = { ...prev };
+
+            if (extracted.personal) merged.personal = { ...prev.personal, ...extracted.personal, location: { ...prev.personal.location, ...extracted.personal.location } };
+            if (extracted.physical) merged.physical = { ...prev.physical, ...extracted.physical };
+            if (extracted.health) merged.health = { ...prev.health, ...extracted.health, conditions: extracted.health.conditions?.length ? extracted.health.conditions : prev.health.conditions };
+            if (extracted.fitness) {
+                merged.fitness = {
+                    ...prev.fitness,
+                    currentlyExercising: extracted.fitness.currentlyExercising ?? prev.fitness.currentlyExercising,
+                    trainingLocation: (extracted.fitness.trainingLocation as any) || prev.fitness.trainingLocation,
+                    weeklyFrequency: extracted.fitness.weeklyFrequency || prev.fitness.weeklyFrequency,
+                    trainingTimeAvailable: extracted.fitness.trainingTimeAvailable || prev.fitness.trainingTimeAvailable,
+                };
+            }
+            if (extracted.nutrition) merged.nutrition = { ...prev.nutrition, ...extracted.nutrition };
+            if (extracted.preferences) merged.preferences = { ...prev.preferences, ...extracted.preferences };
+            if (extracted.goals) merged.goals = { ...prev.goals, ...extracted.goals };
+
+            return merged;
+        });
+
+        setShowExtractionSuccess(true);
+        setTimeout(() => setShowExtractionSuccess(false), 5000);
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const allowedTypes = [
+                'application/pdf',
+                'image/png', 'image/jpeg', 'image/jpg', 'image/webp',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-excel',
+                'text/csv'
+            ];
+            // Basic validation
+            if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|png|jpe?g|webp|xlsx|xls|csv)$/i)) {
+                setExtractionError("Tipo de arquivo não suportado.");
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                setExtractionError("Arquivo muito grande (max 10MB).");
+                return;
+            }
+            handleDocumentUpload(file);
+        }
+    };
 
     // Update formData if user prop changes (important for Personal switching students)
     useEffect(() => {
@@ -255,6 +355,92 @@ export const AnamnesisModal: React.FC<AnamnesisModalProps> = ({ isOpen, onClose,
                         <div className="flex-grow overflow-y-auto p-6 custom-scrollbar">
                             {activeSection === 'personal' && (
                                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+
+                                    {/* Document Upload Section */}
+                                    <div className="bg-gradient-to-r from-blue-600/10 to-indigo-600/10 border border-blue-500/20 rounded-2xl p-4">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20 shrink-0">
+                                                <Sparkles size={20} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <h3 className="text-sm font-bold text-white mb-1">Preenchimento Inteligente (IA)</h3>
+                                                <p className="text-xs text-slate-400 mb-3">
+                                                    Envie um PDF, Imagem ou link do Google Docs. A IA extrairá os dados e preencherá a ficha para você.
+                                                </p>
+
+                                                <input
+                                                    ref={fileInputRef}
+                                                    type="file"
+                                                    accept=".pdf,image/png,image/jpeg,image/jpg,image/webp,.xlsx,.xls,.csv"
+                                                    onChange={handleFileChange}
+                                                    className="hidden"
+                                                />
+
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => fileInputRef.current?.click()}
+                                                        disabled={isExtracting}
+                                                        className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white text-xs font-bold rounded-xl transition-all"
+                                                    >
+                                                        {isExtracting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                                                        {isExtracting ? 'Extraindo...' : 'Enviar Arquivo'}
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowGoogleDocsInput(!showGoogleDocsInput)}
+                                                        disabled={isExtracting}
+                                                        className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all"
+                                                    >
+                                                        <FileText size={14} />
+                                                        Google Docs
+                                                    </button>
+
+                                                    {documentFile && !isExtracting && (
+                                                        <div className="flex items-center gap-2 text-[10px] text-slate-400 bg-slate-800 px-2 py-1 rounded-lg">
+                                                            <FileText size={12} />
+                                                            {documentFile.name.length > 15 ? documentFile.name.slice(0, 15) + '...' : documentFile.name}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Google Docs URL Input */}
+                                                {showGoogleDocsInput && (
+                                                    <div className="mt-3 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+                                                        <input
+                                                            type="url"
+                                                            value={googleDocsUrl}
+                                                            onChange={(e) => setGoogleDocsUrl(e.target.value)}
+                                                            placeholder="Cole a URL do Google Docs..."
+                                                            className="flex-1 bg-slate-900/50 border border-slate-700 text-white text-xs rounded-lg px-3 py-2 focus:border-blue-500 outline-none"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleGoogleDocsSubmit}
+                                                            disabled={isExtracting || !googleDocsUrl.trim()}
+                                                            className="px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all"
+                                                        >
+                                                            Extrair
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {/* Messages */}
+                                                {extractionError && (
+                                                    <p className="mt-2 text-xs text-red-400 flex items-center gap-1 animate-in fade-in">
+                                                        <AlertCircle size={12} /> {extractionError}
+                                                    </p>
+                                                )}
+                                                {showExtractionSuccess && (
+                                                    <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1 animate-in fade-in">
+                                                        <CheckCircle2 size={12} /> Dados extraídos com sucesso!
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <SectionTitle title="Informações Pessoais" description="Dados básicos de identificação e contato." />
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <InputField

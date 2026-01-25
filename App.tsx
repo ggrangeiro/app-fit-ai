@@ -2584,7 +2584,7 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-4">
             {/* Notification Center - Only for Personal and Professor */}
-            {currentUser && (currentUser.role === 'personal' || currentUser.role === 'professor') && (
+            {currentUser && (currentUser.role === 'personal' || currentUser.role === 'professor' || currentUser.role === 'user') && (
               <div className="flex items-center justify-center mr-2">
                 <NotificationCenter currentUser={currentUser} />
               </div>

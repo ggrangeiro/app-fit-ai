@@ -965,3 +965,192 @@ export const regenerateDietPlanV2 = async (
     throw new Error("Falha ao regenerar dieta V2.");
   }
 };
+// ===============================================
+// ========== ANAMNESIS EXTRACTION (AI) ==========
+// ===============================================
+
+/**
+ * Extrai dados de anamnesis de um documento (PDF, imagem, etc.) usando IA.
+ * O documento pode conter informações despadronizadas sobre o usuário.
+ * A IA irá extrair e padronizar as informações no formato Anamnesis.
+ *
+ * @param documentFile - Arquivo do documento (PDF, imagem, etc.)
+ * @param userId - ID do usuário
+ * @param userRole - Role do usuário
+ * @returns Objeto com dados extraídos e texto bruto
+ */
+export const extractAnamnesisFromDocument = async (
+    documentFile: File,
+    userId: string | number,
+    userRole: string
+): Promise<{ extractedData: Partial<Anamnesis>; rawText: string }> => {
+    const genAI = await getGenAI(userId, userRole);
+
+    // Reuse existing fileToGenerativePart if visible, or re-implement inline if not exported
+    // fileToGenerativePart is defined in lines 55-65 of this file but NOT exported. 
+    // Should be accessible since we are in the same file.
+    const docPart = await fileToGenerativePart(documentFile);
+
+    const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash', // Use Flash for speed/cost on documents
+        generationConfig: { responseMimeType: "application/json" }
+    });
+
+    const prompt = `
+    ATUE COMO UM ESPECIALISTA EM EXTRAÇÃO DE DADOS DE DOCUMENTOS DE SAÚDE E FITNESS.
+
+    **IMPORTANTE**: Retorne APENAS um JSON válido, sem markdown.
+
+    Você recebeu um documento que pode conter informações sobre uma pessoa.
+    Seu trabalho é EXTRAIR todas as informações relevantes e PADRONIZAR no formato JSON especificado.
+
+    CAMPOS A EXTRAIR (quando disponíveis):
+    - Pessoais: Nome, Telefone, Data Nasc, Idade, Cidade, Estado, Sexo
+    - Físicos: Peso, Altura, Meta de Peso
+    - Saúde: Condições, Lesões, Dores, Exames
+    - Treino: Experiência, Local, Preferências, Objetivos
+
+    RETORNE um JSON exatamente neste formato:
+    {
+      "rawText": "TEXTO COMPLETO EXTRAÍDO DO DOCUMENTO (Preserve o máximo possível)",
+      "extractedData": {
+        "personal": {
+          "fullName": "string | null",
+          "whatsapp": "string | null",
+          "birthDate": "YYYY-MM-DD | null",
+          "age": number | null,
+          "location": { "city": "string | null", "state": "string | null", "country": "Brasil" },
+          "maritalStatus": "Solteiro(a)" | "Casado(a)" | "Separado(a)" | "Viúvo(a)" | null,
+          "profession": "string | null",
+          "gender": "Masculino" | "Feminino" | null
+        },
+        "physical": {
+          "weight": number | null,
+          "height": number | null,
+          "targetWeight": number | null,
+          "bodyDissatisfaction": "string | null"
+        },
+        "health": {
+          "conditions": ["array strings"] | [],
+          "injuries": "string | null",
+          "lastCheckup": "string | null",
+          "chestPain": boolean | null,
+          "dailyActivity": "Sentado(a)" | "Em pé" | "Moderada" | "Intensa" | null,
+          "sleepQuality": "Ruim" | "Boa" | "Ótima" | null
+        },
+        "nutrition": {
+          "nutritionalMonitoring": boolean | null,
+          "eatingHabits": "string | null"
+        },
+        "fitness": {
+          "currentlyExercising": boolean | null,
+          "trainingLocation": "Academia" | "Casa" | "Ar Livre" | null,
+          "weeklyFrequency": number | null,
+          "trainingTimeAvailable": "string | null"
+        },
+        "preferences": {
+          "dislikedExercises": "string | null",
+          "likedExercises": "string | null",
+          "cardioPreference": "string | null",
+          "bodyPartFocus": "string | null"
+        },
+        "goals": {
+          "threeMonthGoal": "string | null",
+          "mainObstacle": "string | null"
+        }
+      }
+    }
+  `;
+
+    try {
+        const result = await model.generateContent([
+            docPart, // Part object { inlineData: ... }
+            { text: prompt }
+        ]);
+
+        const text = result.response.text();
+        const json = JSON.parse(text);
+
+        return {
+            extractedData: json.extractedData || {},
+            rawText: json.rawText || ''
+        };
+    } catch (error: any) {
+        console.error("Erro ao extrair dados do documento:", error);
+        if (error.message?.includes('API key') || error.message?.includes('401')) {
+            resetGeminiInstance();
+        }
+        throw new Error("Não foi possível extrair os dados do documento.");
+    }
+};
+
+/**
+ * Extrai dados de anamnesis de um Google Docs público.
+ *
+ * @param googleDocsUrl - URL do Google Docs
+ * @param userId - ID do usuário
+ * @param userRole - Role do usuário
+ * @returns Objeto com dados extraídos e texto bruto
+ */
+export const extractAnamnesisFromGoogleDocs = async (
+    googleDocsUrl: string,
+    userId: string | number,
+    userRole: string
+): Promise<{ extractedData: Partial<Anamnesis>; rawText: string }> => {
+    const genAI = await getGenAI(userId, userRole);
+
+    const docIdMatch = googleDocsUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (!docIdMatch) {
+        throw new Error("URL do Google Docs inválida.");
+    }
+    const docId = docIdMatch[1];
+    const isSpreadsheet = googleDocsUrl.includes('/spreadsheets/');
+    const exportUrl = isSpreadsheet
+        ? `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv`
+        : `https://docs.google.com/document/d/${docId}/export?format=txt`;
+
+    let documentContent: string;
+    try {
+        const response = await fetch(exportUrl);
+        if (!response.ok) throw new Error("Erro ao acessar doc. Verifique se é público.");
+        documentContent = await response.text();
+    } catch (e) {
+        throw new Error("Não foi possível acessar o Google Docs.");
+    }
+
+    if (!documentContent || documentContent.length < 10) throw new Error("Documento vazio.");
+
+    const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: { responseMimeType: "application/json" }
+    });
+
+    const prompt = `
+    ATUE COMO UM ESPECIALISTA EM EXTRAÇÃO DE DADOS.
+    Texto do documento:
+    """
+    ${documentContent}
+    """
+    
+    Extraia informações para preencher uma ficha de Anamnese.
+    Retorne JSON (sem markdown) mantendo a estrutura:
+    {
+      "rawText": "Resumo...",
+      "extractedData": { ... }
+    }
+    Use a mesma estrutura de campos do documento normal.
+  `;
+
+    try {
+        const result = await model.generateContent(prompt);
+        const json = JSON.parse(result.response.text());
+        return {
+            extractedData: json.extractedData || {},
+            rawText: json.rawText || documentContent
+        };
+    } catch (error: any) {
+        console.error("Erro no Gemini Docs:", error);
+        if (error.message?.includes('API key')) resetGeminiInstance();
+        throw new Error("Falha na extração.");
+    }
+};
