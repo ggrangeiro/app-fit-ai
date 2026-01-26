@@ -9,6 +9,8 @@ import { ToastType } from './Toast';
 import { apiService, API_BASE_URL } from '../services/apiService';
 import { shareAsPdf } from '../utils/pdfUtils';
 
+import { getCurrentLocation } from '../utils/geolocation';
+
 // Image Gallery component for displaying multiple analysis images
 const ImageGallery: React.FC<{ imageUrls: string[] }> = ({ imageUrls }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -85,8 +87,8 @@ const ImageGallery: React.FC<{ imageUrls: string[] }> = ({ imageUrls }) => {
             key={idx}
             onClick={() => setCurrentIndex(idx)}
             className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${idx === currentIndex
-                ? 'border-cyan-500 ring-2 ring-cyan-500/30'
-                : 'border-slate-700 hover:border-slate-500'
+              ? 'border-cyan-500 ring-2 ring-cyan-500/30'
+              : 'border-slate-700 hover:border-slate-500'
               }`}
           >
             <img
@@ -358,7 +360,10 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
     setCheckInLoading(true);
     try {
-      await apiService.createCheckIn(userId, currentWorkoutId || 0, checkInDate, checkInComment);
+      // Get location for weather/location-based achievements
+      const location = await getCurrentLocation(5000);
+
+      await apiService.createCheckIn(userId, currentWorkoutId || 0, checkInDate, checkInComment, undefined, location);
       showToast('Check-in realizado com sucesso! 💪', 'success');
       setShowCheckInModal(false);
       setCheckInComment('');
