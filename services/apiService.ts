@@ -978,6 +978,7 @@ export const apiService = {
     },
 
     // --- GAMIFICATION / ACHIEVEMENTS ---
+    // --- GAMIFICATION / ACHIEVEMENTS ---
     getUserAchievementsProgress: async (userId: string | number): Promise<AchievementProgress[]> => {
         try {
             const data = await nativeFetch({
@@ -990,5 +991,61 @@ export const apiService = {
             console.error("Failed to fetch achievements:", e);
             return [];
         }
+    },
+
+    getProfessorAchievementsProgress: async (professorId: string | number): Promise<AchievementProgress[]> => {
+        try {
+            const data = await nativeFetch({
+                method: 'GET',
+                url: `${API_BASE_URL}/api/gamification/professor/${professorId}/progress`,
+                params: getAuthQueryParams()
+            });
+            return data || [];
+        } catch (e) {
+            console.error("Failed to fetch professor achievements:", e);
+            return [];
+        }
+    },
+
+    getProfessorStats: async (managerId: string | number, professorId: string | number): Promise<ProfessorStats> => {
+        const startDate = '2023-01-01'; // Lifetime stats start date
+        const endDate = new Date().toISOString().split('T')[0];
+
+        const countAction = async (actionType: string) => {
+            try {
+                const res: any = await nativeFetch({
+                    method: 'GET',
+                    url: `${API_BASE_URL}/api/activities/professors`,
+                    params: {
+                        ...getAuthQueryParams(),
+                        managerId: String(managerId),
+                        professorId: String(professorId),
+                        actionType,
+                        startDate,
+                        endDate,
+                        size: 1
+                    }
+                });
+                return res.pagination?.totalElements || 0;
+            } catch (e) {
+                return 0;
+            }
+        };
+
+        const [students, workouts, diets, analysis] = await Promise.all([
+            countAction('STUDENT_CREATED'),
+            countAction('WORKOUT_GENERATED'),
+            countAction('DIET_GENERATED'),
+            countAction('ANALYSIS_PERFORMED')
+        ]);
+
+        return {
+            studentsCreated: students,
+            workoutsGenerated: workouts,
+            dietsGenerated: diets,
+            analysisPerformed: analysis,
+            totalActions: students + workouts + diets + analysis,
+            assessmentsCreated: 0 // Not tracked yet or mapped to existing
+        } as any; // Cast to satisfy interface if needed
     }
 };

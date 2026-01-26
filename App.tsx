@@ -456,6 +456,7 @@ const App: React.FC = () => {
   const [checkInDate, setCheckInDate] = useState(new Date().toISOString().split('T')[0]);
   const [checkInComment, setCheckInComment] = useState('');
   const [checkInLoading, setCheckInLoading] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
   // Interactive Workout Session State
   const [activeWorkoutDay, setActiveWorkoutDay] = useState<WorkoutDayV2 | null>(null);
 
@@ -484,6 +485,7 @@ const App: React.FC = () => {
         workoutId: workoutIdForExecution,
         dayOfWeek: String(dayIndex),
         executedAt: Date.now(),
+        liked: feedback === 'like',
         exercises: updatedDay.exercises.map((ex, index) => ({
           exerciseName: ex.name,
           order: ex.order || index + 1,
@@ -2836,6 +2838,12 @@ const App: React.FC = () => {
       </header >
 
       {showWorkoutModal && renderWorkoutModal()}
+      {showAchievements && currentUser && (
+        <AchievementsModal
+          userId={currentUser.id}
+          onClose={() => setShowAchievements(false)}
+        />
+      )}
       {showDietModal && renderDietModal()}
       {showGenerateWorkoutForm && renderGenerateWorkoutForm()}
       {showGenerateDietForm && renderGenerateDietForm()}
@@ -2922,24 +2930,82 @@ const App: React.FC = () => {
               />
             )}
 
-            {/* Achievements Button */}
-            {currentUser && (
+            {/* ... Restante do código de seleção de exercício (igual ao anterior) ... */}
+            <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+
+              {/* CARD DE CONQUISTAS (GAMIFICATION) */}
               <button
-                onClick={() => setShowAchievementsModal(true)}
-                className="w-full max-w-5xl mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 hover:border-amber-500/50 hover:from-amber-500/20 hover:to-orange-500/20 transition-all flex items-center justify-between group"
+                onClick={() => setShowAchievements(true)}
+                className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-amber-500/30 hover:bg-amber-600/10 hover:border-amber-500 h-full min-h-[160px] group"
               >
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl text-white shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
-                    <Trophy className="w-5 h-5" />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="text-amber-400 font-bold text-base">Minhas Conquistas</h3>
-                    <p className="text-slate-400 text-xs">Veja suas medalhas e progressos</p>
-                  </div>
-                </div>
-                <ArrowRight className="w-5 h-5 text-amber-500/50 group-hover:text-amber-500 group-hover:translate-x-1 transition-all" />
+                <div className="p-4 bg-amber-500 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Trophy className="w-8 h-8" /></div>
+                <div className="text-center"><h3 className="text-amber-500 font-bold text-xl">Minhas Conquistas</h3><p className="text-slate-400 text-xs mt-1">Ver medalhas e metas</p></div>
               </button>
-            )}
+
+              {/* OUTRAS OPÇÕES DO GRID SERÃO INSERIDAS AQUI - REPARANDO O ERRO DE SINTAXE */}
+              {/* CARD DE TREINO DINÂMICO */}
+              {loadingWorkouts ? (
+                <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-dashed border-2 border-slate-700/50 h-full min-h-[160px] animate-pulse">
+                  <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+                  <span className="text-slate-500 text-xs">Buscando treinos...</span>
+                </div>
+              ) : (
+                savedWorkouts.length > 0 ? (
+                  <button
+                    onClick={() => setShowWorkoutModal(true)}
+                    className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
+                  >
+                    <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Calendar className="w-8 h-8" /></div>
+                    <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Ver Meu Treino</h3><p className="text-slate-400 text-xs mt-1">Ficha ativa disponível</p></div>
+                  </button>
+                ) : (
+                  currentUser?.accessLevel === 'READONLY' ? (
+                    <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-2 border-slate-700/30 h-full min-h-[160px] opacity-50">
+                      <div className="p-4 bg-slate-800 rounded-full text-slate-500"><Lock className="w-8 h-8" /></div>
+                      <div className="text-center"><h3 className="text-slate-500 font-bold text-xl">Peça seu Treino</h3><p className="text-slate-500 text-xs mt-1">Aguarde seu professor</p></div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        // Forçar carregamento da anamnese fresca antes de abrir o formulário
+                        if (currentUser?.id) {
+                          try {
+                            const fresh = await apiService.getUserProfile(currentUser.id);
+                            if (fresh) {
+                              const updatedUser = { ...currentUser, ...fresh };
+                              setCurrentUser(updatedUser);
+                              if (updatedUser.anamnesis) {
+                                setWorkoutFormData({
+                                  ...workoutFormData,
+                                  weight: updatedUser.anamnesis.physical.weight > 0 ? updatedUser.anamnesis.physical.weight.toString() : '',
+                                  height: updatedUser.anamnesis.physical.height > 0 ? updatedUser.anamnesis.physical.height.toString() : '',
+                                  gender: (updatedUser.anamnesis.personal.gender || 'Masculino').toLowerCase(),
+                                  frequency: updatedUser.anamnesis.fitness.weeklyFrequency.toString()
+                                });
+                              }
+                            }
+                          } catch (e) { }
+                        } else if (currentUser?.anamnesis) {
+                          setWorkoutFormData({
+                            ...workoutFormData,
+                            weight: currentUser.anamnesis.physical.weight > 0 ? currentUser.anamnesis.physical.weight.toString() : '',
+                            height: currentUser.anamnesis.physical.height > 0 ? currentUser.anamnesis.physical.height.toString() : '',
+                            gender: (currentUser.anamnesis.personal.gender || 'Masculino').toLowerCase(),
+                            frequency: currentUser.anamnesis.fitness.weeklyFrequency.toString()
+                          });
+                        }
+                        setShowGenerateWorkoutForm(true);
+                      }}
+                      className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
+                    >
+                      <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Dumbbell className="w-8 h-8" /></div>
+                      <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Gerar Treino IA</h3><p className="text-slate-400 text-xs mt-1">Crie sua ficha personalizada</p></div>
+                    </button>
+                  )
+                )
+              )}
+
+            </div>
 
             {/* ALERTA DE SEGURANÇA CARDIOVASCULAR (ANAMNESE) */}
             {currentUser?.anamnesis?.health?.chestPain && (

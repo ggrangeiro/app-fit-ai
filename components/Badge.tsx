@@ -1,6 +1,6 @@
 import React from 'react';
 import { AchievementProgress } from '../types';
-import { Shield, Zap, Flame, Sunrise, Moon, CloudRain, Trophy } from 'lucide-react';
+import { Shield, Zap, Flame, Sunrise, Moon, CloudRain, Trophy, Heart, HeartHandshake, Sparkles } from 'lucide-react';
 
 interface BadgeProps {
     progress: AchievementProgress;
@@ -31,6 +31,18 @@ export const getBadgeIcon = (iconKey: string, size: number = 32) => {
             return <Moon {...props} />;
         case 'BADGE_RAINY_DAY':
             return <CloudRain {...props} />;
+        case 'BADGE_LIKE_1':
+            return <Heart {...props} />;
+        case 'BADGE_LIKE_5':
+            return <Heart {...props} />;
+        case 'BADGE_LIKE_10':
+            return <HeartHandshake {...props} />;
+        case 'BADGE_LIKE_30':
+            return <HeartHandshake {...props} />;
+        case 'BADGE_LIKE_50':
+            return <Sparkles {...props} />;
+        case 'BADGE_LIKE_60':
+            return <Sparkles {...props} />;
         default:
             return <Trophy {...props} />;
     }

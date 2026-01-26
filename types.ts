@@ -484,4 +484,9 @@ export interface AchievementProgress {
   achievement: Achievement;
   unlocked: boolean;
   unlockedAt: string | null;
+  currentProgress?: number; // Added for professor progress tracking
+}
+
+export interface ProfessorAchievementProgress extends AchievementProgress {
+  currentProgress: number;
 }

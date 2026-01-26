@@ -7,7 +7,7 @@ import { compressVideo } from '../utils/videoUtils';
 import { shareAsPdf } from '../utils/pdfUtils';
 import { ResultView } from './ResultView';
 import LoadingScreen from './LoadingScreen';
-import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock, Trash2, UsersRound, BarChart3, ThumbsUp, ThumbsDown, MessageCircle } from 'lucide-react';
+import { Users, UserPlus, FileText, Check, Search, ChevronRight, Activity, Plus, Sparkles, Image as ImageIcon, Loader2, Dumbbell, ToggleLeft, ToggleRight, Save, Database, PlayCircle, X, Scale, ScanLine, AlertCircle, Utensils, UploadCloud, Stethoscope, Calendar, Eye, ShieldAlert, Video, FileVideo, Printer, Share2, CheckCircle, ChevronUp, ChevronDown, RefreshCw, Phone, Key, Lock, Trash2, UsersRound, BarChart3, ThumbsUp, ThumbsDown, MessageCircle, Trophy } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 import { AnamnesisModal } from './AnamnesisModal';
@@ -17,6 +17,7 @@ import { getFullImageUrl } from '../utils/imageUtils';
 import { InsightsTab } from './InsightsTab';
 import { TrendingUp } from 'lucide-react';
 import { NotificationCenter } from './NotificationCenter';
+import { ProfessorAchievementsGallery } from './ProfessorAchievementsGallery';
 
 // LISTA FIXA DE EXERCÍCIOS PARA O PERSONAL (SUBSTITUI CHAMADA DE API)
 const FIXED_EXERCISES_LIST = [
@@ -146,6 +147,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
     };
 
     const [editingAssignments, setEditingAssignments] = useState<string[]>([]);
+
+    // State for viewing Professor Achievements (Personal/Manager view)
+    const [selectedProfessorForAchievements, setSelectedProfessorForAchievements] = useState<User | null>(null);
 
     // --- STATES PARA AÇÕES DO PROFESSOR ---
     const [showTeacherActionModal, setShowTeacherActionModal] = useState<'NONE' | 'DIET' | 'WORKOUT' | 'ASSESSMENT'>('NONE');
@@ -1782,6 +1786,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                             </button>
                         )}
 
+                        {currentUser.role === 'professor' && (
+                            <button
+                                onClick={() => setSelectedProfessorForAchievements(currentUser)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all mt-2 text-slate-300 hover:bg-slate-800 hover:text-amber-400`}
+                            >
+                                <Trophy className="w-5 h-5 text-amber-500" /> Minhas Conquistas
+                            </button>
+                        )}
+
                         {isAdmin && (
                             <>
                                 <button
@@ -1932,6 +1945,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                                 </div>
 
                                                 <div className="flex gap-2 border-t border-slate-700/50 pt-2">
+                                                    <button
+                                                        onClick={() => setSelectedProfessorForAchievements(prof)}
+                                                        className="flex-1 py-2 bg-slate-700/50 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1"
+                                                    >
+                                                        <Trophy className="w-3 h-3 text-amber-500" /> Conquistas
+                                                    </button>
                                                     <button
                                                         onClick={() => {
                                                             setSelectedUser({ ...prof } as any); // Cast as any/User to avoid strict type issues if User type varies
@@ -2088,6 +2107,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                                 </form>
                             </div>
                         </div>
+                    )}
+
+                    {/* PROFESSOR ACHIEVEMENTS MODAL */}
+                    {selectedProfessorForAchievements && (
+                        <ProfessorAchievementsGallery
+                            managerId={currentUser.role === 'personal' ? currentUser.id : (currentUser.managerId || '0')}
+                            professorId={selectedProfessorForAchievements.id}
+                            professorName={selectedProfessorForAchievements.name}
+                            onClose={() => setSelectedProfessorForAchievements(null)}
+                        />
                     )}
 
                     {activeTab === 'assets' && (isAdmin || isPersonal) && (
