@@ -465,3 +465,23 @@ export interface Notification {
   timestamp: number;
   isRead: boolean;
 }
+
+// ===============================================
+// ========== GAMIFICATION / ACHIEVEMENTS ========
+// ===============================================
+
+export interface Achievement {
+  id: number;
+  name: string;
+  description: string;
+  iconKey: string;
+  criteriaType: string;
+  criteriaThreshold: number;
+  active: boolean;
+}
+
+export interface AchievementProgress {
+  achievement: Achievement;
+  unlocked: boolean;
+  unlockedAt: string | null;
+}

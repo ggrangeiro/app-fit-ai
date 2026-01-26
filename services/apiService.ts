@@ -1,5 +1,5 @@
 import { CapacitorHttp, HttpResponse } from '@capacitor/core';
-import { DietGoalEntity, User, UserRole, AnalysisResult, ProfessorActivity, ProfessorSummary, PhotoCategory, EvolutionPhoto, InsightResponse } from "../types";
+import { DietGoalEntity, User, UserRole, AnalysisResult, ProfessorActivity, ProfessorSummary, PhotoCategory, EvolutionPhoto, InsightResponse, AchievementProgress } from "../types";
 import { secureStorage } from "../utils/secureStorage";
 
 
@@ -958,5 +958,20 @@ export const apiService = {
             url: `${API_BASE_URL}/api/insights/professor/${professorId}`,
             params: { ...getAuthQueryParams(), period }
         });
+    },
+
+    // --- GAMIFICATION / ACHIEVEMENTS ---
+    getUserAchievementsProgress: async (userId: string | number): Promise<AchievementProgress[]> => {
+        try {
+            const data = await nativeFetch({
+                method: 'GET',
+                url: `${API_BASE_URL}/api/gamification/users/${userId}/progress`,
+                params: getAuthQueryParams()
+            });
+            return data || [];
+        } catch (e) {
+            console.error("Failed to fetch achievements:", e);
+            return [];
+        }
     }
 };

@@ -218,7 +218,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
                   </div>
                 </div>
                 <div className="space-y-1 animate-in slide-in-from-top-4 duration-300">
-                  <label className="text-sm font-medium text-slate-300 ml-1">Seu Nome</label>
+                  <label className="text-sm font-medium text-slate-300 ml-1">Seu Nome <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <UserIcon className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
                     <input
@@ -233,7 +233,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
                 </div>
 
                 <div className="space-y-1 animate-in slide-in-from-top-4 duration-300" style={{ animationDelay: '50ms' }}>
-                  <label className="text-sm font-medium text-slate-300 ml-1">Telefone</label>
+                  <label className="text-sm font-medium text-slate-300 ml-1">Telefone <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <Phone className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
                     <input
@@ -251,7 +251,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
             )}
 
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-300 ml-1">E-mail de Acesso</label>
+              <label className="text-sm font-medium text-slate-300 ml-1">E-mail de Acesso <span className="text-red-500">*</span></label>
               <div className="relative">
                 <Mail className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
                 <input
@@ -266,7 +266,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-300 ml-1">Senha</label>
+              <label className="text-sm font-medium text-slate-300 ml-1">Senha <span className="text-red-500">*</span></label>
               <div className="relative">
                 <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
                 <input
@@ -289,7 +289,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, showToast, onViewPlans }) => {
 
             {isRegistering && (
               <div className="space-y-1 animate-in slide-in-from-top-4 duration-300">
-                <label className="text-sm font-medium text-slate-300 ml-1">Confirmar Senha</label>
+                <label className="text-sm font-medium text-slate-300 ml-1">Confirmar Senha <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
                   <input

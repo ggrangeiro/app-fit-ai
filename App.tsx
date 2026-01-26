@@ -35,7 +35,8 @@ import { SubscriptionModal } from './components/SubscriptionModal';
 import { PaymentCallback } from './components/PaymentCallback';
 import { AnamnesisModal } from './components/AnamnesisModal';
 import EvolutionPhotosModal from './components/EvolutionPhotosModal';
-import { Camera, ClipboardList, PlayCircle } from 'lucide-react';
+import { AchievementsModal } from './components/AchievementsModal';
+import { Camera, ClipboardList, PlayCircle, Trophy } from 'lucide-react';
 import { getFullImageUrl } from './utils/imageUtils';
 import { WorkoutSession } from './components/WorkoutSession';
 
@@ -368,6 +369,7 @@ const App: React.FC = () => {
   const [showBuyCreditsModal, setShowBuyCreditsModal] = useState(false);
   const [showPlansModal, setShowPlansModal] = useState(false);
   const [showAnamnesisModal, setShowAnamnesisModal] = useState(false);
+  const [showAchievementsModal, setShowAchievementsModal] = useState(false);
   const [isOffline, setIsOffline] = useState(!window.navigator.onLine);
 
   // Password Reset Token Detection
@@ -2871,6 +2873,16 @@ const App: React.FC = () => {
         )
       }
 
+      {/* Achievements Modal Rendering */}
+      {
+        showAchievementsModal && currentUser && (
+          <AchievementsModal
+            userId={currentUser.id}
+            onClose={() => setShowAchievementsModal(false)}
+          />
+        )
+      }
+
       {/* Renderização Condicional baseada no Role */}
       <main className="flex-grow flex items-center justify-center p-4 md:p-8">
 
@@ -2899,6 +2911,25 @@ const App: React.FC = () => {
                 refreshTrigger={checkInUpdateTrigger}
                 weeklyGoal={calculatedWeeklyGoal}
               />
+            )}
+
+            {/* Achievements Button */}
+            {currentUser && (
+              <button
+                onClick={() => setShowAchievementsModal(true)}
+                className="w-full max-w-5xl mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 hover:border-amber-500/50 hover:from-amber-500/20 hover:to-orange-500/20 transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl text-white shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
+                    <Trophy className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-amber-400 font-bold text-base">Minhas Conquistas</h3>
+                    <p className="text-slate-400 text-xs">Veja suas medalhas e progressos</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-5 h-5 text-amber-500/50 group-hover:text-amber-500 group-hover:translate-x-1 transition-all" />
+              </button>
             )}
 
             {/* ALERTA DE SEGURANÇA CARDIOVASCULAR (ANAMNESE) */}
