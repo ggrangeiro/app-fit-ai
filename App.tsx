@@ -39,6 +39,7 @@ import { AchievementsModal } from './components/AchievementsModal';
 import { Camera, ClipboardList, PlayCircle, Trophy } from 'lucide-react';
 import { getFullImageUrl } from './utils/imageUtils';
 import { WorkoutSession } from './components/WorkoutSession';
+import { getCurrentLocation } from './utils/geolocation';
 
 // --- ICON MAPPING SYSTEM ---
 const EXERCISE_ICONS: Record<string, React.ReactNode> = {
@@ -520,12 +521,17 @@ const App: React.FC = () => {
       // 3. Auto Check-in
       const todayDate = new Date().toISOString().split('T')[0];
       const dayName = (updatedDay as any).name || updatedDay.dayLabel || 'treino';
+
+      // Get location for weather-based achievements (non-blocking)
+      const location = await getCurrentLocation(5000);
+
       await apiService.createCheckIn(
         currentUser.id,
         currentWorkout.id,
         todayDate,
         `Treino de ${dayName} finalizado com sucesso.`,
-        feedback
+        feedback,
+        location
       );
 
       setCheckInDate(todayDate);
@@ -1825,7 +1831,10 @@ const App: React.FC = () => {
 
     setCheckInLoading(true);
     try {
-      await apiService.createCheckIn(currentUser.id, currentWorkoutId, checkInDate, checkInComment);
+      // Get location for weather-based achievements (non-blocking)
+      const location = await getCurrentLocation(5000);
+
+      await apiService.createCheckIn(currentUser.id, currentWorkoutId, checkInDate, checkInComment, undefined, location);
       showToast('Check-in realizado com sucesso! 💪', 'success');
 
       // Force refresh of tracking data

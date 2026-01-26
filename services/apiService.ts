@@ -611,18 +611,35 @@ export const apiService = {
     },
 
     // --- CHECK-INS ---
-    createCheckIn: async (userId: string | number, trainingId: number, data: string, comment?: string, feedback?: 'like' | 'dislike') => {
+    createCheckIn: async (
+        userId: string | number,
+        trainingId: number,
+        data: string,
+        comment?: string,
+        feedback?: 'like' | 'dislike',
+        location?: { latitude: number; longitude: number } | null
+    ) => {
+        const body: Record<string, unknown> = {
+            userId: String(userId),
+            trainingId,
+            data,
+            comment,
+            feedback,
+            status: 'completed',
+            timestamp: Date.now()
+        };
+
+        // Add location if available (enables weather-based achievements)
+        if (location) {
+            body.latitude = location.latitude;
+            body.longitude = location.longitude;
+        }
+
         return await nativeFetch({
             method: 'POST',
             url: `${API_BASE_URL}/api/checkins/`,
             params: getAuthQueryParams(),
-            data: {
-                userId: String(userId),
-                trainingId,
-                data,
-                comment,
-                feedback
-            }
+            data: body
         });
     },
 
