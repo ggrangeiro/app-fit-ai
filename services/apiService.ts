@@ -1,5 +1,5 @@
 import { CapacitorHttp, HttpResponse } from '@capacitor/core';
-import { DietGoalEntity, User, UserRole, AnalysisResult, ProfessorActivity, ProfessorSummary, PhotoCategory, EvolutionPhoto, InsightResponse, AchievementProgress } from "../types";
+import { DietGoalEntity, User, UserRole, AnalysisResult, ProfessorActivity, ProfessorSummary, PhotoCategory, EvolutionPhoto, InsightResponse, AchievementProgress, ProfessorStats, ProfessorAchievementProgress } from "../types";
 import { secureStorage } from "../utils/secureStorage";
 
 
@@ -1007,6 +1007,54 @@ export const apiService = {
         }
     },
 
+    // --- PERSONAL ACHIEVEMENTS ---
+    getPersonalAchievementsProgress: async (personalId: string | number): Promise<AchievementProgress[]> => {
+        try {
+            const data = await nativeFetch({
+                method: 'GET',
+                url: `${API_BASE_URL}/api/gamification/personal/${personalId}/progress`,
+                params: getAuthQueryParams()
+            });
+            return data || [];
+        } catch (e) {
+            console.error("Failed to fetch personal achievements:", e);
+            return [];
+        }
+    },
+
+    checkPersonalAchievements: async (personalId: string | number) => {
+        try {
+            return await nativeFetch({
+                method: 'POST',
+                url: `${API_BASE_URL}/api/gamification/personal/${personalId}/check`,
+                params: getAuthQueryParams()
+            });
+        } catch (e) {
+            console.error("Failed to check personal achievements:", e);
+            return null;
+        }
+    },
+
+    getPersonalStats: async (personalId: string | number): Promise<ProfessorStats> => {
+        try {
+            const data = await nativeFetch({
+                method: 'GET',
+                url: `${API_BASE_URL}/api/gamification/personal/${personalId}/stats`,
+                params: getAuthQueryParams()
+            });
+            return data;
+        } catch (e) {
+            console.error("Failed to fetch personal stats:", e);
+            return {
+                studentsCreated: 0,
+                workoutsGenerated: 0,
+                dietsGenerated: 0,
+                analysisPerformed: 0,
+                totalActions: 0
+            };
+        }
+    },
+
     getProfessorStats: async (managerId: string | number, professorId: string | number): Promise<ProfessorStats> => {
         const startDate = '2023-01-01'; // Lifetime stats start date
         const endDate = new Date().toISOString().split('T')[0];
@@ -1047,5 +1095,73 @@ export const apiService = {
             totalActions: students + workouts + diets + analysis,
             assessmentsCreated: 0 // Not tracked yet or mapped to existing
         } as any; // Cast to satisfy interface if needed
+    },
+
+    // --- PROFESSOR VIDEO CUSTOMIZATION ---
+
+    getProfessorVideos: async (professorId: number | string) => {
+        const requester = getRequesterCredentials();
+        if (!requester) throw new Error("Não autenticado");
+
+        const url = `${API_BASE_URL}/api/professors/videos/${professorId}?requesterId=${requester.id}&requesterRole=${requester.role}`;
+
+        const response = await fetch(url, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" }
+        });
+
+        if (!response.ok) return [];
+        return await response.json();
+    },
+
+    saveProfessorVideo: async (professorId: number | string, data: { exerciseId: string; videoUrl: string; description?: string }) => {
+        const requester = getRequesterCredentials();
+        if (!requester) throw new Error("Não autenticado");
+
+        const url = `${API_BASE_URL}/api/professors/videos/${professorId}?requesterId=${requester.id}&requesterRole=${requester.role}`;
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) throw new Error("Erro ao salvar vídeo.");
+        return await response.json();
+    },
+
+    deleteProfessorVideo: async (professorId: number | string, exerciseId: string) => {
+        const requester = getRequesterCredentials();
+        if (!requester) throw new Error("Não autenticado");
+
+        const url = `${API_BASE_URL}/api/professors/videos/${professorId}/${exerciseId}?requesterId=${requester.id}&requesterRole=${requester.role}`;
+
+        const response = await fetch(url, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" }
+        });
+
+        if (!response.ok) throw new Error("Erro ao remover vídeo.");
+        return true;
+    },
+
+    // 10. CRIAR NOVO EXERCÍCIO
+    createExercise: async (name: string, videoUrl?: string, description?: string) => {
+        const requester = getRequesterCredentials();
+        if (!requester) throw new Error("Não autenticado");
+
+        const url = `${API_BASE_URL}/api/exercises/create?requesterId=${requester.id}&requesterRole=${requester.role}`;
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, videoUrl, description })
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || "Erro ao criar exercício.");
+        }
+        return await response.json();
     }
 };

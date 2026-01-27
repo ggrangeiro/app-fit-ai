@@ -13,6 +13,15 @@ export interface ExerciseDTO {
   description?: string;
 }
 
+export interface ProfessorExerciseVideo {
+  id: number;
+  professorId: number;
+  exerciseId: string; // Alias ou ID do exercício
+  videoUrl: string;
+  description?: string;
+  createdAt?: string;
+}
+
 // --- NOVOS ENUMS DO BACKEND V2 ---
 export enum DietGoalEntity {
   WEIGHT_LOSS = 'WEIGHT_LOSS',

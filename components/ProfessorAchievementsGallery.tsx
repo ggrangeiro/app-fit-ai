@@ -8,6 +8,7 @@ interface ProfessorAchievementsGalleryProps {
     managerId: string;
     professorId: string | number;
     professorName: string;
+    userType: 'personal' | 'professor';
     onClose?: () => void;
 }
 
@@ -15,6 +16,7 @@ export const ProfessorAchievementsGallery: React.FC<ProfessorAchievementsGallery
     managerId,
     professorId,
     professorName,
+    userType,
     onClose
 }) => {
     const [achievements, setAchievements] = useState<ProfessorAchievementProgress[]>([]);
@@ -26,29 +28,57 @@ export const ProfessorAchievementsGallery: React.FC<ProfessorAchievementsGallery
         const fetchData = async () => {
             try {
                 // Fetch achievements and basic stats concurrently
-                // Note: getProfessorAchievementsProgress returns AchievementProgress[] with professor specific badges
-                const [rawAchievements, statsData] = await Promise.all([
-                    apiService.getProfessorAchievementsProgress(professorId),
-                    apiService.getProfessorStats(managerId, professorId)
-                ]);
+                let rawAchievements: ProfessorAchievementProgress[] = [];
+                let statsData: ProfessorStats | null = null;
 
-                // Calculate progress manually based on stats
+                if (userType === 'personal') {
+                    // PERSONAL: Use dedicated aggregated endpoints
+                    // Cast generic AchievementProgress[] to ProfessorAchievementProgress[] for consistency
+                    rawAchievements = (await apiService.getPersonalAchievementsProgress(professorId)) as ProfessorAchievementProgress[];
+                    statsData = await apiService.getPersonalStats(professorId);
+
+                    // Trigger check to ensure backend is up to date (optional, but good for UX)
+                    if (rawAchievements.length === 0) {
+                        await apiService.checkPersonalAchievements(professorId);
+                        rawAchievements = (await apiService.getPersonalAchievementsProgress(professorId)) as ProfessorAchievementProgress[];
+                    }
+
+                } else {
+                    // PROFESSOR: Use existing endpoints
+                    rawAchievements = (await apiService.getProfessorAchievementsProgress(professorId)) as ProfessorAchievementProgress[];
+                    statsData = await apiService.getProfessorStats(managerId, professorId);
+                }
+
+                // If stats are missing for some reason, ensure object exists to prevent crashes
+                if (!statsData) {
+                    statsData = {
+                        studentsCreated: 0,
+                        workoutsGenerated: 0,
+                        dietsGenerated: 0,
+                        analysisPerformed: 0,
+                        totalActions: 0
+                    };
+                }
+
+                // Calculate progress manually based on stats if currentProgress is missing
+                // (Backend for Personal should return currentProgress populated, but for Professors might still need this)
                 const getProgressValue = (type: string, s: ProfessorStats) => {
                     switch (type) {
                         case 'WORKOUT_CREATED': return s.workoutsGenerated;
                         case 'DIET_CREATED': return s.dietsGenerated;
-                        case 'STUDENT_CREATED': return s.studentsCreated; // Mapped from STUDENTS_REGISTERED
+                        case 'STUDENT_CREATED': return s.studentsCreated;
                         case 'ANALYSIS_PERFORMED': return s.analysisPerformed;
                         default: return 0;
                     }
                 };
 
                 const enrichedAchievements: ProfessorAchievementProgress[] = rawAchievements.map(a => {
-                    // For legacy reasons, map backend criteriaType to stats keys if needed
-                    // Backend types: WORKOUT_GENERATED, etc.
-                    // Achievement Types from DB might be: WORKOUT_CREATED, DIET_CREATED
-                    // Let's assume they match or we normalize
-                    const current = statsData ? getProgressValue(a.achievement.criteriaType, statsData) : 0;
+                    // Prioritize existing currentProgress from backend if available
+                    let current = a.currentProgress;
+                    if (current === undefined || current === null) {
+                        current = statsData ? getProgressValue(a.achievement.criteriaType, statsData) : 0;
+                    }
+
                     return {
                         ...a,
                         currentProgress: current
@@ -58,13 +88,13 @@ export const ProfessorAchievementsGallery: React.FC<ProfessorAchievementsGallery
                 setAchievements(enrichedAchievements);
                 setStats(statsData);
             } catch (error) {
-                console.error("Failed to load professor achievements", error);
+                console.error("Failed to load achievements", error);
             } finally {
                 setLoading(false);
             }
         };
         fetchData();
-    }, [managerId, professorId]);
+    }, [managerId, professorId, userType]);
 
     const validAchievements = achievements.filter(a => a?.achievement?.id);
     const unlockedCount = validAchievements.filter(a => a.unlocked).length;
@@ -139,7 +169,7 @@ export const ProfessorAchievementsGallery: React.FC<ProfessorAchievementsGallery
                         )}
 
                         {/* Conquistas por categoria */}
-                        {Object.entries(groupedAchievements).map(([type, typeAchievements]) => (
+                        {Object.entries(groupedAchievements).map(([type, typeAchievements]: [string, ProfessorAchievementProgress[]]) => (
                             <div key={type} className="mb-8">
                                 <div className="flex items-center gap-2 mb-4">
                                     <h3 className="text-lg font-bold text-gray-800">

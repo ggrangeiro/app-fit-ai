@@ -12,9 +12,10 @@ import ConfirmModal from './ConfirmModal';
 import Toast, { ToastType } from './Toast';
 import { AnamnesisModal } from './AnamnesisModal';
 import { AICustomizationModal } from './AICustomizationModal';
-import { ClipboardList, Camera } from 'lucide-react';
+import { ClipboardList, Camera, BookOpen } from 'lucide-react';
 import { getFullImageUrl } from '../utils/imageUtils';
 import { InsightsTab } from './InsightsTab';
+import { ExerciseVideoManager } from './ExerciseVideoManager';
 import { TrendingUp } from 'lucide-react';
 import { NotificationCenter } from './NotificationCenter';
 import { ProfessorAchievementsGallery } from './ProfessorAchievementsGallery';
@@ -73,7 +74,7 @@ interface AdminDashboardProps {
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshData, onUpdateUser }) => {
     console.log("Rendering AdminDashboard... User:", currentUser.id);
-    const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets' | 'team' | 'insights'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets' | 'team' | 'insights' | 'library'>('users');
     const [users, setUsers] = useState<User[]>([]);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [userListTab, setUserListTab] = useState<'students' | 'personals' | 'professors'>('students'); // Novo estado para abas mobile
@@ -1786,7 +1787,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                             </button>
                         )}
 
-                        {currentUser.role === 'professor' && (
+                        {(isManager || isPersonal) && (
+                            <button
+                                onClick={() => setActiveTab('library')}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all mt-2 ${activeTab === 'library' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-300 hover:bg-slate-800'}`}
+                            >
+                                <BookOpen className="w-5 h-5" /> Biblioteca
+                            </button>
+                        )}
+
+                        {(currentUser.role === 'professor' || currentUser.role === 'personal') && (
                             <button
                                 onClick={() => setSelectedProfessorForAchievements(currentUser)}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all mt-2 text-slate-300 hover:bg-slate-800 hover:text-amber-400`}
@@ -2115,6 +2125,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                             managerId={currentUser.role === 'personal' ? currentUser.id : (currentUser.managerId || '0')}
                             professorId={selectedProfessorForAchievements.id}
                             professorName={selectedProfessorForAchievements.name}
+                            userType={selectedProfessorForAchievements.role === 'personal' ? 'personal' : 'professor'}
                             onClose={() => setSelectedProfessorForAchievements(null)}
                         />
                     )}
@@ -2845,6 +2856,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     if (onUpdateUser) onUpdateUser(updated);
                 }}
             />
+            {activeTab === 'library' && (isPersonal || isAdmin) && (
+                <div className="w-full max-w-7xl mx-auto md:p-6 pb-24 md:pb-6 animate-in fade-in duration-300">
+                    <ExerciseVideoManager professorId={currentUser.id} />
+                </div>
+            )}
         </div >
     );
 };
