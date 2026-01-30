@@ -40,6 +40,7 @@ import { Camera, ClipboardList, PlayCircle, Trophy } from 'lucide-react';
 import { getFullImageUrl } from './utils/imageUtils';
 import { WorkoutSession } from './components/WorkoutSession';
 import { getCurrentLocation } from './utils/geolocation';
+import { ClassSchedule } from './components/ClassSchedule';
 
 // --- ICON MAPPING SYSTEM ---
 const EXERCISE_ICONS: Record<string, React.ReactNode> = {
@@ -191,6 +192,7 @@ const App: React.FC = () => {
   const [showRedoModal, setShowRedoModal] = useState(false);
   const [redoFeedback, setRedoFeedback] = useState('');
   const [redoCount, setRedoCount] = useState(0);
+  const [showClassSchedule, setShowClassSchedule] = useState(false);
 
   const handleRedoWorkout = async () => {
     // Validation
@@ -2942,6 +2944,15 @@ const App: React.FC = () => {
                 <div className="text-center"><h3 className="text-amber-500 font-bold text-xl">Minhas Conquistas</h3><p className="text-slate-400 text-xs mt-1">Ver medalhas e metas</p></div>
               </button>
 
+              {/* AULAS EM GRUPO - NOVO */}
+              <button
+                onClick={() => setShowClassSchedule(true)}
+                className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
+              >
+                <div className="p-4 bg-emerald-500 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Calendar className="w-8 h-8" /></div>
+                <div className="text-center"><h3 className="text-emerald-500 font-bold text-xl">Aulas em Grupo</h3><p className="text-slate-400 text-xs mt-1">Ver agenda e reservar</p></div>
+              </button>
+
               {/* OUTRAS OPÇÕES DO GRID SERÃO INSERIDAS AQUI - REPARANDO O ERRO DE SINTAXE */}
               {/* CARD DE TREINO DINÂMICO */}
               {loadingWorkouts ? (
@@ -3436,6 +3447,27 @@ const App: React.FC = () => {
           previousLoads={previousLoads}
         />
       )}
+      {
+        showClassSchedule && currentUser && (
+          <div className="fixed inset-0 z-[100] bg-slate-900/95 flex flex-col animate-in fade-in backdrop-blur-sm">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-900" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-emerald-400" /> Agenda de Aulas
+              </h2>
+              <button
+                onClick={() => setShowClassSchedule(false)}
+                className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white border border-slate-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 max-w-lg mx-auto w-full">
+              <ClassSchedule currentUser={currentUser} />
+            </div>
+          </div>
+        )
+      }
+
       < SubscriptionModal
         isOpen={showPlansModal}
         onClose={() => setShowPlansModal(false)}

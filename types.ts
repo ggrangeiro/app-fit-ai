@@ -499,3 +499,34 @@ export interface AchievementProgress {
 export interface ProfessorAchievementProgress extends AchievementProgress {
   currentProgress: number;
 }
+
+// ===============================================
+// ========== GROUP CLASSES TYPES ================
+// ===============================================
+
+export interface GroupClass {
+  id: number;
+  name: string;
+  description?: string;
+  professorId: number;
+  professorName?: string; // Enhanced in some responses
+  startTime: string; // ISO 8601
+  durationMinutes: number;
+  capacity: number;
+  location?: string;
+  photoUrl?: string;
+  isRecurrent: boolean;
+  recurrenceDays?: string; // "MONDAY,WEDNESDAY"
+  recurrenceGroupId?: string;
+  bookings: number; // Count of confirmed bookings
+  full?: boolean; // Helper from available endpoint
+  createdAt?: string;
+}
+
+export interface ClassBooking {
+  id: number;
+  classId: number;
+  studentId: number;
+  status: 'CONFIRMED' | 'CANCELLED' | 'WAITLIST';
+  createdAt: string;
+}

@@ -19,6 +19,7 @@ import { ExerciseVideoManager } from './ExerciseVideoManager';
 import { TrendingUp } from 'lucide-react';
 import { NotificationCenter } from './NotificationCenter';
 import { ProfessorAchievementsGallery } from './ProfessorAchievementsGallery';
+import { ClassManager } from './ClassManager';
 
 // LISTA FIXA DE EXERCÍCIOS PARA O PERSONAL (SUBSTITUI CHAMADA DE API)
 const FIXED_EXERCISES_LIST = [
@@ -74,7 +75,7 @@ interface AdminDashboardProps {
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshData, onUpdateUser }) => {
     console.log("Rendering AdminDashboard... User:", currentUser.id);
-    const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets' | 'team' | 'insights' | 'library'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'create' | 'assets' | 'team' | 'insights' | 'library' | 'classes'>('users');
     const [users, setUsers] = useState<User[]>([]);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [userListTab, setUserListTab] = useState<'students' | 'personals' | 'professors'>('students'); // Novo estado para abas mobile
@@ -2046,6 +2047,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser, onRefreshD
                     {/* ===== INSIGHTS TAB (Personal Only) ===== */}
                     {activeTab === 'insights' && isManager && (
                         <InsightsTab professors={professors} user={currentUser} />
+                    )}
+
+                    {/* ===== CLASS MANAGER TAB ===== */}
+                    {activeTab === 'classes' && (currentUser.role === 'professor' || currentUser.role === 'personal') && (
+                        <ClassManager currentUser={currentUser} />
                     )}
 
                     {/* Create Professor Modal */}

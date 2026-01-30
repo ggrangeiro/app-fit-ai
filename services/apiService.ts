@@ -800,18 +800,91 @@ export const apiService = {
     ): Promise<any> => {
         return await nativeFetch({
             method: 'POST',
-            url: `${API_BASE_URL}/api/usuarios/`,
+            url: `${API_BASE_URL}/api/usuarios/create-professor`,
             params: getAuthQueryParams(),
-            data: {
-                nome: name,
-                name,
-                email,
-                senha: 'mudar123',
-                telefone: phone,
-                role: 'professor',
-                managerId,
-                accessLevel: 'FULL'
-            }
+            data: { name, email, phone, managerId }
+        });
+    },
+
+
+    // --- GROUP CLASSES (AULAS EM GRUPO) ---
+
+    // Create Class (Prof/Personal)
+    createClass: async (data: any) => {
+        return await nativeFetch({
+            method: 'POST',
+            url: `${API_BASE_URL}/api/classes`,
+            params: getAuthQueryParams(), // Pass requesterId/Role
+            data: data
+        });
+    },
+
+    // List Professor Classes
+    getProfessorClasses: async (professorId: string | number) => {
+        const data = await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/classes/professor/${professorId}`,
+            params: getAuthQueryParams()
+        });
+        return Array.isArray(data) ? data : [];
+    },
+
+    // List Available Classes (Student)
+    getAvailableClasses: async (includeFull: boolean = false) => {
+        const params: any = getAuthQueryParams();
+        params.includeFull = includeFull;
+
+        const data = await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/classes/available`,
+            params: params
+        });
+        return Array.isArray(data) ? data : [];
+    },
+
+    // Book Class
+    bookClass: async (classId: number, studentId: string | number) => {
+        return await nativeFetch({
+            method: 'POST',
+            url: `${API_BASE_URL}/api/classes/${classId}/book`,
+            params: getAuthQueryParams(),
+            data: { studentId: Number(studentId) }
+        });
+    },
+
+    // Cancel Booking
+    cancelBooking: async (classId: number) => {
+        return await nativeFetch({
+            method: 'DELETE',
+            url: `${API_BASE_URL}/api/classes/${classId}/book`,
+            params: getAuthQueryParams()
+        });
+    },
+
+    // Get Booking Status
+    getBookingStatus: async (classId: number) => {
+        return await nativeFetch({
+            method: 'GET',
+            url: `${API_BASE_URL}/api/classes/${classId}/status`,
+            params: getAuthQueryParams()
+        });
+    },
+
+    // Delete Single Class
+    deleteClass: async (classId: number) => {
+        return await nativeFetch({
+            method: 'DELETE',
+            url: `${API_BASE_URL}/api/classes/${classId}`,
+            params: getAuthQueryParams()
+        });
+    },
+
+    // Delete Recurrence Series
+    deleteRecurrenceSeries: async (groupId: string) => {
+        return await nativeFetch({
+            method: 'DELETE',
+            url: `${API_BASE_URL}/api/classes/recurrence/${groupId}`,
+            params: getAuthQueryParams()
         });
     },
 
