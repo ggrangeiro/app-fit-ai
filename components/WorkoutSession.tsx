@@ -1,6 +1,175 @@
 import React, { useState, useEffect } from 'react';
 import { WorkoutDayV2, ExerciseV2, WorkoutPlanV2 } from '../types';
-import { ArrowLeft, Clock, Info, CheckCircle2, Save, Play, Dumbbell, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ArrowLeft, Clock, Info, CheckCircle2, Save, Play, Dumbbell, ThumbsUp, ThumbsDown, X, Calendar, ChevronRight } from 'lucide-react';
+
+// ====================================
+// Modal de Seleção de Dia de Treino
+// ====================================
+
+interface WorkoutDaySelectorProps {
+    days: any[];
+    onSelectDay: (day: any, dayIndex: number) => void;
+    onClose: () => void;
+}
+
+// Mapeamento de dias da semana em inglês para português
+const dayOfWeekMap: Record<string, string> = {
+    'monday': 'Segunda',
+    'tuesday': 'Terça',
+    'wednesday': 'Quarta',
+    'thursday': 'Quinta',
+    'friday': 'Sexta',
+    'saturday': 'Sábado',
+    'sunday': 'Domingo',
+    'weekend': 'Fim de Semana',
+    '1': 'Segunda',
+    '2': 'Terça',
+    '3': 'Quarta',
+    '4': 'Quinta',
+    '5': 'Sexta',
+    '6': 'Sábado',
+    '7': 'Domingo',
+};
+
+// Verifica se é dia de descanso
+const isRestDay = (day: any): boolean => {
+    if (!day) return true;
+
+    // Verificar propriedades booleanas explícitas (vários formatos possíveis)
+    // IMPORTANTE: isRest é usado no formato atual
+    if (day.isRest === true || day.isRestDay === true || day.is_rest_day === true || day.is_rest === true) return true;
+
+    // Verificar status
+    if (day.status === 'rest') return true;
+
+    // Verificar trainingType/title que indica descanso
+    const trainingType = (day.trainingType || day.training_type || day.title || '').toLowerCase();
+    if (trainingType === 'descanso' || trainingType === 'rest' || trainingType === 'descanso ativo') return true;
+
+    // Verificar pelo nome do dia se indica descanso
+    const dayName = (day.day || day.dayLabel || day.day_label || day.name || '').toLowerCase();
+    if (dayName.includes('descanso') || dayName.includes('recuperação') || dayName.includes('rest') || dayName.includes('off')) {
+        return true;
+    }
+
+    // Se tem isRest/isRestDay explicitamente false, NÃO é descanso
+    if (day.isRest === false || day.isRestDay === false || day.is_rest_day === false) return false;
+
+    // Se tem exercícios, NÃO é descanso
+    if (day.exercises && day.exercises.length > 0) return false;
+
+    // Por padrão, assumir que NÃO é descanso
+    return false;
+};
+
+const formatDayTitle = (day: any, index: number): string => {
+    if (!day) return `Treino ${index + 1}`;
+
+    // Suportar múltiplos formatos de dados
+    // Formato novo: { day: "Segunda-feira", title: "Superior A" }
+    // Formato antigo: { dayLabel: "Dia 1: Superior A", dayOfWeek: "monday", trainingType: "..." }
+    const title = day.title || day.trainingType || day.training_type || '';
+    const dayNameFull = day.day || day.dayLabel || day.day_label || '';
+    const dayOfWeek = day.dayOfWeek || day.day_of_week || '';
+
+    // Se temos "day" (ex: "Segunda-feira") e "title" (ex: "Superior A"), combinar
+    if (dayNameFull && title) {
+        // Remover "-feira" para ficar mais curto
+        const shortDayName = dayNameFull.replace('-feira', '');
+        return `${shortDayName}: ${title}`;
+    }
+
+    // Se temos dayOfWeek em inglês, traduzir e combinar com title
+    if (dayOfWeek && title) {
+        const translatedDay = dayOfWeekMap[String(dayOfWeek).toLowerCase()] || '';
+        if (translatedDay) {
+            return `${translatedDay}: ${title}`;
+        }
+    }
+
+    // Se temos apenas dayLabel no formato "Dia X: Titulo"
+    if (dayNameFull && dayNameFull.match(/^Dia \d+:/i)) {
+        // Se temos dayOfWeek, substituir "Dia X" pelo dia da semana
+        if (dayOfWeek) {
+            const translatedDay = dayOfWeekMap[String(dayOfWeek).toLowerCase()] || '';
+            if (translatedDay) {
+                return dayNameFull.replace(/^Dia \d+:/i, `${translatedDay}:`);
+            }
+        }
+        return dayNameFull;
+    }
+
+    // Se temos apenas title
+    if (title) {
+        return title;
+    }
+
+    // Último fallback
+    return day.name || `Treino ${index + 1}`;
+};
+
+export const WorkoutDaySelector: React.FC<WorkoutDaySelectorProps> = ({ days, onSelectDay, onClose }) => {
+    // Filtrar apenas dias de treino (remover dias de descanso)
+    const trainingDays = days.filter((day: any) => !isRestDay(day));
+
+    // Debug: log dos dias recebidos
+    console.log('[WorkoutDaySelector] Dias recebidos:', days);
+    console.log('[WorkoutDaySelector] Dias de treino (filtrados):', trainingDays);
+
+    return (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 md:p-8 w-full max-w-2xl relative shadow-2xl max-h-[90vh] overflow-y-auto" style={{ marginTop: 'env(safe-area-inset-top)' }}>
+                <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+                    <X className="w-6 h-6" />
+                </button>
+
+                <div className="flex flex-col items-center mb-6">
+                    <div className="p-3 bg-emerald-600/20 text-emerald-400 rounded-full mb-3">
+                        <Dumbbell className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white">Iniciar Treino</h3>
+                    <p className="text-slate-400 text-center text-sm">Selecione qual treino você deseja fazer hoje</p>
+                </div>
+
+                <div className="space-y-3">
+                    {trainingDays.map((day: any, index: number) => {
+                        const title = formatDayTitle(day, index);
+                        const exerciseCount = day.exercises?.length || 0;
+                        const note = day.note || 'Bom treino!';
+
+                        // Encontrar o índice original no array completo para passar ao handler
+                        const originalIndex = days.findIndex((d: any) => d === day);
+
+                        return (
+                            <button
+                                key={index}
+                                onClick={() => onSelectDay(day, originalIndex + 1)}
+                                className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl p-5 text-left transition-all group"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Calendar className="w-4 h-4 text-emerald-400" />
+                                            <h4 className="text-white font-bold">{title}</h4>
+                                        </div>
+                                        <p className="text-slate-400 text-xs mt-1">
+                                            {exerciseCount > 0 ? `${exerciseCount} exercícios • ` : ''}{note}
+                                        </p>
+                                    </div>
+                                    <ChevronRight className="w-6 h-6 text-slate-500 group-hover:text-emerald-400 transition-colors" />
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ====================================
+// Sessão de Treino Interativa
+// ====================================
 
 interface WorkoutSessionProps {
     dayData: WorkoutDayV2;

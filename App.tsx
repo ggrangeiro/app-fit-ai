@@ -38,7 +38,7 @@ import EvolutionPhotosModal from './components/EvolutionPhotosModal';
 import { AchievementsModal } from './components/AchievementsModal';
 import { Camera, ClipboardList, PlayCircle, Trophy } from 'lucide-react';
 import { getFullImageUrl } from './utils/imageUtils';
-import { WorkoutSession } from './components/WorkoutSession';
+import { WorkoutSession, WorkoutDaySelector } from './components/WorkoutSession';
 import { getCurrentLocation } from './utils/geolocation';
 import { ClassSchedule } from './components/ClassSchedule';
 
@@ -2099,16 +2099,12 @@ const App: React.FC = () => {
         </div>
         <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
 
-          {/* Interactive Workout List (Hybrid Mode) */}
-          {/* Interactive Workout List (Hybrid Mode) */}
+          {/* Upgrade Button for legacy workouts without structured data */}
           {(() => {
             const currentWorkout = savedWorkouts[0];
-            // Fallback: Try to extract JSON from HTML if explicit daysData is missing
             const embeddedJson = currentWorkout?.content?.match(/<!-- DATA_JSON_START -->([\s\S]*?)<!-- DATA_JSON_END -->/)?.[1];
-            // ROBUST CHECK: Check daysData (camel) AND days_data (snake)
             const activeDaysData = viewingDaysData || currentWorkout?.daysData || currentWorkout?.days_data || embeddedJson;
 
-            // SHOW UPGRADE BUTTON IF NO DATA
             if (!activeDaysData && currentWorkout) {
               return (
                 <div className="mb-8 p-6 bg-slate-800 rounded-2xl border border-slate-700 text-center">
@@ -2130,42 +2126,6 @@ const App: React.FC = () => {
                 </div>
               );
             }
-
-            if (showDaySelector && activeDaysData) {
-              try {
-                const rawParsed: any = JSON.parse(activeDaysData);
-                // Handle both formats: { days: [...] } or direct array
-                const parsedDays = Array.isArray(rawParsed) ? rawParsed : (rawParsed.days || []);
-                return (
-                  <div className="mb-8 grid gap-4 grid-cols-1 md:grid-cols-2 animate-in fade-in slide-in-from-top-4">
-                    {parsedDays.map((day: any, idx: number) => {
-                      // Support both formats: { name, status } and { dayLabel, trainingType, isRestDay }
-                      const isRest = day.status === 'rest' || day.isRestDay || day.is_rest_day;
-                      const title = day.name || day.dayLabel || day.day_label || day.trainingType || day.training_type || `Dia ${idx + 1}`;
-                      return (
-                        <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${isRest ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
-                          <div>
-                            <h4 className="font-bold text-slate-800">{title}</h4>
-                          </div>
-                          {!isRest && (
-                            <button
-                              onClick={() => handleStartSession({ ...day, _dayIndex: idx + 1 })}
-                              className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-emerald-900/20 shadow-lg active:scale-95"
-                            >
-                              <PlayCircle size={18} /> Iniciar
-                            </button>
-                          )}
-                          {isRest && <span className="text-xs font-bold px-2 py-1 bg-slate-300 text-slate-600 rounded">DESCANSO</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              } catch (e) {
-                console.warn('Failed to parse daysData', e);
-                return null;
-              }
-            }
             return null;
           })()}
           <style>{`
@@ -2178,9 +2138,7 @@ const App: React.FC = () => {
                    .no-print { display: none !important; }
                  }
              `}</style>
-          {!showDaySelector && (
-            <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: (viewingWorkoutHtml || (savedWorkouts[0]?.content || '')).split('<!-- DATA_JSON_START -->')[0] }} />
-          )}
+          <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: (viewingWorkoutHtml || (savedWorkouts[0]?.content || '')).split('<!-- DATA_JSON_START -->')[0] }} />
         </div>
       </div>
       {showRedoModal && (
@@ -2211,6 +2169,48 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Modal de Seleção de Dia de Treino */}
+      {showDaySelector && (() => {
+        const currentWorkout = savedWorkouts[0];
+        const embeddedJson = currentWorkout?.content?.match(/<!-- DATA_JSON_START -->([\s\S]*?)<!-- DATA_JSON_END -->/)?.[1];
+        const activeDaysData = viewingDaysData || currentWorkout?.daysData || currentWorkout?.days_data || embeddedJson;
+
+        console.log('[DaySelector] currentWorkout:', currentWorkout);
+        console.log('[DaySelector] activeDaysData source:', {
+          viewingDaysData: !!viewingDaysData,
+          daysData: !!currentWorkout?.daysData,
+          days_data: !!currentWorkout?.days_data,
+          embeddedJson: !!embeddedJson
+        });
+
+        if (!activeDaysData) {
+          console.warn('[DaySelector] No activeDaysData found!');
+          return null;
+        }
+
+        try {
+          const rawParsed: any = JSON.parse(activeDaysData);
+          const parsedDays = Array.isArray(rawParsed) ? rawParsed : (rawParsed.days || []);
+
+          console.log('[DaySelector] rawParsed:', rawParsed);
+          console.log('[DaySelector] parsedDays:', parsedDays);
+          console.log('[DaySelector] parsedDays sample:', parsedDays[0]);
+
+          return (
+            <WorkoutDaySelector
+              days={parsedDays}
+              onSelectDay={(day, dayIndex) => {
+                handleStartSession({ ...day, _dayIndex: dayIndex });
+                setShowDaySelector(false);
+              }}
+              onClose={() => setShowDaySelector(false)}
+            />
+          );
+        } catch (e) {
+          console.warn('Failed to parse daysData for selector', e);
+          return null;
+        }
+      })()}
     </div>
   );
 
