@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { AnalysisResult, ExerciseType, ExerciseRecord, SPECIAL_EXERCISES, User } from '../types';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
-import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User as UserIcon, ArrowLeft, ArrowRight, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download, Lightbulb, UploadCloud, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle, Repeat, Activity, Trophy, Sparkles, User as UserIcon, ArrowLeft, ArrowRight, MessageCircleHeart, Scale, Utensils, Printer, Loader2, X, AlertTriangle, ThumbsUp, Info, Dumbbell, History, Share2, Download, Lightbulb, UploadCloud, Image as ImageIcon, WifiOff, Clock } from 'lucide-react';
 import MuscleMap from './MuscleMap';
 import { generateDietPlan, generateWorkoutPlan } from '../services/geminiService';
 import { EvolutionModal } from './EvolutionModal';
 import { ToastType } from './Toast';
 import { apiService, API_BASE_URL } from '../services/apiService';
 import { shareAsPdf } from '../utils/pdfUtils';
+import { useAsyncOperation, OperationType, ErrorType } from '../hooks/useAsyncOperation';
+import { PendingOperationModal } from './PendingOperationModal';
 
 import { getCurrentLocation } from '../utils/geolocation';
 
@@ -183,6 +185,35 @@ export const ResultView: React.FC<ResultViewProps> = ({
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // Hook para gerenciar operações assíncronas com persistência
+  const workoutOperation = useAsyncOperation<string>('WORKOUT', {
+    timeout: 120000, // 2 minutos
+    onInterrupt: () => {
+      console.log('Workout generation interrupted - app went to background');
+    },
+  });
+
+  const dietOperation = useAsyncOperation<string>('DIET', {
+    timeout: 120000,
+    onInterrupt: () => {
+      console.log('Diet generation interrupted - app went to background');
+    },
+  });
+
+  // Estado para controlar qual modal de recuperação mostrar
+  const [showWorkoutRecoveryModal, setShowWorkoutRecoveryModal] = useState(false);
+  const [showDietRecoveryModal, setShowDietRecoveryModal] = useState(false);
+
+  // Verifica operações pendentes ao montar
+  useEffect(() => {
+    if (workoutOperation.hasPendingOperation) {
+      setShowWorkoutRecoveryModal(true);
+    }
+    if (dietOperation.hasPendingOperation) {
+      setShowDietRecoveryModal(true);
+    }
+  }, [workoutOperation.hasPendingOperation, dietOperation.hasPendingOperation]);
+
   // Reset helpers
   const resetDietForm = () => {
     setDietFormData({ weight: '', height: '', goal: 'emagrecer', gender: 'masculino', observations: '' });
@@ -239,8 +270,10 @@ export const ResultView: React.FC<ResultViewProps> = ({
     }
   }, [result.gender]);
 
-  const handleGenerateDiet = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGenerateDiet = async (e: React.FormEvent, retryFormData?: any) => {
+    e?.preventDefault?.();
+
+    const formDataToUse = retryFormData || dietFormData;
 
     // --- VERIFICAÇÃO DE CRÉDITO ---
     if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
@@ -255,46 +288,85 @@ export const ResultView: React.FC<ResultViewProps> = ({
     }
 
     setDietLoading(true);
-    try {
-      const planHtml = await generateDietPlan(dietFormData, currentUser?.id || userId, currentUser?.role || 'user', dietDocument, dietPhoto);
 
-      await apiService.createDiet(userId, planHtml, dietFormData.goal);
-      if (onDietSaved) onDietSaved();
+    // Executa com o hook que gerencia timeout e persistência
+    const result = await dietOperation.execute(
+      async (signal) => {
+        // Gera o plano com suporte a AbortSignal
+        const planHtml = await generateDietPlan(
+          formDataToUse,
+          currentUser?.id || userId,
+          currentUser?.role || 'user',
+          dietDocument,
+          dietPhoto,
+          undefined,
+          signal
+        );
 
-      // --- DEBITAR CRÉDITO ---
-      if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
-        try {
-          const creditResponse = await apiService.consumeCredit(currentUser.id, 'DIETA');
-          if (creditResponse && typeof creditResponse.novoSaldo === 'number' && onUpdateUser) {
-            onUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
-          }
-        } catch (e: any) {
-          console.error("Erro ao debitar crédito da dieta", e);
-          if (e.message === 'CREDITS_EXHAUSTED' || e.message.includes('402')) {
-            showToast("Atenção: Saldo insuficiente para debitar a geração.", 'error');
+        // Salva no backend
+        await apiService.createDiet(userId, planHtml, formDataToUse.goal);
+        if (onDietSaved) onDietSaved();
+
+        // Debita crédito
+        if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
+          try {
+            const creditResponse = await apiService.consumeCredit(currentUser.id, 'DIETA');
+            if (creditResponse && typeof creditResponse.novoSaldo === 'number' && onUpdateUser) {
+              onUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
+            }
+          } catch (creditError: any) {
+            console.error("Erro ao debitar crédito da dieta", creditError);
           }
         }
-      }
 
+        return planHtml;
+      },
+      formDataToUse,
+      currentUser?.id || userId
+    );
+
+    setDietLoading(false);
+
+    if (result.success && result.data) {
       // Limpa anexos
       if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview);
       setDietPhotoPreview(null);
       setDietPhoto(null);
       setDietDocument(null);
 
-      setDietPlanHtml(planHtml);
+      setDietPlanHtml(result.data);
       setShowDietForm(false);
+      setShowDietRecoveryModal(false);
       resetDietForm();
       showToast("Dieta gerada com sucesso!", 'success');
-    } catch (error) {
-      showToast("Erro ao gerar dieta. Tente novamente.", 'error');
-    } finally {
-      setDietLoading(false);
+    } else if (result.error) {
+      const errorMsg = getErrorMessage(result.error, 'Erro ao gerar dieta. Tente novamente.');
+      showToast(errorMsg, 'error');
     }
   };
 
-  const handleGenerateWorkout = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Função auxiliar para obter mensagem de erro amigável
+  const getErrorMessage = (error: { type: ErrorType; message: string } | null, defaultMsg: string): string => {
+    if (!error) return defaultMsg;
+
+    switch (error.type) {
+      case 'NETWORK_ERROR':
+        return 'Sem conexão com a internet. Verifique sua rede e tente novamente.';
+      case 'TIMEOUT':
+        return 'A geração demorou muito. Tente novamente em alguns instantes.';
+      case 'API_ERROR':
+        return 'Erro no serviço de IA. Tente novamente.';
+      case 'CREDIT_ERROR':
+        return 'Créditos insuficientes para esta operação.';
+      default:
+        return error.message || defaultMsg;
+    }
+  };
+
+  const handleGenerateWorkout = async (e: React.FormEvent, retryFormData?: any) => {
+    e?.preventDefault?.();
+
+    const formDataToUse = retryFormData || workoutFormData;
 
     // --- VERIFICAÇÃO DE CRÉDITO ---
     if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
@@ -309,46 +381,64 @@ export const ResultView: React.FC<ResultViewProps> = ({
     }
 
     setWorkoutLoading(true);
-    try {
-      const planHtml = await generateWorkoutPlan(workoutFormData, currentUser?.id || userId, currentUser?.role || 'user', workoutDocument, workoutPhoto);
 
-      const response = await apiService.createTraining(userId, planHtml, workoutFormData.goal);
-      if (response && response.id) {
-        setCurrentWorkoutId(response.id);
-      }
+    // Executa com o hook que gerencia timeout e persistência
+    const result = await workoutOperation.execute(
+      async (signal) => {
+        // Gera o plano com suporte a AbortSignal
+        const planHtml = await generateWorkoutPlan(
+          formDataToUse,
+          currentUser?.id || userId,
+          currentUser?.role || 'user',
+          workoutDocument,
+          workoutPhoto,
+          undefined,
+          signal
+        );
 
-      if (onWorkoutSaved) onWorkoutSaved();
+        // Salva no backend
+        const response = await apiService.createTraining(userId, planHtml, formDataToUse.goal);
+        if (response && response.id) {
+          setCurrentWorkoutId(response.id);
+        }
 
-      // --- DEBITAR CRÉDITO ---
-      if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
-        try {
-          const creditResponse = await apiService.consumeCredit(currentUser.id, 'TREINO');
-          if (creditResponse && typeof creditResponse.novoSaldo === 'number' && onUpdateUser) {
-            onUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
-          }
-        } catch (e: any) {
-          console.error("Erro ao debitar crédito do treino", e);
-          if (e.message === 'CREDITS_EXHAUSTED' || e.message.includes('402')) {
-            showToast("Atenção: Saldo insuficiente para debitar a geração.", 'error');
+        if (onWorkoutSaved) onWorkoutSaved();
+
+        // Debita crédito
+        if (currentUser && (currentUser.role === 'user' || currentUser.role === 'personal')) {
+          try {
+            const creditResponse = await apiService.consumeCredit(currentUser.id, 'TREINO');
+            if (creditResponse && typeof creditResponse.novoSaldo === 'number' && onUpdateUser) {
+              onUpdateUser({ ...currentUser, credits: creditResponse.novoSaldo });
+            }
+          } catch (creditError: any) {
+            console.error("Erro ao debitar crédito do treino", creditError);
           }
         }
-      }
 
+        return planHtml;
+      },
+      formDataToUse,
+      currentUser?.id || userId
+    );
+
+    setWorkoutLoading(false);
+
+    if (result.success && result.data) {
       // Limpa anexos
       if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
       setWorkoutPhotoPreview(null);
       setWorkoutPhoto(null);
       setWorkoutDocument(null);
 
-      setWorkoutPlanHtml(planHtml);
+      setWorkoutPlanHtml(result.data);
       setShowWorkoutForm(false);
+      setShowWorkoutRecoveryModal(false);
       resetWorkoutForm();
       showToast("Treino gerado com sucesso!", 'success');
-
-    } catch (error) {
-      showToast("Erro ao gerar treino. Tente novamente.", 'error');
-    } finally {
-      setWorkoutLoading(false);
+    } else if (result.error) {
+      const errorMsg = getErrorMessage(result.error, 'Erro ao gerar treino. Tente novamente.');
+      showToast(errorMsg, 'error');
     }
   };
 
@@ -622,6 +712,42 @@ ${strengthsText}${improvementsText}
         triggerConfirm={triggerConfirm}
         userId={currentUser?.id || userId}
         userRole={currentUser?.role || 'user'}
+      />
+
+      {/* Modal de Recuperação de Treino Pendente */}
+      <PendingOperationModal
+        isOpen={showWorkoutRecoveryModal}
+        operation={workoutOperation.pendingOperation}
+        onRetry={() => {
+          const savedFormData = workoutOperation.getPendingFormData();
+          if (savedFormData) {
+            setWorkoutFormData(savedFormData);
+            handleGenerateWorkout({ preventDefault: () => {} } as React.FormEvent, savedFormData);
+          }
+        }}
+        onDismiss={() => {
+          workoutOperation.dismissPendingOperation();
+          setShowWorkoutRecoveryModal(false);
+        }}
+        isRetrying={workoutLoading}
+      />
+
+      {/* Modal de Recuperação de Dieta Pendente */}
+      <PendingOperationModal
+        isOpen={showDietRecoveryModal}
+        operation={dietOperation.pendingOperation}
+        onRetry={() => {
+          const savedFormData = dietOperation.getPendingFormData();
+          if (savedFormData) {
+            setDietFormData(savedFormData);
+            handleGenerateDiet({ preventDefault: () => {} } as React.FormEvent, savedFormData);
+          }
+        }}
+        onDismiss={() => {
+          dietOperation.dismissPendingOperation();
+          setShowDietRecoveryModal(false);
+        }}
+        isRetrying={dietLoading}
       />
 
       {/* Modal Form for Diet */}

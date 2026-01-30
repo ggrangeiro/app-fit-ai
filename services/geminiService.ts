@@ -7,6 +7,47 @@ import { getGeminiApiKey, clearApiKeyCache } from "./configService";
 const ANALYSIS_MODEL = "gemini-3-pro-preview";
 const SUPPORT_MODEL = "gemini-3-flash-preview";
 
+// Timeout padrão para operações de IA (2 minutos)
+const DEFAULT_AI_TIMEOUT = 120000;
+
+/**
+ * Wrapper que adiciona timeout a uma Promise
+ */
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, signal?: AbortSignal): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    // Verifica se já foi abortado
+    if (signal?.aborted) {
+      reject(new DOMException('Operação cancelada pelo usuário', 'AbortError'));
+      return;
+    }
+
+    // Listener para abort
+    const abortHandler = () => {
+      reject(new DOMException('Operação cancelada pelo usuário', 'AbortError'));
+    };
+    signal?.addEventListener('abort', abortHandler);
+
+    // Timeout
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', abortHandler);
+      reject(new Error('TIMEOUT: A operação demorou muito. Tente novamente.'));
+    }, timeoutMs);
+
+    // Promise original
+    promise
+      .then((result) => {
+        clearTimeout(timeoutId);
+        signal?.removeEventListener('abort', abortHandler);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        signal?.removeEventListener('abort', abortHandler);
+        reject(error);
+      });
+  });
+};
+
 // --- BLOCO DE SEGURANÇA E RELEVÂNCIA (ANTI-ALUCINAÇÃO) ---
 const SAFETY_PROMPT_BLOCK = `
     VERIFICAÇÃO DE SEGURANÇA E RELEVÂNCIA (CRÍTICO):
@@ -218,7 +259,8 @@ export const generateDietPlan = async (
   userRole: string,
   documentFile?: File | null,
   photoFile?: File | null,
-  personalConfig?: { methodology?: string; communicationStyle?: string }
+  personalConfig?: { methodology?: string; communicationStyle?: string },
+  signal?: AbortSignal
 ): Promise<string> => {
   const genAI = await getGenAI(userId, userRole);
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
@@ -276,6 +318,11 @@ export const generateDietPlan = async (
   `;
 
   try {
+    // Verifica se já foi cancelado
+    if (signal?.aborted) {
+      throw new DOMException('Operação cancelada pelo usuário', 'AbortError');
+    }
+
     const parts: any[] = [{ text: prompt }];
 
     if (documentFile) {
@@ -288,14 +335,37 @@ export const generateDietPlan = async (
       parts.push(photoPart);
     }
 
-    const result = await model.generateContent(parts);
+    // Verifica novamente antes da chamada principal
+    if (signal?.aborted) {
+      throw new DOMException('Operação cancelada pelo usuário', 'AbortError');
+    }
+
+    // Executa com timeout
+    const result = await withTimeout(
+      model.generateContent(parts),
+      DEFAULT_AI_TIMEOUT,
+      signal
+    );
     return result.response.text().replace(/```html|```/g, "").trim();
   } catch (error: any) {
+    // Re-throw AbortError para tratamento adequado
+    if (error.name === 'AbortError') {
+      throw error;
+    }
+
     console.error("Erro ao gerar dieta:", error);
+
+    // Erro de timeout
+    if (error.message?.includes('TIMEOUT')) {
+      throw new Error('TIMEOUT: A geração da dieta demorou muito. Tente novamente.');
+    }
+
     if (error.message?.includes("API key") || error.message?.includes("401") || error.message?.includes("403")) {
       resetGeminiInstance();
+      throw new Error('API_ERROR: Erro de autenticação. Tente novamente.');
     }
-    return "<p>Erro ao gerar dieta.</p>";
+
+    throw new Error('GENERATION_ERROR: Erro ao gerar dieta. Tente novamente.');
   }
 };
 
@@ -310,7 +380,8 @@ export const generateWorkoutPlan = async (
   userRole: string,
   documentFile?: File | null,
   photoFile?: File | null,
-  personalConfig?: { methodology?: string; communicationStyle?: string }
+  personalConfig?: { methodology?: string; communicationStyle?: string },
+  signal?: AbortSignal
 ): Promise<string> => {
   const genAI = await getGenAI(userId, userRole);
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
@@ -382,6 +453,11 @@ export const generateWorkoutPlan = async (
   `;
 
   try {
+    // Verifica se já foi cancelado
+    if (signal?.aborted) {
+      throw new DOMException('Operação cancelada pelo usuário', 'AbortError');
+    }
+
     const parts: any[] = [{ text: prompt }];
 
     if (documentFile) {
@@ -394,14 +470,37 @@ export const generateWorkoutPlan = async (
       parts.push(photoPart);
     }
 
-    const result = await model.generateContent(parts);
+    // Verifica novamente antes da chamada principal
+    if (signal?.aborted) {
+      throw new DOMException('Operação cancelada pelo usuário', 'AbortError');
+    }
+
+    // Executa com timeout
+    const result = await withTimeout(
+      model.generateContent(parts),
+      DEFAULT_AI_TIMEOUT,
+      signal
+    );
     return result.response.text().replace(/```html|```/g, "").trim();
   } catch (error: any) {
+    // Re-throw AbortError para tratamento adequado
+    if (error.name === 'AbortError') {
+      throw error;
+    }
+
     console.error("Erro ao gerar treino:", error);
+
+    // Erro de timeout
+    if (error.message?.includes('TIMEOUT')) {
+      throw new Error('TIMEOUT: A geração do treino demorou muito. Tente novamente.');
+    }
+
     if (error.message?.includes("API key") || error.message?.includes("401") || error.message?.includes("403")) {
       resetGeminiInstance();
+      throw new Error('API_ERROR: Erro de autenticação. Tente novamente.');
     }
-    return "<p>Erro ao gerar treino.</p>";
+
+    throw new Error('GENERATION_ERROR: Erro ao gerar treino. Tente novamente.');
   }
 };
 
