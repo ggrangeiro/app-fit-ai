@@ -1,12 +1,36 @@
 import CryptoJS from 'crypto-js';
 
-const SECRET_KEY = "fitai_secret_key_v1"; // Em produção, idealmente viria de uma variável de ambiente, mas para criptografia local simples funciona.
+/**
+ * Gera uma chave derivada baseada em fatores do ambiente.
+ * Em produção, isso é mais seguro que uma chave hardcoded pois
+ * a chave final varia por instalação/dispositivo.
+ */
+const deriveSecretKey = (): string => {
+    // Combina múltiplos fatores para criar uma chave única por instalação
+    const factors = [
+        navigator.userAgent,
+        window.location.origin,
+        'fitai_v2_salt_2024'
+    ].join('|');
+
+    // Gera hash SHA256 dos fatores para criar a chave
+    return CryptoJS.SHA256(factors).toString();
+};
+
+// Chave derivada é gerada uma vez e cacheada
+let _cachedKey: string | null = null;
+const getSecretKey = (): string => {
+    if (!_cachedKey) {
+        _cachedKey = deriveSecretKey();
+    }
+    return _cachedKey;
+};
 
 export const secureStorage = {
     setItem: (key: string, value: any) => {
         try {
             const stringValue = JSON.stringify(value);
-            const encrypted = CryptoJS.AES.encrypt(stringValue, SECRET_KEY).toString();
+            const encrypted = CryptoJS.AES.encrypt(stringValue, getSecretKey()).toString();
             localStorage.setItem(key, encrypted);
         } catch (e) {
             console.error("Error encrypting data", e);
@@ -24,7 +48,7 @@ export const secureStorage = {
 
             // Tenta desencriptar
             try {
-                const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
+                const bytes = CryptoJS.AES.decrypt(encrypted, getSecretKey());
                 const decrypted = bytes.toString(CryptoJS.enc.Utf8);
 
                 if (!decrypted) {

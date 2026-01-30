@@ -6,7 +6,6 @@ import { ToastType } from './Toast';
 
 interface WeeklyCheckInTrackerProps {
     userId: string;
-    onOpenCheckIn: (date: string) => void;
     showToast: (message: string, type?: ToastType) => void;
     refreshTrigger?: number; // New prop to force refresh
     weeklyGoal?: number; // Training days per week from workout plan
@@ -84,7 +83,6 @@ const generateMockStreakData = (): StreakData => {
 
 export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     userId,
-    onOpenCheckIn,
     showToast,
     refreshTrigger = 0,
     weeklyGoal = 5
@@ -129,11 +127,12 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
         } finally {
             setLoading(false);
         }
-    }, [userId, weekOffset, refreshTrigger]); // Added refreshTrigger dependency
+    }, [userId, weekOffset]);
 
+    // Fetch data when dependencies change, including refreshTrigger for check-in updates
     useEffect(() => {
         fetchData();
-    }, [fetchData]);
+    }, [fetchData, refreshTrigger]);
 
     const handlePrevWeek = () => setWeekOffset(prev => prev - 1);
     const handleNextWeek = () => {
@@ -144,46 +143,33 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     };
 
     const handleDayClick = (day: WeeklyCheckInDay) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const dayDate = new Date(day.date);
-        dayDate.setHours(0, 0, 0, 0);
-
-        const isToday = dayDate.getTime() === today.getTime();
-        const isPast = dayDate < today;
-        const isFuture = dayDate > today;
-
-        if (isFuture) {
-            // Future days are disabled
+        // Apenas mostra informações de dias com check-in
+        // Check-in manual foi removido - só é feito ao finalizar treino
+        if (!day.hasCheckIn) {
             return;
         }
 
-        if (day.hasCheckIn) {
-            let msg = '';
-            // Workout Name
-            if (day.checkIn?.workoutName) {
-                msg += `🏋️ ${day.checkIn.workoutName}`;
-            } else {
-                msg += `🏋️ Treino Concluído`;
-            }
-
-            // Feedback
-            if (day.checkIn?.feedback === 'like') {
-                msg += ` • 👍 Gostou`;
-            } else if (day.checkIn?.feedback === 'dislike') {
-                msg += ` • 👎 Não gostou`;
-            }
-
-            // Comment
-            if (day.checkIn?.comment) {
-                msg += `\n💬 "${day.checkIn.comment}"`;
-            }
-
-            showToast(msg, 'info');
-        } else if (!day.hasCheckIn && (isToday || isPast)) {
-            // Open check-in modal with pre-selected date
-            onOpenCheckIn(day.date);
+        let msg = '';
+        // Workout Name
+        if (day.checkIn?.workoutName) {
+            msg += `🏋️ ${day.checkIn.workoutName}`;
+        } else {
+            msg += `🏋️ Treino Concluído`;
         }
+
+        // Feedback
+        if (day.checkIn?.feedback === 'like') {
+            msg += ` • 👍 Gostou`;
+        } else if (day.checkIn?.feedback === 'dislike') {
+            msg += ` • 👎 Não gostou`;
+        }
+
+        // Comment
+        if (day.checkIn?.comment) {
+            msg += `\n💬 "${day.checkIn.comment}"`;
+        }
+
+        showToast(msg, 'info');
     };
 
     const getDayState = (day: WeeklyCheckInDay): 'completed' | 'today' | 'empty' | 'future' => {

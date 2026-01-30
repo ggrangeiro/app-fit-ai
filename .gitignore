@@ -15,6 +15,12 @@ dist-ssr
 # Environment Variables
 .env
 
+# APK files (never commit binaries)
+*.apk
+
+# Android build outputs
+android/app/build/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

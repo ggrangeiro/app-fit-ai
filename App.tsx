@@ -461,6 +461,7 @@ const App: React.FC = () => {
   const [showAchievements, setShowAchievements] = useState(false);
   // Interactive Workout Session State
   const [activeWorkoutDay, setActiveWorkoutDay] = useState<WorkoutDayV2 | null>(null);
+  const [showDaySelector, setShowDaySelector] = useState(false);
 
   const handleStartSession = async (day: WorkoutDayV2) => {
     if (currentUser) {
@@ -698,6 +699,10 @@ const App: React.FC = () => {
         return;
       }
       if (showWorkoutModal) {
+        if (showDaySelector) {
+          setShowDaySelector(false);
+          return;
+        }
         setShowWorkoutModal(false);
         setViewingWorkoutHtml(null);
         setViewingDaysData(null);
@@ -1735,6 +1740,7 @@ const App: React.FC = () => {
       resetWorkoutForm();
       setViewingWorkoutHtml(planHtml);
       setViewingDaysData(daysDataStr || null); // Set immediate V2 data
+      setShowDaySelector(false);
       setShowWorkoutModal(true);
 
     } catch (err: any) {
@@ -2036,12 +2042,29 @@ const App: React.FC = () => {
       <div className="min-h-screen p-4 md:p-8 relative" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top))' }}>
         <div className="flex justify-between items-center max-w-7xl mx-auto mb-6">
           <button
-            onClick={() => { setShowWorkoutModal(false); setViewingWorkoutHtml(null); setViewingDaysData(null); resetWorkoutForm(); }}
+            onClick={() => {
+              if (showDaySelector) {
+                setShowDaySelector(false);
+              } else {
+                setShowWorkoutModal(false);
+                setViewingWorkoutHtml(null);
+                setViewingDaysData(null);
+                resetWorkoutForm();
+              }
+            }}
             className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" /> <span className="hidden sm:inline">Voltar</span>
           </button>
           <div className="flex gap-3">
+            {!showDaySelector && (savedWorkouts.length > 0) && (
+              <button
+                onClick={() => setShowDaySelector(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-lg text-white font-bold shadow-lg shadow-purple-900/20 transition-all scale-100 hover:scale-105 active:scale-95"
+              >
+                <Dumbbell className="w-5 h-5" /> <span>Iniciar Treino</span>
+              </button>
+            )}
             <button
               onClick={() => handleSharePdf('workout-view-content', 'Meu Treino FitAI')}
               disabled={pdfLoading}
@@ -2077,6 +2100,7 @@ const App: React.FC = () => {
         <div className="max-w-6xl mx-auto bg-slate-50 rounded-3xl p-8 shadow-2xl min-h-[80vh]">
 
           {/* Interactive Workout List (Hybrid Mode) */}
+          {/* Interactive Workout List (Hybrid Mode) */}
           {(() => {
             const currentWorkout = savedWorkouts[0];
             // Fallback: Try to extract JSON from HTML if explicit daysData is missing
@@ -2107,7 +2131,7 @@ const App: React.FC = () => {
               );
             }
 
-            if (activeDaysData) {
+            if (showDaySelector && activeDaysData) {
               try {
                 const rawParsed: any = JSON.parse(activeDaysData);
                 // Handle both formats: { days: [...] } or direct array
@@ -2154,7 +2178,9 @@ const App: React.FC = () => {
                    .no-print { display: none !important; }
                  }
              `}</style>
-          <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: (viewingWorkoutHtml || (savedWorkouts[0]?.content || '')).split('<!-- DATA_JSON_START -->')[0] }} />
+          {!showDaySelector && (
+            <div id="workout-view-content" dangerouslySetInnerHTML={{ __html: (viewingWorkoutHtml || (savedWorkouts[0]?.content || '')).split('<!-- DATA_JSON_START -->')[0] }} />
+          )}
         </div>
       </div>
       {showRedoModal && (
@@ -2968,7 +2994,7 @@ const App: React.FC = () => {
               ) : (
                 savedWorkouts.length > 0 ? (
                   <button
-                    onClick={() => setShowWorkoutModal(true)}
+                    onClick={() => { setShowDaySelector(false); setShowWorkoutModal(true); }}
                     className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
                   >
                     <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Calendar className="w-8 h-8" /></div>
@@ -2986,7 +3012,7 @@ const App: React.FC = () => {
                         // Forçar carregamento da anamnese fresca antes de abrir o formulário
                         if (currentUser?.id) {
                           try {
-                            const fresh = await apiService.getUserProfile(currentUser.id);
+                            const fresh = await apiService.getMe(currentUser.id);
                             if (fresh) {
                               const updatedUser = { ...currentUser, ...fresh };
                               setCurrentUser(updatedUser);

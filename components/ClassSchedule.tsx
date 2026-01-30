@@ -11,7 +11,7 @@ interface ClassScheduleProps {
 export const ClassSchedule: React.FC<ClassScheduleProps> = ({ currentUser }) => {
     const [classes, setClasses] = useState<GroupClass[]>([]);
     const [loading, setLoading] = useState(false);
-    const [filter, setFilter] = useState<'TODAY' | 'WEEK' | 'MONTH'>('TODAY');
+    const [filter, setFilter] = useState<'TODAY' | 'WEEK' | 'NEXT_WEEK' | 'NEXT_MONTH'>('TODAY');
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; isVisible: boolean }>({
         message: '', type: 'info', isVisible: false
     });
@@ -65,17 +65,34 @@ export const ClassSchedule: React.FC<ClassScheduleProps> = ({ currentUser }) => 
     const filteredClasses = classes.filter(cls => {
         const d = new Date(cls.startTime);
         const now = new Date();
+        now.setHours(0, 0, 0, 0);
 
         if (filter === 'TODAY') {
             return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         }
         if (filter === 'WEEK') {
-            const nextWeek = new Date();
-            nextWeek.setDate(now.getDate() + 7);
-            return d >= now && d <= nextWeek;
+            // Esta semana (próximos 7 dias a partir de hoje)
+            const endOfWeek = new Date(now);
+            endOfWeek.setDate(now.getDate() + 7);
+            return d >= now && d <= endOfWeek;
         }
-        // MONTH
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        if (filter === 'NEXT_WEEK') {
+            // Próxima semana (de segunda a domingo da próxima semana)
+            const dayOfWeek = now.getDay();
+            const daysUntilNextMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+            const nextMonday = new Date(now);
+            nextMonday.setDate(now.getDate() + daysUntilNextMonday);
+            nextMonday.setHours(0, 0, 0, 0);
+            const nextSunday = new Date(nextMonday);
+            nextSunday.setDate(nextMonday.getDate() + 6);
+            nextSunday.setHours(23, 59, 59, 999);
+            return d >= nextMonday && d <= nextSunday;
+        }
+        // NEXT_MONTH
+        const nextMonth = now.getMonth() + 1;
+        const nextMonthYear = nextMonth > 11 ? now.getFullYear() + 1 : now.getFullYear();
+        const actualNextMonth = nextMonth > 11 ? 0 : nextMonth;
+        return d.getMonth() === actualNextMonth && d.getFullYear() === nextMonthYear;
     });
 
     // Need to know if current user booked. 
@@ -124,7 +141,7 @@ export const ClassSchedule: React.FC<ClassScheduleProps> = ({ currentUser }) => 
 
                 {/* Filters */}
                 <div className="flex bg-slate-800 p-1 rounded-xl">
-                    {['TODAY', 'WEEK', 'MONTH'].map(f => (
+                    {['TODAY', 'WEEK', 'NEXT_WEEK', 'NEXT_MONTH'].map(f => (
                         <button
                             key={f}
                             onClick={() => setFilter(f as any)}
@@ -133,7 +150,7 @@ export const ClassSchedule: React.FC<ClassScheduleProps> = ({ currentUser }) => 
                                     : 'text-slate-400 hover:text-white'
                                 }`}
                         >
-                            {f === 'TODAY' ? 'Hoje' : f === 'WEEK' ? 'Semana' : 'Mês'}
+                            {f === 'TODAY' ? 'Hoje' : f === 'WEEK' ? 'Semana' : f === 'NEXT_WEEK' ? 'Próx. Semana' : 'Próx. Mês'}
                         </button>
                     ))}
                 </div>

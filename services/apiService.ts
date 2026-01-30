@@ -3,7 +3,8 @@ import { DietGoalEntity, User, UserRole, AnalysisResult, ProfessorActivity, Prof
 import { secureStorage } from "../utils/secureStorage";
 
 
-export const API_BASE_URL = "https://app-back-ia-732767853162.southamerica-east1.run.app";
+// URL da API carregada de variável de ambiente (definida em .env.production)
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "https://app-back-ia-732767853162.southamerica-east1.run.app";
 
 // --- HELPERS PARA CREDENCIAIS E AUTH ---
 
@@ -63,8 +64,6 @@ export const apiService = {
             data: { email: email, senha: password }
         });
 
-        console.log('[DEBUG] apiService.login - Raw Data:', JSON.stringify(data, null, 2));
-
         const userId = data.id ? String(data.id) : "0";
         let role: UserRole = 'user';
         if (data.role) {
@@ -109,8 +108,6 @@ export const apiService = {
             url: `${API_BASE_URL}/api/usuarios/${userId}`,
             params: authParams
         });
-
-        console.log('[DEBUG] apiService.getMe - Raw Data:', JSON.stringify(data, null, 2));
 
         const id = data.id ? String(data.id) : String(userId);
         let role: UserRole = 'user';
@@ -439,15 +436,11 @@ export const apiService = {
         const params: any = getAuthQueryParams();
         params._t = Date.now();
 
-        console.log(`[DEBUG] Fetching trainings for user ${userId} with params:`, params);
-
         const data = await nativeFetch({
             method: 'GET',
             url: `${API_BASE_URL}/api/treinos/${userId}`,
             params: params
         });
-
-        console.log('[DEBUG] getTrainings RESPONSE:', JSON.stringify(data));
 
         return Array.isArray(data) ? data : (data.trainings || []);
     },
