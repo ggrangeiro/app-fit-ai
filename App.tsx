@@ -868,8 +868,6 @@ const App: React.FC = () => {
     if (!currentUser) {
       const storedUser = secureStorage.getItem<User>('fitai_current_session');
       if (storedUser) {
-        console.log('[DEBUG] Session Restored:', storedUser);
-        if (storedUser.plan) console.log('[DEBUG] Restored Plan:', storedUser.plan);
         try {
           // const storedUser = JSON.parse(stored); // Removed manual parse, secureStorage handles it
           setCurrentUser(storedUser);
@@ -1121,6 +1119,9 @@ const App: React.FC = () => {
         apiService.getTrainingsV2(userId).catch(() => []) // Fallback se V2 falhar
       ]);
 
+      // Rastrear quais IDs V2 foram mesclados
+      const usedV2Ids = new Set<number>();
+
       // Mesclar daysData do V2 no V1 e sempre buscar v2Id
       const mergedWorkouts = workoutsV1.map((w: any) => {
         // Estratégia 1: Match por título no conteúdo HTML
@@ -1146,13 +1147,13 @@ const App: React.FC = () => {
           );
         }
 
-        // Estratégia 4: Se ainda não encontrou, usar o primeiro V2 disponível
+        // Estratégia 4: Se ainda não encontrou, usar o primeiro V2 disponível que não foi usado
         if (!v2Match && workoutsV2.length > 0) {
-          v2Match = workoutsV2[0];
+          v2Match = workoutsV2.find((v2: any) => !usedV2Ids.has(v2.id));
         }
 
         if (v2Match) {
-          console.log('[DEBUG] Merged V1 id', w.id, 'with V2 id', v2Match.id);
+          usedV2Ids.add(v2Match.id);
           // Sempre pegar v2Id, e daysData se não existir no V1
           return {
             ...w,
@@ -1163,7 +1164,22 @@ const App: React.FC = () => {
         return w;
       });
 
-      setSavedWorkouts(mergedWorkouts);
+      // Adicionar treinos V2 que não têm correspondente V1
+      const v2OnlyWorkouts = workoutsV2
+        .filter((v2: any) => !usedV2Ids.has(v2.id))
+        .map((v2: any) => ({
+          id: v2.id,
+          v2Id: v2.id,
+          userId: v2.userId,
+          title: v2.title,
+          goal: v2.title,
+          content: '', // Sem HTML
+          daysData: v2.daysData,
+          createdAt: v2.createdAt,
+          updatedAt: v2.updatedAt
+        }));
+
+      setSavedWorkouts([...mergedWorkouts, ...v2OnlyWorkouts]);
     } catch (e) {
       setSavedWorkouts([]);
     } finally {
@@ -1202,7 +1218,6 @@ const App: React.FC = () => {
             ...statusData // Overwrites plan/usage with fresh data
           });
 
-          console.log('[DEBUG] initData - Merged User Plan:', statusData.plan);
           await loadExercisesList(fullUser); // Load exercises based on fresh role
         } catch (e) {
           console.error("Background sync failed", e);
@@ -1243,8 +1258,6 @@ const App: React.FC = () => {
 
 
   const handleLogin = (user: User) => {
-    console.log('[DEBUG] handleLogin - Incoming User:', user);
-    console.log('[DEBUG] handleLogin - User Plan:', user.plan);
     setCurrentUser(user);
     secureStorage.setItem('fitai_current_session', user); // Ensure session is saved
 
@@ -1262,9 +1275,6 @@ const App: React.FC = () => {
     // Robust check for plan type to prevent false positives for PRO/STUDIO users
     let isFree = true;
 
-    // Log for debugging
-    console.log('Checking plan for auto-modal:', user.plan);
-
     if (user.plan) {
       const p = user.plan as any;
       if (typeof p === 'string') {
@@ -1280,8 +1290,6 @@ const App: React.FC = () => {
 
     // personalId might be null, undefined or empty string
     const hasPersonal = !!user.personalId;
-
-    console.log(`[DEBUG] Plan Check: plan=${JSON.stringify(user.plan)}, isFree=${isFree}, hasPersonal=${hasPersonal}`);
 
     if (isFree && !hasPersonal) {
       // Small delay to ensure UI transition is smooth
@@ -1689,9 +1697,7 @@ const App: React.FC = () => {
             level: workoutFormData.level,
             legacyHtml: planHtml
           });
-          console.log('[DEBUG] V2 structured workout created successfully');
-        } catch (v2Error) {
-          console.warn('[DEBUG] Failed to create V2 workout (non-blocking):', v2Error);
+        } catch {
           // Non-blocking: V1 was created, V2 is a bonus
         }
       }
@@ -2111,7 +2117,7 @@ const App: React.FC = () => {
                     {parsedDays.map((day: any, idx: number) => {
                       // Support both formats: { name, status } and { dayLabel, trainingType, isRestDay }
                       const isRest = day.status === 'rest' || day.isRestDay || day.is_rest_day;
-                      const title = day.name || day.trainingType || day.training_type || day.dayLabel || day.day_label || `Dia ${idx + 1}`;
+                      const title = day.name || day.dayLabel || day.day_label || day.trainingType || day.training_type || `Dia ${idx + 1}`;
                       return (
                         <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between ${isRest ? 'bg-slate-200 border-slate-300 opacity-75' : 'bg-white border-slate-200 shadow-sm transition-all hover:shadow-md'}`}>
                           <div>
@@ -2925,7 +2931,6 @@ const App: React.FC = () => {
             {currentUser && (
               <WeeklyCheckInTracker
                 userId={currentUser.id}
-                onOpenCheckIn={(date) => { setCheckInDate(date); setShowCheckInModal(true); }}
                 showToast={showToast}
                 refreshTrigger={checkInUpdateTrigger}
                 weeklyGoal={calculatedWeeklyGoal}
@@ -3037,41 +3042,8 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* ... Restante do código de seleção de exercício (igual ao anterior) ... */}
+            {/* Grid de Dieta e outros */}
             <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-
-              {/* CARD DE TREINO DINÂMICO */}
-              {loadingWorkouts ? (
-                <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-dashed border-2 border-slate-700/50 h-full min-h-[160px] animate-pulse">
-                  <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
-                  <span className="text-slate-500 text-xs">Buscando treinos...</span>
-                </div>
-              ) : (
-                savedWorkouts.length > 0 ? (
-                  <button
-                    onClick={() => setShowWorkoutModal(true)}
-                    className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
-                  >
-                    <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Calendar className="w-8 h-8" /></div>
-                    <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Ver Meu Treino</h3><p className="text-slate-400 text-xs mt-1">Ficha ativa disponível</p></div>
-                  </button>
-                ) : (
-                  currentUser?.accessLevel === 'READONLY' ? (
-                    <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-2 border-slate-700 bg-slate-800/50 h-full min-h-[160px] cursor-not-allowed opacity-70">
-                      <div className="p-4 bg-slate-700 rounded-full text-slate-400 shadow-lg"><Lock className="w-8 h-8" /></div>
-                      <div className="text-center"><h3 className="text-slate-400 font-bold text-xl">Gerar Treino</h3><p className="text-slate-500 text-xs mt-1">Consulte seu Professor</p></div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={handleOpenWorkoutForm}
-                      className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
-                    >
-                      <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Dumbbell className="w-8 h-8" /></div>
-                      <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Gerar Treino IA</h3><p className="text-slate-400 text-xs mt-1">Crie sua ficha personalizada</p></div>
-                    </button>
-                  )
-                )
-              )}
 
               {/* CARD DE DIETA DINÂMICO */}
               {loadingDiets ? (
