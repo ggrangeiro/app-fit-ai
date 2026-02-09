@@ -396,10 +396,35 @@ export const ResultView: React.FC<ResultViewProps> = ({
           signal
         );
 
-        // Salva no backend
-        const response = await apiService.createTraining(userId, planHtml, formDataToUse.goal);
+        // --- CRITICAL FIX: Extract Structured Data for Interactive Mode ---
+        let daysDataStr: string | undefined = undefined;
+        const match = planHtml.match(/<!-- DATA_JSON_START -->([\s\S]*?)<!-- DATA_JSON_END -->/);
+        if (match && match[1]) {
+          try {
+            JSON.parse(match[1]);
+            daysDataStr = match[1];
+          } catch (e) {
+            console.warn("Failed to parse hidden JSON from workout plan", e);
+          }
+        }
+
+        // Salva no backend (V1)
+        const response = await apiService.createTraining(userId, planHtml, formDataToUse.goal, daysDataStr);
         if (response && response.id) {
           setCurrentWorkoutId(response.id);
+        }
+
+        // CRITICAL: Also create V2 structured record for interactive mode
+        if (daysDataStr) {
+          try {
+            await apiService.createTrainingV2(userId, daysDataStr, formDataToUse.goal, {
+              level: formDataToUse.level,
+              legacyHtml: planHtml
+            });
+          } catch {
+            // Non-blocking: V1 was created, V2 is a bonus
+            console.warn("[ResultView] Failed to create V2 structured plan, V1 was saved.");
+          }
         }
 
         if (onWorkoutSaved) onWorkoutSaved();
@@ -722,7 +747,7 @@ ${strengthsText}${improvementsText}
           const savedFormData = workoutOperation.getPendingFormData();
           if (savedFormData) {
             setWorkoutFormData(savedFormData);
-            handleGenerateWorkout({ preventDefault: () => {} } as React.FormEvent, savedFormData);
+            handleGenerateWorkout({ preventDefault: () => { } } as React.FormEvent, savedFormData);
           }
         }}
         onDismiss={() => {
@@ -740,7 +765,7 @@ ${strengthsText}${improvementsText}
           const savedFormData = dietOperation.getPendingFormData();
           if (savedFormData) {
             setDietFormData(savedFormData);
-            handleGenerateDiet({ preventDefault: () => {} } as React.FormEvent, savedFormData);
+            handleGenerateDiet({ preventDefault: () => { } } as React.FormEvent, savedFormData);
           }
         }}
         onDismiss={() => {
