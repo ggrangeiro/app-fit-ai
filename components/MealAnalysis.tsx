@@ -215,7 +215,6 @@ export const MealAnalysis: React.FC<MealAnalysisProps> = ({
                                         id="meal-photo-upload"
                                         type="file"
                                         accept="image/*"
-                                        capture="environment"
                                         className="hidden"
                                         onChange={handleFileSelect}
                                     />
