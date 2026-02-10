@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Badge, getBadgeIcon } from './Badge';
 import { AchievementProgress } from '../types';
 import { apiService } from '../services/apiService';
@@ -10,6 +11,7 @@ interface AchievementsModalProps {
 }
 
 export const AchievementsModal: React.FC<AchievementsModalProps> = ({ userId, onClose }) => {
+    const { t } = useTranslation();
     const [achievements, setAchievements] = useState<AchievementProgress[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedBadge, setSelectedBadge] = useState<AchievementProgress | null>(null);
@@ -46,8 +48,8 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ userId, on
                             <Trophy className="w-5 h-5 text-amber-600" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-gray-900">Conquistas</h2>
-                            <p className="text-xs text-gray-500">Desbloqueie medalhas com consistência!</p>
+                            <h2 className="text-lg font-bold text-gray-900">{t('achievements.title')}</h2>
+                            <p className="text-xs text-gray-500">{t('achievements.subtitle')}</p>
                         </div>
                     </div>
                     <button
@@ -63,14 +65,14 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ userId, on
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-12">
                             <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-3" />
-                            <p className="text-sm text-gray-500">Carregando conquistas...</p>
+                            <p className="text-sm text-gray-500">{t('achievements.loading')}</p>
                         </div>
                     ) : (
                         <>
                             {/* Progress Bar */}
                             <div className="mb-6">
                                 <div className="flex justify-between text-sm font-medium mb-2">
-                                    <span className="text-gray-600">{unlockedCount} de {totalCount} desbloqueadas</span>
+                                    <span className="text-gray-600">{t('achievements.unlocked_count', { unlocked: unlockedCount, total: totalCount })}</span>
                                     <span className="text-indigo-600">{Math.round(progressPercent)}%</span>
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2.5">
@@ -85,7 +87,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ userId, on
                             {validAchievements.length === 0 ? (
                                 <div className="text-center py-8">
                                     <Trophy className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                                    <p className="text-gray-500">Nenhuma conquista disponível</p>
+                                    <p className="text-gray-500">{t('achievements.no_achievements')}</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-3 gap-2 justify-items-center">
@@ -136,12 +138,12 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ userId, on
                             {selectedBadge.unlocked ? (
                                 <>
                                     <Check size={12} />
-                                    Desbloqueada
+                                    {t('achievements.unlocked')}
                                 </>
                             ) : (
                                 <>
                                     <Lock size={12} />
-                                    Bloqueada
+                                    {t('achievements.locked')}
                                 </>
                             )}
                         </div>
@@ -151,7 +153,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ userId, on
 
                         {selectedBadge.unlocked && selectedBadge.unlockedAt && (
                             <p className="text-xs text-gray-500 mb-4">
-                                Conquistada em {new Date(selectedBadge.unlockedAt).toLocaleDateString('pt-BR')}
+                                {t('achievements.achieved_at', { date: new Date(selectedBadge.unlockedAt).toLocaleDateString() })}
                             </p>
                         )}
 
@@ -159,7 +161,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ userId, on
                             onClick={() => setSelectedBadge(null)}
                             className="w-full py-2.5 bg-indigo-600 text-white rounded-xl font-medium active:bg-indigo-700 transition-colors"
                         >
-                            Fechar
+                            {t('achievements.close')}
                         </button>
                     </div>
                 </div>

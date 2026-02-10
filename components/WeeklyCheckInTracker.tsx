@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, Flame, Check, Calendar, Loader2, Target } from 'lucide-react';
 import { apiService } from '../services/apiService';
 import { WeeklyCheckInData, StreakData, WeeklyCheckInDay } from '../types';
@@ -10,6 +11,28 @@ interface WeeklyCheckInTrackerProps {
     refreshTrigger?: number; // New prop to force refresh
     weeklyGoal?: number; // Training days per week from workout plan
 }
+
+// Map API Portuguese day labels to i18n keys
+const DAY_LABEL_MAP: Record<string, string> = {
+    'Seg': 'mon', 'Ter': 'tue', 'Qua': 'wed', 'Qui': 'thu',
+    'Sex': 'fri', 'Sáb': 'sat', 'Dom': 'sun',
+    'seg': 'mon', 'ter': 'tue', 'qua': 'wed', 'qui': 'thu',
+    'sex': 'fri', 'sáb': 'sat', 'dom': 'sun',
+    // Also support dayOfWeek names from backend
+    'monday': 'mon', 'tuesday': 'tue', 'wednesday': 'wed',
+    'thursday': 'thu', 'friday': 'fri', 'saturday': 'sat', 'sunday': 'sun',
+    // Already-correct i18n keys (from mock data)
+    'mon': 'mon', 'tue': 'tue', 'wed': 'wed', 'thu': 'thu',
+    'fri': 'fri', 'sat': 'sat', 'sun': 'sun',
+};
+
+// Map Portuguese month names (from API weekLabel) to i18n month keys
+const MONTH_NAME_MAP: Record<string, string> = {
+    'janeiro': 'january', 'fevereiro': 'february', 'março': 'march',
+    'abril': 'april', 'maio': 'may', 'junho': 'june',
+    'julho': 'july', 'agosto': 'august', 'setembro': 'september',
+    'outubro': 'october', 'novembro': 'november', 'dezembro': 'december',
+};
 
 // Helper to calculate Monday of a week based on offset
 const getMondayForOffset = (offset: number): string => {
@@ -27,7 +50,7 @@ const generateMockWeekData = (weekStart: string): WeeklyCheckInData => {
     const startDate = new Date(weekStart);
     const days: WeeklyCheckInDay[] = [];
     const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    const dayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    const dayLabels = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -57,10 +80,10 @@ const generateMockWeekData = (weekStart: string): WeeklyCheckInData => {
     const totalCheckIns = days.filter(d => d.hasCheckIn).length;
 
     // Calculate week label
-    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const monthKeys = ['january', 'february', 'march', 'april', 'may', 'june',
+        'july', 'august', 'september', 'october', 'november', 'december'];
     const weekOfMonth = Math.ceil(startDate.getDate() / 7);
-    const weekLabel = `Semana ${weekOfMonth} de ${monthNames[startDate.getMonth()]}`;
+    const weekLabel = `${weekOfMonth}|${monthKeys[startDate.getMonth()]}`;
 
     return {
         weekStart,
@@ -87,6 +110,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
     refreshTrigger = 0,
     weeklyGoal = 5
 }) => {
+    const { t } = useTranslation();
     const [weekOffset, setWeekOffset] = useState(0);
     const [weekData, setWeekData] = useState<WeeklyCheckInData | null>(null);
     const [streakData, setStreakData] = useState<StreakData | null>(null);
@@ -154,14 +178,14 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
         if (day.checkIn?.workoutName) {
             msg += `🏋️ ${day.checkIn.workoutName}`;
         } else {
-            msg += `🏋️ Treino Concluído`;
+            msg += t('weekly_tracker.workout_completed');
         }
 
         // Feedback
         if (day.checkIn?.feedback === 'like') {
-            msg += ` • 👍 Gostou`;
+            msg += ` • ${t('weekly_tracker.liked')}`;
         } else if (day.checkIn?.feedback === 'dislike') {
-            msg += ` • 👎 Não gostou`;
+            msg += ` • ${t('weekly_tracker.disliked')}`;
         }
 
         // Comment
@@ -231,7 +255,25 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
                                 <div className="flex items-center gap-2">
                                     <Calendar className="w-4 h-4 text-emerald-400" />
                                     <span className="text-white font-semibold text-sm md:text-base">
-                                        {weekData?.weekLabel || 'Esta Semana'}
+                                        {(() => {
+                                            const label = weekData?.weekLabel;
+                                            if (!label) return t('weekly_tracker.this_week');
+                                            // Handle mock data format: "2|february"
+                                            const pipeParts = label.split('|');
+                                            if (pipeParts.length === 2) {
+                                                return t('weekly_tracker.week_label', { week: pipeParts[0], month: t(`weekly_tracker.months.${pipeParts[1]}`) });
+                                            }
+                                            // Handle API format: "Semana 2 de Fevereiro"
+                                            const apiMatch = label.match(/Semana\s+(\d+)\s+de\s+(\w+)/i);
+                                            if (apiMatch) {
+                                                const weekNum = apiMatch[1];
+                                                const monthKey = MONTH_NAME_MAP[apiMatch[2].toLowerCase()];
+                                                if (monthKey) {
+                                                    return t('weekly_tracker.week_label', { week: weekNum, month: t(`weekly_tracker.months.${monthKey}`) });
+                                                }
+                                            }
+                                            return label;
+                                        })()}
                                     </span>
                                 </div>
                                 <button
@@ -251,7 +293,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
                                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-orange-500/20 to-amber-500/20 border border-orange-500/30 animate-pulse-subtle">
                                     <Flame className="w-4 h-4 text-orange-400" />
                                     <span className="text-orange-300 font-bold text-sm">
-                                        {streakData.currentStreak} {streakData.currentStreak === 1 ? 'dia' : 'dias'}
+                                        {streakData.currentStreak} {streakData.currentStreak === 1 ? t('weekly_tracker.day_singular') : t('weekly_tracker.day_plural')}
                                     </span>
                                 </div>
                             )}
@@ -262,7 +304,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
                             <div className="flex items-center justify-between mb-1.5">
                                 <div className="flex items-center gap-2">
                                     <Target className="w-4 h-4 text-slate-400" />
-                                    <span className="text-xs text-slate-400 font-medium">Meta semanal</span>
+                                    <span className="text-xs text-slate-400 font-medium">{t('weekly_tracker.weekly_goal')}</span>
                                 </div>
                                 <span className={`text-xs font-bold ${goalReached ? 'text-emerald-400' : 'text-slate-300'}`}>
                                     {weekData?.totalCheckIns || 0}/{effectiveWeeklyGoal}
@@ -297,7 +339,10 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
                                             state === 'today' ? 'text-blue-400' :
                                                 'text-slate-500'
                                             }`}>
-                                            {day.dayLabel}
+                                            {(() => {
+                                                const key = DAY_LABEL_MAP[day.dayLabel] || DAY_LABEL_MAP[day.dayOfWeek] || day.dayLabel;
+                                                return t(`weekly_tracker.days.${key}`);
+                                            })()}
                                         </span>
 
                                         <div className={`
@@ -329,7 +374,7 @@ export const WeeklyCheckInTracker: React.FC<WeeklyCheckInTrackerProps> = ({
                         {useMockData && (
                             <div className="mt-3 text-center">
                                 <span className="text-[10px] text-slate-600 bg-slate-800/50 px-2 py-0.5 rounded">
-                                    📊 Dados de demonstração
+                                    {t('weekly_tracker.demo_data')}
                                 </span>
                             </div>
                         )}

@@ -1,0 +1,373 @@
+{
+    "common": {
+        "back": "Voltar",
+        "close": "Fechar",
+        "confirm": "Confirmar",
+        "cancel": "Cancelar",
+        "delete": "Excluir",
+        "save": "Salvar",
+        "share": "Compartilhar",
+        "generating": "Gerando...",
+        "loading": "Carregando...",
+        "sending": "Enviando...",
+        "saving": "Salvando...",
+        "error": "Erro",
+        "success": "Sucesso",
+        "male": "Masculino",
+        "female": "Feminino",
+        "yes": "Sim",
+        "no": "Não",
+        "optional": "Opcional",
+        "weight_kg": "Peso (kg)",
+        "height_cm": "Altura (cm)",
+        "exam_pdf": "Exame/PDF",
+        "change_photo": "Trocar Foto",
+        "current_photo": "Foto Atual",
+        "optional_attachments": "Anexos Opcionais",
+        "redo_now": "Refazer Agora",
+        "what_should_change": "O que deve ser mudado?"
+    },
+    "auth": {
+        "user_not_authenticated": "Usuário não autenticado.",
+        "passwords_dont_match": "As senhas não coincidem.",
+        "password_min_length": "A nova senha deve ter pelo menos 6 caracteres.",
+        "password_changed": "Senha alterada com sucesso!",
+        "password_change_error": "Erro ao alterar senha.",
+        "welcome": "Bem-vindo, {{name}}!",
+        "logout": "Sair da Conta",
+        "change_password": "Alterar Senha",
+        "update_credentials": "Atualizar credenciais",
+        "current_password": "Senha Atual",
+        "new_password": "Nova Senha",
+        "confirm_new_password": "Confirmar Nova Senha",
+        "enter_current_password": "Digite sua senha atual",
+        "min_6_chars": "Mínimo 6 caracteres",
+        "repeat_new_password": "Repita a nova senha",
+        "update_access_password": "Atualize sua senha de acesso"
+    },
+    "profile": {
+        "change_photo": "Alterar Foto",
+        "customize_profile": "Personalize seu perfil",
+        "uploading_photo": "Enviando foto...",
+        "photo_updated": "Foto de perfil atualizada!",
+        "photo_upload_error": "Erro ao enviar foto: ",
+        "readonly_profile": "Seu perfil é apenas de leitura.",
+        "administrator": "Administrador",
+        "personal_trainer": "Personal Trainer",
+        "student": "Aluno",
+        "refreshing_data": "Atualizando dados...",
+        "data_refreshed": "Dados atualizados!",
+        "data_refresh_error": "Erro ao atualizar dados.",
+        "refresh_data": "Atualizar dados"
+    },
+    "account": {
+        "delete_title": "Excluir Conta Permanentemente?",
+        "delete_warning": "ATENÇÃO: Sua conta e todos os dados serão apagados para sempre. Esta ação não pode ser desfeita.",
+        "deleting": "Processando exclusão...",
+        "deleted": "Conta excluída com sucesso.",
+        "delete_error": "Erro ao excluir conta: ",
+        "delete_account": "Excluir Conta"
+    },
+    "workout": {
+        "generate_title": "Gerar Treino Personalizado",
+        "generate_button": "Gerar Treino com IA (-{{cost}} Créditos)",
+        "generated_success": "Treino gerado com sucesso!",
+        "generate_error": "Erro ao gerar treino: ",
+        "saved_success": "Treino salvo com sucesso!",
+        "save_error": "Erro ao salvar treino.",
+        "adjusted_success": "Treino ajustado com sucesso!",
+        "adjust_error": "Erro ao ajustar treino: ",
+        "no_workout_available": "Nenhum treino disponível para refazer.",
+        "describe_changes": "Por favor, descreva o que deseja alterar no treino.",
+        "delete_title": "Excluir Treino Atual?",
+        "delete_warning": "Você perderá sua ficha de treino atual permanentemente. Deseja continuar?",
+        "deleted_success": "Treino removido com sucesso.",
+        "delete_error": "Erro ao remover treino.",
+        "view_my_workout": "Ver Meu Treino",
+        "active_plan": "Ficha ativa disponível",
+        "generate_ai": "Gerar Treino IA",
+        "create_plan": "Crie sua ficha personalizada",
+        "start_workout": "Iniciar Treino",
+        "redo_with_ai": "Refazer Treino com IA",
+        "redo_placeholder": "Ex: Quero um treino mais intenso, troque agachamento por leg press...",
+        "ask_your_trainer": "Peça seu Treino",
+        "wait_trainer": "Aguarde seu professor",
+        "loading_workouts": "Buscando treinos...",
+        "activate_interactive": "Ativar Modo Interativo",
+        "activate_interactive_desc": "Este treino foi criado em uma versão anterior. A Inteligência Artificial pode ler o conteúdo e criar a ficha interativa automaticamente para você.",
+        "convert_now": "Converter Agora (Grátis)",
+        "converting": "Atualizando...",
+        "converted_success": "Treino atualizado para Modo Interativo!",
+        "convert_error": "Falha ao converter treino. Tente novamente.",
+        "hypertrophy": "Hipertrofia",
+        "weight_loss": "Emagrecimento",
+        "definition": "Definição",
+        "beginner": "Iniciante",
+        "intermediate": "Intermediário",
+        "advanced": "Avançado",
+        "1x_week": "1x Semana",
+        "2x_week": "2x Semana",
+        "3x_week": "3x Semana",
+        "4x_week": "4x Semana",
+        "5x_week": "5x Semana",
+        "6x_week": "6x Semana",
+        "every_day": "Todos dias",
+        "short_30": "Curto (30min)",
+        "medium_60": "Médio (60min)",
+        "long_90": "Longo (90min+)",
+        "observations": "Observações (lesões, foco...)",
+        "strength_exercises": "Exercícios de Força",
+        "exercise_selected": "Exercício Selecionado",
+        "tap_to_change": "Toque para alterar",
+        "available_count": "{{count}} disponíveis",
+        "syncing_catalog": "Sincronizando catálogo de exercícios..."
+    },
+    "diet": {
+        "generate_title": "Gerar Dieta Personalizada",
+        "generate_button": "Gerar Dieta com IA (-{{cost}} Créditos)",
+        "generated_success": "Dieta gerada com sucesso!",
+        "generate_error": "Erro ao gerar dieta: ",
+        "adjusted_success": "Dieta ajustada com sucesso!",
+        "adjust_error": "Erro ao ajustar dieta: ",
+        "no_diet_available": "Nenhuma dieta disponível para refazer.",
+        "delete_title": "Excluir Dieta Atual?",
+        "delete_warning": "Você perderá seu plano nutricional atual permanentemente. Deseja continuar?",
+        "deleted_success": "Dieta removida com sucesso.",
+        "delete_error": "Erro ao remover dieta.",
+        "view_my_diet": "Ver Minha Dieta",
+        "active_plan": "Plano nutricional ativo",
+        "generate_ai": "Gerar Dieta IA",
+        "create_menu": "Crie seu cardápio ideal",
+        "redo_with_ai": "Refazer Dieta com IA",
+        "redo_placeholder": "Ex: Quero menos carboidratos, incluir mais frutas...",
+        "lose_weight": "Emagrecer",
+        "gain_mass": "Hipertrofia",
+        "maintenance": "Manutenção",
+        "restrictions": "Restrições alimentares...",
+        "consult_trainer": "Consulte seu Professor",
+        "loading_diets": "Buscando dietas..."
+    },
+    "checkin": {
+        "title": "Check-in de Treino",
+        "subtitle": "Registre que você concluiu este treino hoje!",
+        "date_label": "Data do Treino",
+        "comment_label": "Comentário (Opcional)",
+        "comment_placeholder": "Como foi o treino? (ex: 'Senti um pouco de cansaço na última série')",
+        "confirm_button": "Confirmar Check-in",
+        "success": "Check-in realizado com sucesso! 💪",
+        "auto_success": "Check-in realizado automaticamente! 💪",
+        "error": "Erro ao realizar check-in. Tente novamente.",
+        "no_workout": "Nenhum treino encontrado para check-in.",
+        "select_date": "Selecione uma data para o check-in.",
+        "make_checkin": "Fazer Check-in"
+    },
+    "credits": {
+        "1_used": "1 Crédito Utilizado",
+        "limit_reached": "Limite do plano atingido e sem créditos.",
+        "subscribe_or_buy": "Assine um plano ou compre créditos para gerar treinos!",
+        "invalid_plan": "Plano inválido.",
+        "starting_payment": "Iniciando pagamento...",
+        "subscription_error": "Erro ao iniciar assinatura: ",
+        "your_balance": "Seu Saldo",
+        "plan": "Plano:",
+        "purchased": "Comprados:",
+        "total": "Total:",
+        "my_credits": "Meus Créditos",
+        "recharge_history": "Recarga e Histórico"
+    },
+    "plans": {
+        "upgrade_plan": "Upgrade de Plano",
+        "unlock_features": "Desbloqueie recursos"
+    },
+    "analysis": {
+        "free_analysis": "Análise Livre",
+        "free_analysis_desc": "Exercício não listado? Envie o vídeo aqui.",
+        "selected_exercise": "Exercício Selecionado",
+        "postural_eval": "Avaliação Postural",
+        "body_composition": "Composição Corporal",
+        "biofeedback": "Biofeedback Postural",
+        "biotype_fat": "Biotipo & % Gordura",
+        "invalid_file": "Tipo de arquivo inválido.",
+        "video_only": "Para este modo, envie apenas 1 vídeo.",
+        "invalid_content": "Conteúdo inválido para este exercício.",
+        "unexpected_error": "Erro inesperado.",
+        "not_done_yet": "Você ainda não realizou este exercício.",
+        "connection_error": "Erro de conexão ao buscar histórico.",
+        "record_removed": "Registro removido com sucesso.",
+        "record_remove_error": "Erro ao remover registro."
+    },
+    "home": {
+        "your_area": "Sua Área de Treino",
+        "greeting": "Olá!",
+        "what_today": "O que vamos fazer hoje?",
+        "my_achievements": "Minhas Conquistas",
+        "badges_goals": "Ver medalhas e metas",
+        "group_classes": "Aulas em Grupo",
+        "view_schedule": "Ver agenda e reservar",
+        "evolution_photos": "Fotos Evolução",
+        "visual_compare": "Comparativo Visual",
+        "locked_feature": "Recurso Bloqueado",
+        "medical_alert": "Restrição Médica Detectada",
+        "medical_alert_desc": "Identificamos dor no peito em sua avaliação. <strong>Não inicie exercícios sem liberação médica.</strong>",
+        "review_assessment": "Revisar Avaliação"
+    },
+    "menu": {
+        "training_profile": "Meu Perfil de Treino",
+        "assessment_ai": "Ficha de Avaliação (IA)",
+        "my_evolution": "Minha Evolução",
+        "compare_photos": "Fotos comparativas",
+        "whatsapp_contact": "Falar no WhatsApp",
+        "view_tutorial": "Ver Tutorial"
+    },
+    "pdf": {
+        "generated_success": "PDF gerado com sucesso!",
+        "generate_error": "Erro ao gerar PDF."
+    },
+    "exercise_tips": {
+        "SQUAT": [
+            "Calcanhares no chão.",
+            "Peito estufado.",
+            "Joelhos seguem os pés."
+        ],
+        "PUSHUP": [
+            "Corpo em linha reta.",
+            "Cotovelos para trás.",
+            "Peito quase no chão."
+        ],
+        "LUNGE": [
+            "Tronco vertical.",
+            "Joelhos em 90 graus.",
+            "Equilíbrio centralizado."
+        ],
+        "BURPEE": [
+            "Ritmo constante.",
+            "Core ativado.",
+            "Salto explosivo."
+        ],
+        "PLANK": [
+            "Ombros sobre cotovelos.",
+            "Glúteos contraídos.",
+            "Pescoço neutro."
+        ],
+        "JUMPING_JACK": [
+            "Coordenação rítmica.",
+            "Ponta dos pés.",
+            "Amplitude total."
+        ],
+        "MOUNTAIN_CLIMBER": [
+            "Quadril baixo.",
+            "Joelhos no peito.",
+            "Braços firmes."
+        ],
+        "CRUNCH": [
+            "Lombar no chão.",
+            "Olhar para o teto.",
+            "Solte o ar ao subir."
+        ],
+        "PULLUP": [
+            "Ative as escápulas.",
+            "Queixo acima da barra.",
+            "Descida controlada."
+        ],
+        "BRIDGE": [
+            "Calcanhares empurram.",
+            "Contraia glúteos.",
+            "Lombar estável."
+        ],
+        "BULGARIAN_SQUAT": [
+            "Pé de trás apoiado.",
+            "Tronco firme.",
+            "Desça com controle."
+        ],
+        "DEADLIFT": [
+            "Barra rente à perna.",
+            "Coluna neutra.",
+            "Força no quadril."
+        ],
+        "TRICEP_DIP": [
+            "Cotovelos fechados.",
+            "Ombros longe das orelhas.",
+            "Profundidade 90°."
+        ],
+        "BICEP_CURL": [
+            "Cotovelos colados.",
+            "Sem balançar o tronco.",
+            "Descida lenta."
+        ],
+        "CABLE_CROSSOVER": [
+            "Abraço circular.",
+            "Foco no peito.",
+            "Controle a volta."
+        ],
+        "BENCH_PRESS": [
+            "Pés firmes no chão.",
+            "Escápulas retraídas.",
+            "Cotovelos levemente fechados."
+        ],
+        "POSTURE_ANALYSIS": [
+            "Posição relaxada.",
+            "Corpo inteiro visível.",
+            "Local bem iluminado."
+        ],
+        "BODY_COMPOSITION": [
+            "Roupa justa/banho.",
+            "Frente e Lado.",
+            "Pose natural."
+        ],
+        "FREE_ANALYSIS_MODE": [
+            "Certifique-se que o corpo todo aparece.",
+            "Boa iluminação ajuda na detecção.",
+            "Execute o movimento completo."
+        ],
+        "DEFAULT": [
+            "Mantenha a postura correta.",
+            "Respire de forma controlada.",
+            "Concentre-se na execução."
+        ]
+    },
+    "weekly_tracker": {
+        "this_week": "Esta Semana",
+        "weekly_goal": "Meta semanal",
+        "day_singular": "dia",
+        "day_plural": "dias",
+        "demo_data": "📊 Dados de demonstração",
+        "workout_completed": "🏋️ Treino Concluído",
+        "liked": "👍 Gostou",
+        "disliked": "👎 Não gostou",
+        "days": {
+            "mon": "SEG",
+            "tue": "TER",
+            "wed": "QUA",
+            "thu": "QUI",
+            "fri": "SEX",
+            "sat": "SÁB",
+            "sun": "DOM"
+        },
+        "months": {
+            "january": "Janeiro",
+            "february": "Fevereiro",
+            "march": "Março",
+            "april": "Abril",
+            "may": "Maio",
+            "june": "Junho",
+            "july": "Julho",
+            "august": "Agosto",
+            "september": "Setembro",
+            "october": "Outubro",
+            "november": "Novembro",
+            "december": "Dezembro"
+        },
+        "week_label": "Semana {{week}} de {{month}}"
+    },
+    "achievements": {
+        "title": "Conquistas",
+        "subtitle": "Desbloqueie medalhas com consistência!",
+        "loading": "Carregando conquistas...",
+        "unlocked_count": "{{unlocked}} de {{total}} desbloqueadas",
+        "no_achievements": "Nenhuma conquista disponível",
+        "unlocked": "Desbloqueada",
+        "locked": "Bloqueada",
+        "achieved_at": "Conquistada em {{date}}",
+        "close": "Fechar"
+    }
+}

@@ -1,0 +1,373 @@
+{
+    "common": {
+        "back": "Back",
+        "close": "Close",
+        "confirm": "Confirm",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "save": "Save",
+        "share": "Share",
+        "generating": "Generating...",
+        "loading": "Loading...",
+        "sending": "Sending...",
+        "saving": "Saving...",
+        "error": "Error",
+        "success": "Success",
+        "male": "Male",
+        "female": "Female",
+        "yes": "Yes",
+        "no": "No",
+        "optional": "Optional",
+        "weight_kg": "Weight (kg)",
+        "height_cm": "Height (cm)",
+        "exam_pdf": "Lab Results/PDF",
+        "change_photo": "Change Photo",
+        "current_photo": "Current Photo",
+        "optional_attachments": "Optional Attachments",
+        "redo_now": "Redo Now",
+        "what_should_change": "What should be changed?"
+    },
+    "auth": {
+        "user_not_authenticated": "User not authenticated.",
+        "passwords_dont_match": "Passwords don't match.",
+        "password_min_length": "New password must be at least 6 characters.",
+        "password_changed": "Password changed successfully!",
+        "password_change_error": "Error changing password.",
+        "welcome": "Welcome, {{name}}!",
+        "logout": "Log Out",
+        "change_password": "Change Password",
+        "update_credentials": "Update credentials",
+        "current_password": "Current Password",
+        "new_password": "New Password",
+        "confirm_new_password": "Confirm New Password",
+        "enter_current_password": "Enter your current password",
+        "min_6_chars": "Minimum 6 characters",
+        "repeat_new_password": "Repeat new password",
+        "update_access_password": "Update your access password"
+    },
+    "profile": {
+        "change_photo": "Change Photo",
+        "customize_profile": "Customize your profile",
+        "uploading_photo": "Uploading photo...",
+        "photo_updated": "Profile photo updated!",
+        "photo_upload_error": "Error uploading photo: ",
+        "readonly_profile": "Your profile is read-only.",
+        "administrator": "Administrator",
+        "personal_trainer": "Personal Trainer",
+        "student": "Student",
+        "refreshing_data": "Refreshing data...",
+        "data_refreshed": "Data updated!",
+        "data_refresh_error": "Error refreshing data.",
+        "refresh_data": "Refresh data"
+    },
+    "account": {
+        "delete_title": "Delete Account Permanently?",
+        "delete_warning": "WARNING: Your account and all data will be permanently deleted. This action cannot be undone.",
+        "deleting": "Processing deletion...",
+        "deleted": "Account deleted successfully.",
+        "delete_error": "Error deleting account: ",
+        "delete_account": "Delete Account"
+    },
+    "workout": {
+        "generate_title": "Generate Custom Workout",
+        "generate_button": "Generate Workout with AI (-{{cost}} Credits)",
+        "generated_success": "Workout generated successfully!",
+        "generate_error": "Error generating workout: ",
+        "saved_success": "Workout saved successfully!",
+        "save_error": "Error saving workout.",
+        "adjusted_success": "Workout adjusted successfully!",
+        "adjust_error": "Error adjusting workout: ",
+        "no_workout_available": "No workout available to redo.",
+        "describe_changes": "Please describe what you'd like to change in the workout.",
+        "delete_title": "Delete Current Workout?",
+        "delete_warning": "You will permanently lose your current workout plan. Continue?",
+        "deleted_success": "Workout removed successfully.",
+        "delete_error": "Error removing workout.",
+        "view_my_workout": "View My Workout",
+        "active_plan": "Active plan available",
+        "generate_ai": "Generate AI Workout",
+        "create_plan": "Create your custom plan",
+        "start_workout": "Start Workout",
+        "redo_with_ai": "Redo Workout with AI",
+        "redo_placeholder": "E.g.: I want a more intense workout, replace squats with leg press...",
+        "ask_your_trainer": "Request Workout",
+        "wait_trainer": "Wait for your trainer",
+        "loading_workouts": "Loading workouts...",
+        "activate_interactive": "Activate Interactive Mode",
+        "activate_interactive_desc": "This workout was created in a previous version. AI can read the content and automatically create an interactive plan for you.",
+        "convert_now": "Convert Now (Free)",
+        "converting": "Updating...",
+        "converted_success": "Workout upgraded to Interactive Mode!",
+        "convert_error": "Failed to convert workout. Try again.",
+        "hypertrophy": "Hypertrophy",
+        "weight_loss": "Weight Loss",
+        "definition": "Definition",
+        "beginner": "Beginner",
+        "intermediate": "Intermediate",
+        "advanced": "Advanced",
+        "1x_week": "1x Week",
+        "2x_week": "2x Week",
+        "3x_week": "3x Week",
+        "4x_week": "4x Week",
+        "5x_week": "5x Week",
+        "6x_week": "6x Week",
+        "every_day": "Every day",
+        "short_30": "Short (30min)",
+        "medium_60": "Medium (60min)",
+        "long_90": "Long (90min+)",
+        "observations": "Notes (injuries, focus...)",
+        "strength_exercises": "Strength Exercises",
+        "exercise_selected": "Exercise Selected",
+        "tap_to_change": "Tap to change",
+        "available_count": "{{count}} available",
+        "syncing_catalog": "Syncing exercise catalog..."
+    },
+    "diet": {
+        "generate_title": "Generate Custom Diet",
+        "generate_button": "Generate Diet with AI (-{{cost}} Credits)",
+        "generated_success": "Diet generated successfully!",
+        "generate_error": "Error generating diet: ",
+        "adjusted_success": "Diet adjusted successfully!",
+        "adjust_error": "Error adjusting diet: ",
+        "no_diet_available": "No diet available to redo.",
+        "delete_title": "Delete Current Diet?",
+        "delete_warning": "You will permanently lose your current nutrition plan. Continue?",
+        "deleted_success": "Diet removed successfully.",
+        "delete_error": "Error removing diet.",
+        "view_my_diet": "View My Diet",
+        "active_plan": "Active nutrition plan",
+        "generate_ai": "Generate AI Diet",
+        "create_menu": "Create your ideal menu",
+        "redo_with_ai": "Redo Diet with AI",
+        "redo_placeholder": "E.g.: I want less carbs, include more fruits...",
+        "lose_weight": "Lose Weight",
+        "gain_mass": "Hypertrophy",
+        "maintenance": "Maintenance",
+        "restrictions": "Dietary restrictions...",
+        "consult_trainer": "Consult your Trainer",
+        "loading_diets": "Loading diets..."
+    },
+    "checkin": {
+        "title": "Workout Check-in",
+        "subtitle": "Record that you completed this workout today!",
+        "date_label": "Workout Date",
+        "comment_label": "Comment (Optional)",
+        "comment_placeholder": "How was the workout? (e.g.: 'Felt a bit tired on the last set')",
+        "confirm_button": "Confirm Check-in",
+        "success": "Check-in completed! 💪",
+        "auto_success": "Auto check-in completed! 💪",
+        "error": "Error checking in. Please try again.",
+        "no_workout": "No workout found for check-in.",
+        "select_date": "Please select a date for check-in.",
+        "make_checkin": "Check In"
+    },
+    "credits": {
+        "1_used": "1 Credit Used",
+        "limit_reached": "Plan limit reached and no credits left.",
+        "subscribe_or_buy": "Subscribe to a plan or buy credits to generate workouts!",
+        "invalid_plan": "Invalid plan.",
+        "starting_payment": "Starting payment...",
+        "subscription_error": "Error starting subscription: ",
+        "your_balance": "Your Balance",
+        "plan": "Plan:",
+        "purchased": "Purchased:",
+        "total": "Total:",
+        "my_credits": "My Credits",
+        "recharge_history": "Recharge & History"
+    },
+    "plans": {
+        "upgrade_plan": "Upgrade Plan",
+        "unlock_features": "Unlock features"
+    },
+    "analysis": {
+        "free_analysis": "Free Analysis",
+        "free_analysis_desc": "Exercise not listed? Upload the video here.",
+        "selected_exercise": "Selected Exercise",
+        "postural_eval": "Postural Assessment",
+        "body_composition": "Body Composition",
+        "biofeedback": "Postural Biofeedback",
+        "biotype_fat": "Biotype & Fat %",
+        "invalid_file": "Invalid file type.",
+        "video_only": "For this mode, send only 1 video.",
+        "invalid_content": "Invalid content for this exercise.",
+        "unexpected_error": "Unexpected error.",
+        "not_done_yet": "You haven't done this exercise yet.",
+        "connection_error": "Connection error when fetching history.",
+        "record_removed": "Record removed successfully.",
+        "record_remove_error": "Error removing record."
+    },
+    "home": {
+        "your_area": "Your Training Area",
+        "greeting": "Hello!",
+        "what_today": "What shall we do today?",
+        "my_achievements": "My Achievements",
+        "badges_goals": "View badges and goals",
+        "group_classes": "Group Classes",
+        "view_schedule": "View schedule & book",
+        "evolution_photos": "Progress Photos",
+        "visual_compare": "Visual Comparison",
+        "locked_feature": "Locked Feature",
+        "medical_alert": "Medical Restriction Detected",
+        "medical_alert_desc": "We detected chest pain in your assessment. <strong>Do not start exercising without medical clearance.</strong>",
+        "review_assessment": "Review Assessment"
+    },
+    "menu": {
+        "training_profile": "My Training Profile",
+        "assessment_ai": "AI Assessment Form",
+        "my_evolution": "My Evolution",
+        "compare_photos": "Comparison photos",
+        "whatsapp_contact": "Chat on WhatsApp",
+        "view_tutorial": "View Tutorial"
+    },
+    "pdf": {
+        "generated_success": "PDF generated successfully!",
+        "generate_error": "Error generating PDF."
+    },
+    "exercise_tips": {
+        "SQUAT": [
+            "Heels on the ground.",
+            "Chest up.",
+            "Knees follow your feet."
+        ],
+        "PUSHUP": [
+            "Body in a straight line.",
+            "Elbows back.",
+            "Chest almost touching the floor."
+        ],
+        "LUNGE": [
+            "Upright torso.",
+            "Knees at 90 degrees.",
+            "Centered balance."
+        ],
+        "BURPEE": [
+            "Steady pace.",
+            "Core engaged.",
+            "Explosive jump."
+        ],
+        "PLANK": [
+            "Shoulders over elbows.",
+            "Glutes contracted.",
+            "Neutral neck."
+        ],
+        "JUMPING_JACK": [
+            "Rhythmic coordination.",
+            "On your toes.",
+            "Full range of motion."
+        ],
+        "MOUNTAIN_CLIMBER": [
+            "Hips low.",
+            "Knees to chest.",
+            "Firm arms."
+        ],
+        "CRUNCH": [
+            "Lower back on the floor.",
+            "Look at the ceiling.",
+            "Exhale going up."
+        ],
+        "PULLUP": [
+            "Activate your scapulae.",
+            "Chin above the bar.",
+            "Controlled descent."
+        ],
+        "BRIDGE": [
+            "Push through heels.",
+            "Contract glutes.",
+            "Stable lower back."
+        ],
+        "BULGARIAN_SQUAT": [
+            "Back foot supported.",
+            "Firm torso.",
+            "Descend with control."
+        ],
+        "DEADLIFT": [
+            "Bar close to legs.",
+            "Neutral spine.",
+            "Force from the hips."
+        ],
+        "TRICEP_DIP": [
+            "Elbows close.",
+            "Shoulders away from ears.",
+            "90° depth."
+        ],
+        "BICEP_CURL": [
+            "Elbows pinned.",
+            "No swinging.",
+            "Slow descent."
+        ],
+        "CABLE_CROSSOVER": [
+            "Circular hug motion.",
+            "Focus on the chest.",
+            "Control the return."
+        ],
+        "BENCH_PRESS": [
+            "Feet firm on the ground.",
+            "Retracted scapulae.",
+            "Elbows slightly closed."
+        ],
+        "POSTURE_ANALYSIS": [
+            "Relaxed position.",
+            "Full body visible.",
+            "Well-lit area."
+        ],
+        "BODY_COMPOSITION": [
+            "Tight/swim clothing.",
+            "Front and side.",
+            "Natural pose."
+        ],
+        "FREE_ANALYSIS_MODE": [
+            "Make sure your full body is visible.",
+            "Good lighting helps detection.",
+            "Perform the full movement."
+        ],
+        "DEFAULT": [
+            "Maintain correct posture.",
+            "Breathe in a controlled manner.",
+            "Focus on execution."
+        ]
+    },
+    "weekly_tracker": {
+        "this_week": "This Week",
+        "weekly_goal": "Weekly goal",
+        "day_singular": "day",
+        "day_plural": "days",
+        "demo_data": "📊 Demo data",
+        "workout_completed": "🏋️ Workout Completed",
+        "liked": "👍 Liked",
+        "disliked": "👎 Disliked",
+        "days": {
+            "mon": "MON",
+            "tue": "TUE",
+            "wed": "WED",
+            "thu": "THU",
+            "fri": "FRI",
+            "sat": "SAT",
+            "sun": "SUN"
+        },
+        "months": {
+            "january": "January",
+            "february": "February",
+            "march": "March",
+            "april": "April",
+            "may": "May",
+            "june": "June",
+            "july": "July",
+            "august": "August",
+            "september": "September",
+            "october": "October",
+            "november": "November",
+            "december": "December"
+        },
+        "week_label": "Week {{week}} of {{month}}"
+    },
+    "achievements": {
+        "title": "Achievements",
+        "subtitle": "Unlock badges with consistency!",
+        "loading": "Loading achievements...",
+        "unlocked_count": "{{unlocked}} of {{total}} unlocked",
+        "no_achievements": "No achievements available",
+        "unlocked": "Unlocked",
+        "locked": "Locked",
+        "achieved_at": "Achieved on {{date}}",
+        "close": "Close"
+    }
+}

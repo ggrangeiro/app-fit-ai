@@ -31,31 +31,22 @@ const dayOfWeekMap: Record<string, string> = {
     '7': 'Domingo',
 };
 
-// Verifica se é dia de descanso
+// Verifica se é dia de descanso (simplificado para alinhar com versão web)
 const isRestDay = (day: any): boolean => {
     if (!day) return true;
 
-    // Verificar propriedades booleanas explícitas (vários formatos possíveis)
-    // IMPORTANTE: isRest é usado no formato atual
+    // Prioridade 1: Propriedades booleanas explícitas (mesmo que versão web)
     if (day.isRest === true || day.isRestDay === true || day.is_rest_day === true || day.is_rest === true) return true;
-
-    // Verificar status
-    if (day.status === 'rest') return true;
-
-    // Verificar trainingType/title que indica descanso
-    const trainingType = (day.trainingType || day.training_type || day.title || '').toLowerCase();
-    if (trainingType === 'descanso' || trainingType === 'rest' || trainingType === 'descanso ativo') return true;
-
-    // Verificar pelo nome do dia se indica descanso
-    const dayName = (day.day || day.dayLabel || day.day_label || day.name || '').toLowerCase();
-    if (dayName.includes('descanso') || dayName.includes('recuperação') || dayName.includes('rest') || dayName.includes('off')) {
-        return true;
-    }
-
-    // Se tem isRest/isRestDay explicitamente false, NÃO é descanso
     if (day.isRest === false || day.isRestDay === false || day.is_rest_day === false) return false;
 
-    // Se tem exercícios, NÃO é descanso
+    // Prioridade 2: Status
+    if (day.status === 'rest') return true;
+
+    // Prioridade 3: TrainingType/title - match exato apenas (não substring)
+    const trainingType = (day.trainingType || day.training_type || day.title || '').toLowerCase().trim();
+    if (['descanso', 'rest', 'descanso ativo'].includes(trainingType)) return true;
+
+    // Prioridade 4: Se tem exercícios, NÃO é descanso
     if (day.exercises && day.exercises.length > 0) return false;
 
     // Por padrão, assumir que NÃO é descanso
@@ -110,11 +101,26 @@ const formatDayTitle = (day: any, index: number): string => {
 
 export const WorkoutDaySelector: React.FC<WorkoutDaySelectorProps> = ({ days, onSelectDay, onClose }) => {
     // Filtrar apenas dias de treino (remover dias de descanso)
-    const trainingDays = days.filter((day: any) => !isRestDay(day));
+    const nonRestDays = days.filter((day: any) => !isRestDay(day));
+
+    // Remover duplicatas baseado em day + title (para evitar dados duplicados da API)
+    const seenKeys = new Set<string>();
+    const trainingDays = nonRestDays.filter((day: any) => {
+        const dayName = day.dayLabel || day.day_label || day.day || day.name || '';
+        const title = day.trainingType || day.training_type || day.title || '';
+        const uniqueKey = `${dayName}::${title}`.toLowerCase();
+
+        if (seenKeys.has(uniqueKey)) {
+            return false; // Duplicata, ignorar
+        }
+        seenKeys.add(uniqueKey);
+        return true;
+    });
 
     // Debug: log dos dias recebidos
     console.log('[WorkoutDaySelector] Dias recebidos:', days);
-    console.log('[WorkoutDaySelector] Dias de treino (filtrados):', trainingDays);
+    console.log('[WorkoutDaySelector] Dias sem descanso:', nonRestDays);
+    console.log('[WorkoutDaySelector] Dias de treino (sem duplicatas):', trainingDays);
 
     return (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
