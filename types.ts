@@ -530,3 +530,27 @@ export interface ClassBooking {
   status: 'CONFIRMED' | 'CANCELLED' | 'WAITLIST';
   createdAt: string;
 }
+
+// ===============================================
+// ========== MEAL ANALYSIS TYPES ================
+// ===============================================
+
+export interface MealFoodItem {
+  name: string;
+  quantity: string;
+  calories: number;
+  color: string; // Hex color for the food card
+}
+
+export interface MealAnalysisResult {
+  foods: MealFoodItem[];
+  totalCalories: number;
+  protein: number;     // grams
+  carbs: number;       // grams
+  fats: number;        // grams
+  fiber: number;       // grams
+  healthScore: number; // 0-100
+  plateDescription: string; // Brief description of what's on the plate
+  tips: string[];      // Nutritional tips from AI
+  motivation: string;  // Motivational message
+}

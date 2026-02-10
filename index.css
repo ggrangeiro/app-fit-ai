@@ -128,4 +128,23 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
     }
+
+    /* Meal Analysis Animations */
+    .animate-marquee {
+        animation: marquee 12s linear infinite;
+    }
+
+    @keyframes marquee {
+        0% {
+            transform: translateX(0);
+        }
+
+        100% {
+            transform: translateX(-50%);
+        }
+    }
+
+    .animate-scan-line {
+        animation: scan-line 2s ease-in-out infinite;
+    }
 }

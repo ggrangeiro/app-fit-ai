@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { AnalysisResult, ExerciseType, SPECIAL_EXERCISES, WorkoutPlanV2, DietPlanV2, Anamnesis } from "../types";
+import { AnalysisResult, ExerciseType, SPECIAL_EXERCISES, WorkoutPlanV2, DietPlanV2, Anamnesis, MealAnalysisResult } from "../types";
 import { getGeminiApiKey, clearApiKeyCache } from "./configService";
+import i18next from 'i18next';
 
 // --- CONFIGURAÇÃO ---
 // Configuração dos modelos: Pro para tarefas complexas (vídeo) e Flash para suporte
@@ -9,6 +10,29 @@ const SUPPORT_MODEL = "gemini-3-flash-preview";
 
 // Timeout padrão para operações de IA (2 minutos)
 const DEFAULT_AI_TIMEOUT = 120000;
+
+// --- INTERNACIONALIZAÇÃO DOS PROMPTS ---
+// Mapeia o código de idioma do i18next para o nome completo do idioma
+const LANGUAGE_MAP: Record<string, string> = {
+  'pt': 'Português Brasileiro',
+  'pt-BR': 'Português Brasileiro',
+  'en': 'English',
+  'en-US': 'English',
+  'en-GB': 'English',
+  'es': 'Español',
+  'es-ES': 'Español',
+  'es-419': 'Español',
+};
+
+/**
+ * Retorna a instrução de idioma para ser injetada nos prompts da IA.
+ * Garante que a resposta da IA será no idioma do dispositivo do usuário.
+ */
+const getLanguageInstruction = (): string => {
+  const lang = i18next.language || 'pt';
+  const languageName = LANGUAGE_MAP[lang] || LANGUAGE_MAP[lang.split('-')[0]] || 'Português Brasileiro';
+  return `\n    IDIOMA OBRIGATÓRIO: Responda INTEIRAMENTE em ${languageName}. Todo o conteúdo gerado (nomes de exercícios, dias da semana, dicas, refeições, motivações, considerações, alertas) DEVE estar em ${languageName}.\n  `;
+};
 
 /**
  * Wrapper que adiciona timeout a uma Promise
@@ -102,6 +126,8 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
       resolve({ inlineData: { data: base64Content, mimeType: file.type } });
     };
     reader.onerror = (e) => reject(new Error("Falha ao ler arquivo: " + e));
+    // CRITICAL FIX: Actually start reading the file!
+    reader.readAsDataURL(file);
   });
 };
 
@@ -209,6 +235,7 @@ export const analyzeVideo = async (
 
   const prompt = `
     ${detailedStyle}
+    ${getLanguageInstruction()}
     ${validationRules}
     ${historyContext}
     ${specificContext}
@@ -284,6 +311,7 @@ export const generateDietPlan = async (
 
   const prompt = `
     Atue como um Nutricionista Esportivo.
+    ${getLanguageInstruction()}
     ${personalContext}
 
     Perfil: ${userData.weight}kg, Objetivo: ${userData.goal}, Sexo: ${userData.gender}.
@@ -405,6 +433,7 @@ export const generateWorkoutPlan = async (
 
   const prompt = `
     Atue como um Personal Trainer Especialista e Motivador.
+    ${getLanguageInstruction()}
     ${personalContext}
 
     PERFIL DO ALUNO:
@@ -526,6 +555,7 @@ export const regenerateWorkoutPlan = async (
 
   const prompt = `
     Atue como um Personal Trainer Especialista.
+    ${getLanguageInstruction()}
     
     CONTEXTO ORIGINAL DO ALUNO:
     - Sexo: ${userData.gender || 'não informado'}
@@ -586,6 +616,7 @@ export const regenerateDietPlan = async (
 
   const prompt = `
     Atue como um Nutricionista Esportivo Especialista.
+    ${getLanguageInstruction()}
     
     CONTEXTO ORIGINAL DO ALUNO:
     - Sexo: ${userData.gender || 'não informado'}
@@ -633,6 +664,7 @@ export const generateProgressInsight = async (
   const genAI = await getGenAI(userId, userRole);
   const model = genAI.getGenerativeModel({ model: SUPPORT_MODEL });
   const prompt = `
+    ${getLanguageInstruction()}
     Atue como um Amigo de Treino. Compare hoje (Nota ${current.score}) com a anterior (Nota ${previous.score}) no exercício ${type}.
     Seja muito positivo, use emojis e seja curto (máximo 3 frases).
   `;
@@ -697,6 +729,7 @@ export const generateWorkoutPlanV2 = async (
 
   const prompt = `
     Atue como um Personal Trainer de Elite altamente técnico.
+    ${getLanguageInstruction()}
     ${personalContext}
     
     Analise o perfil e documentos do aluno para criar um TREINO ESTRUTURADO (V2) em formato JSON.
@@ -893,6 +926,7 @@ export const generateDietPlanV2 = async (
 
   const prompt = `
     Atue como um Nutricionista Esportivo de Elite.
+    ${getLanguageInstruction()}
     ${personalContext}
 
     Analise o perfil e documentos do aluno para criar uma DIETA ESTRUTURADA (V2) em formato JSON.
@@ -1004,6 +1038,7 @@ export const regenerateWorkoutPlanV2 = async (
 
   const prompt = `
     Atue como um Personal Trainer Ajustando uma Ficha.
+    ${getLanguageInstruction()}
     
     TAREFA: Você receberá um TREINO ATUAL (JSON) e um FEEDBACK DO ALUNO.
     Sua missão é regenerar o JSON aplicando APENAS as alterações solicitadas, mantendo a estrutura original intacta onde não for afetado.
@@ -1042,6 +1077,7 @@ export const regenerateDietPlanV2 = async (
 
   const prompt = `
     Atue como um Nutricionista Ajustando uma Dieta.
+    ${getLanguageInstruction()}
     
     TAREFA: Você receberá uma DIETA ATUAL (JSON) e um FEEDBACK DO ALUNO.
     Sua missão é regenerar o JSON aplicando APENAS as alterações solicitadas, mantendo a estrutura original intacta onde não for afetado.
@@ -1079,23 +1115,23 @@ export const regenerateDietPlanV2 = async (
  * @returns Objeto com dados extraídos e texto bruto
  */
 export const extractAnamnesisFromDocument = async (
-    documentFile: File,
-    userId: string | number,
-    userRole: string
+  documentFile: File,
+  userId: string | number,
+  userRole: string
 ): Promise<{ extractedData: Partial<Anamnesis>; rawText: string }> => {
-    const genAI = await getGenAI(userId, userRole);
+  const genAI = await getGenAI(userId, userRole);
 
-    // Reuse existing fileToGenerativePart if visible, or re-implement inline if not exported
-    // fileToGenerativePart is defined in lines 55-65 of this file but NOT exported. 
-    // Should be accessible since we are in the same file.
-    const docPart = await fileToGenerativePart(documentFile);
+  // Reuse existing fileToGenerativePart if visible, or re-implement inline if not exported
+  // fileToGenerativePart is defined in lines 55-65 of this file but NOT exported. 
+  // Should be accessible since we are in the same file.
+  const docPart = await fileToGenerativePart(documentFile);
 
-    const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash', // Use Flash for speed/cost on documents
-        generationConfig: { responseMimeType: "application/json" }
-    });
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-1.5-flash', // Use Flash for speed/cost on documents
+    generationConfig: { responseMimeType: "application/json" }
+  });
 
-    const prompt = `
+  const prompt = `
     ATUE COMO UM ESPECIALISTA EM EXTRAÇÃO DE DADOS DE DOCUMENTOS DE SAÚDE E FITNESS.
 
     **IMPORTANTE**: Retorne APENAS um JSON válido, sem markdown.
@@ -1161,26 +1197,26 @@ export const extractAnamnesisFromDocument = async (
     }
   `;
 
-    try {
-        const result = await model.generateContent([
-            docPart, // Part object { inlineData: ... }
-            { text: prompt }
-        ]);
+  try {
+    const result = await model.generateContent([
+      docPart, // Part object { inlineData: ... }
+      { text: prompt }
+    ]);
 
-        const text = result.response.text();
-        const json = JSON.parse(text);
+    const text = result.response.text();
+    const json = JSON.parse(text);
 
-        return {
-            extractedData: json.extractedData || {},
-            rawText: json.rawText || ''
-        };
-    } catch (error: any) {
-        console.error("Erro ao extrair dados do documento:", error);
-        if (error.message?.includes('API key') || error.message?.includes('401')) {
-            resetGeminiInstance();
-        }
-        throw new Error("Não foi possível extrair os dados do documento.");
+    return {
+      extractedData: json.extractedData || {},
+      rawText: json.rawText || ''
+    };
+  } catch (error: any) {
+    console.error("Erro ao extrair dados do documento:", error);
+    if (error.message?.includes('API key') || error.message?.includes('401')) {
+      resetGeminiInstance();
     }
+    throw new Error("Não foi possível extrair os dados do documento.");
+  }
 };
 
 /**
@@ -1192,39 +1228,39 @@ export const extractAnamnesisFromDocument = async (
  * @returns Objeto com dados extraídos e texto bruto
  */
 export const extractAnamnesisFromGoogleDocs = async (
-    googleDocsUrl: string,
-    userId: string | number,
-    userRole: string
+  googleDocsUrl: string,
+  userId: string | number,
+  userRole: string
 ): Promise<{ extractedData: Partial<Anamnesis>; rawText: string }> => {
-    const genAI = await getGenAI(userId, userRole);
+  const genAI = await getGenAI(userId, userRole);
 
-    const docIdMatch = googleDocsUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-    if (!docIdMatch) {
-        throw new Error("URL do Google Docs inválida.");
-    }
-    const docId = docIdMatch[1];
-    const isSpreadsheet = googleDocsUrl.includes('/spreadsheets/');
-    const exportUrl = isSpreadsheet
-        ? `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv`
-        : `https://docs.google.com/document/d/${docId}/export?format=txt`;
+  const docIdMatch = googleDocsUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (!docIdMatch) {
+    throw new Error("URL do Google Docs inválida.");
+  }
+  const docId = docIdMatch[1];
+  const isSpreadsheet = googleDocsUrl.includes('/spreadsheets/');
+  const exportUrl = isSpreadsheet
+    ? `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv`
+    : `https://docs.google.com/document/d/${docId}/export?format=txt`;
 
-    let documentContent: string;
-    try {
-        const response = await fetch(exportUrl);
-        if (!response.ok) throw new Error("Erro ao acessar doc. Verifique se é público.");
-        documentContent = await response.text();
-    } catch (e) {
-        throw new Error("Não foi possível acessar o Google Docs.");
-    }
+  let documentContent: string;
+  try {
+    const response = await fetch(exportUrl);
+    if (!response.ok) throw new Error("Erro ao acessar doc. Verifique se é público.");
+    documentContent = await response.text();
+  } catch (e) {
+    throw new Error("Não foi possível acessar o Google Docs.");
+  }
 
-    if (!documentContent || documentContent.length < 10) throw new Error("Documento vazio.");
+  if (!documentContent || documentContent.length < 10) throw new Error("Documento vazio.");
 
-    const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
-        generationConfig: { responseMimeType: "application/json" }
-    });
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-1.5-flash',
+    generationConfig: { responseMimeType: "application/json" }
+  });
 
-    const prompt = `
+  const prompt = `
     ATUE COMO UM ESPECIALISTA EM EXTRAÇÃO DE DADOS.
     Texto do documento:
     """
@@ -1240,16 +1276,101 @@ export const extractAnamnesisFromGoogleDocs = async (
     Use a mesma estrutura de campos do documento normal.
   `;
 
-    try {
-        const result = await model.generateContent(prompt);
-        const json = JSON.parse(result.response.text());
-        return {
-            extractedData: json.extractedData || {},
-            rawText: json.rawText || documentContent
-        };
-    } catch (error: any) {
-        console.error("Erro no Gemini Docs:", error);
-        if (error.message?.includes('API key')) resetGeminiInstance();
-        throw new Error("Falha na extração.");
+  try {
+    const result = await model.generateContent(prompt);
+    const json = JSON.parse(result.response.text());
+    return {
+      extractedData: json.extractedData || {},
+      rawText: json.rawText || documentContent
+    };
+  } catch (error: any) {
+    console.error("Erro no Gemini Docs:", error);
+    if (error.message?.includes('API key')) resetGeminiInstance();
+    throw new Error("Falha na extração.");
+  }
+};
+
+// --- MEAL PLATE ANALYSIS ---
+/**
+ * Analisa uma foto do prato do aluno e retorna informações nutricionais detalhadas.
+ * @param photoFile - Arquivo de imagem do prato
+ * @param userId - ID do usuário logado
+ * @param userRole - Role do usuário
+ */
+export const analyzeMealPhoto = async (
+  photoFile: File,
+  userId: string | number,
+  userRole: string
+): Promise<MealAnalysisResult> => {
+  const genAI = await getGenAI(userId, userRole);
+  const model = genAI.getGenerativeModel({
+    model: SUPPORT_MODEL,
+    generationConfig: { responseMimeType: "application/json" }
+  });
+
+  const photoPart = await fileToGenerativePart(photoFile);
+
+  const prompt = `
+    ${getLanguageInstruction()}
+    Atue como um Nutricionista Esportivo de Elite com vasta experiência em análise visual de refeições.
+
+    Analise CUIDADOSAMENTE a foto do prato enviada pelo aluno.
+
+    INSTRUÇÕES:
+    1. IDENTIFIQUE TODOS os alimentos visíveis no prato com a maior precisão possível.
+    2. ESTIME as quantidades (em gramas ou porções) de cada alimento.
+    3. CALCULE as calorias de cada alimento e o total.
+    4. CALCULE os macronutrientes totais (proteína, carboidratos, gorduras, fibras) em gramas.
+    5. DÊ uma nota de 0 a 100 para o quão saudável é o prato (healthScore).
+    6. Forneça 2-3 dicas curtas e práticas para melhorar a refeição.
+    7. Inclua uma mensagem motivacional curta e encorajadora.
+    8. Para cada alimento, atribua uma cor vibrante que represente o grupo alimentar:
+       - Proteínas: "#EF4444" (vermelho)
+       - Carboidratos/Grãos: "#F59E0B" (âmbar)
+       - Vegetais verdes: "#10B981" (verde)
+       - Frutas: "#8B5CF6" (roxo)
+       - Laticínios: "#3B82F6" (azul)
+       - Gorduras/Óleos: "#F97316" (laranja)
+       - Outros: "#EC4899" (rosa)
+    9. O campo "plateDescription" deve ser uma descrição curta e amigável do prato (1-2 frases).
+
+    VALIDAÇÃO:
+    - Se a imagem NÃO contiver comida/alimento, retorne healthScore: 0, foods: [], totalCalories: 0, e plateDescription explicando que não foi possível identificar alimentos.
+    - JAMAIS invente alimentos que não estão visíveis na foto.
+
+    Responda EXCLUSIVAMENTE em JSON com esta estrutura exata:
+    {
+      "foods": [
+        { "name": "string", "quantity": "string (ex: 150g)", "calories": number, "color": "string (hex)" }
+      ],
+      "totalCalories": number,
+      "protein": number,
+      "carbs": number,
+      "fats": number,
+      "fiber": number,
+      "healthScore": number,
+      "plateDescription": "string",
+      "tips": ["string", "string"],
+      "motivation": "string"
     }
+  `;
+
+  try {
+    const result = await withTimeout(
+      model.generateContent([
+        { inlineData: photoPart.inlineData },
+        { text: prompt }
+      ]),
+      DEFAULT_AI_TIMEOUT
+    );
+
+    const text = result.response.text();
+    return JSON.parse(text) as MealAnalysisResult;
+  } catch (error: any) {
+    console.error("Erro na análise do prato:", error);
+    if (error.message?.includes("API key") || error.message?.includes("401") || error.message?.includes("403")) {
+      resetGeminiInstance();
+    }
+    throw new Error("Não consegui analisar o prato agora. Tente novamente!");
+  }
 };

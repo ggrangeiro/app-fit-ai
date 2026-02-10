@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppStep, ExerciseType, AnalysisResult, User, ExerciseRecord, ExerciseDTO, SPECIAL_EXERCISES, WorkoutPlan, DietPlan, WorkoutDayV2, WorkoutPlanV2 } from './types';
 import { App as CapApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
@@ -41,6 +42,7 @@ import { getFullImageUrl } from './utils/imageUtils';
 import { WorkoutSession, WorkoutDaySelector } from './components/WorkoutSession';
 import { getCurrentLocation } from './utils/geolocation';
 import { ClassSchedule } from './components/ClassSchedule';
+import { MealAnalysis } from './components/MealAnalysis';
 
 // --- ICON MAPPING SYSTEM ---
 const EXERCISE_ICONS: Record<string, React.ReactNode> = {
@@ -77,27 +79,12 @@ const EXERCISE_ICONS: Record<string, React.ReactNode> = {
   'DEFAULT': <Dumbbell />
 };
 
-const EXERCISE_TIPS: Record<string, string[]> = {
-  'SQUAT': ["Calcanhares no chão.", "Peito estufado.", "Joelhos seguem os pés."],
-  'PUSHUP': ["Corpo em linha reta.", "Cotovelos para trás.", "Peito quase no chão."],
-  'LUNGE': ["Tronco vertical.", "Joelhos em 90 graus.", "Equilíbrio centralizado."],
-  'BURPEE': ["Ritmo constante.", "Core ativado.", "Salto explosivo."],
-  'PLANK': ["Ombros sobre cotovelos.", "Glúteos contraídos.", "Pescoço neutro."],
-  'JUMPING_JACK': ["Coordenação rítmica.", "Ponta dos pés.", "Amplitude total."],
-  'MOUNTAIN_CLIMBER': ["Quadril baixo.", "Joelhos no peito.", "Braços firmes."],
-  'CRUNCH': ["Lombar no chão.", "Olhar para o teto.", "Solte o ar ao subir."],
-  'PULLUP': ["Ative as escápulas.", "Queixo acima da barra.", "Descida controlada."],
-  'BRIDGE': ["Calcanhares empurram.", "Contraia glúteos.", "Lombar estável."],
-  'BULGARIAN_SQUAT': ["Pé de trás apoiado.", "Tronco firme.", "Desça com controle."],
-  'DEADLIFT': ["Barra rente à perna.", "Coluna neutra.", "Força no quadril."],
-  'TRICEP_DIP': ["Cotovelos fechados.", "Ombros longe das orelhas.", "Profundidade 90°."],
-  'BICEP_CURL': ["Cotovelos colados.", "Sem balançar o tronco.", "Descida lenta."],
-  'CABLE_CROSSOVER': ["Abraço circular.", "Foco no peito.", "Controle a volta."],
-  'BENCH_PRESS': ["Pés firmes no chão.", "Escápulas retraídas.", "Cotovelos levemente fechados."],
-  'POSTURE_ANALYSIS': ["Posição relaxada.", "Corpo inteiro visível.", "Local bem iluminado."],
-  'BODY_COMPOSITION': ["Roupa justa/banho.", "Frente e Lado.", "Pose natural."],
-  'FREE_ANALYSIS_MODE': ["Certifique-se que o corpo todo aparece.", "Boa iluminação ajuda na detecção.", "Execute o movimento completo."],
-  'DEFAULT': ["Mantenha a postura correta.", "Respire de forma controlada.", "Concentre-se na execução."]
+// EXERCISE_TIPS are now loaded from translation files via i18n
+const getExerciseTips = (t: (key: string, options?: any) => any, exerciseKey: string): string[] => {
+  const key = `exercise_tips.${exerciseKey}`;
+  const tips = t(key, { returnObjects: true });
+  if (Array.isArray(tips)) return tips;
+  return t('exercise_tips.DEFAULT', { returnObjects: true }) as string[];
 };
 
 import { secureStorage } from './utils/secureStorage'; // Import secureStorage
@@ -105,6 +92,7 @@ import { secureStorage } from './utils/secureStorage'; // Import secureStorage
 // ... (imports)
 
 const App: React.FC = () => {
+  const { t } = useTranslation();
   // --- INICIALIZAÇÃO ROBUSTA DE ESTADO (CORREÇÃO F5) ---
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     // Lê via secureStorage na inicialização
@@ -193,6 +181,7 @@ const App: React.FC = () => {
   const [redoFeedback, setRedoFeedback] = useState('');
   const [redoCount, setRedoCount] = useState(0);
   const [showClassSchedule, setShowClassSchedule] = useState(false);
+  const [showMealAnalysis, setShowMealAnalysis] = useState(false);
 
   const handleRedoWorkout = async () => {
     // Validation
@@ -708,6 +697,10 @@ const App: React.FC = () => {
         setViewingDaysData(null);
         return;
       }
+      if (showMealAnalysis) {
+        setShowMealAnalysis(false);
+        return;
+      }
       if (showDietModal) {
         setShowDietModal(false);
         setViewingDietHtml(null);
@@ -794,6 +787,7 @@ const App: React.FC = () => {
     showPlansModal,
     showAnamnesisModal,
     showWorkoutModal,
+    showMealAnalysis,
     showDietModal,
     showCheckInModal,
     showChangePasswordModal,
@@ -850,7 +844,7 @@ const App: React.FC = () => {
     if (!selectedExercise) return "Prepare-se...";
     const alias = selectedExercise === SPECIAL_EXERCISES.FREE_MODE ? SPECIAL_EXERCISES.FREE_MODE : (selectedExerciseObj?.alias || 'DEFAULT');
     // Garante um fallback seguro se a chave não existir
-    const tips = EXERCISE_TIPS[alias] || EXERCISE_TIPS['DEFAULT'] || ["Aguarde a análise da IA..."];
+    const tips = getExerciseTips(t, alias);
     return tips[currentTipIndex % tips.length];
   };
 
@@ -1246,7 +1240,7 @@ const App: React.FC = () => {
           const exerciseObj = exercisesList.find(e => e.id === selectedExercise);
           const typeKey = exerciseObj ? exerciseObj.alias : 'FREE_ANALYSIS_MODE';
           // Fallback seguro também no intervalo
-          const tips = EXERCISE_TIPS[typeKey] || EXERCISE_TIPS['DEFAULT'] || ["Mantenha a postura correta."];
+          const tips = getExerciseTips(t, typeKey);
           return (prev + 1) % tips.length;
         });
       }, 3000);
@@ -1716,7 +1710,7 @@ const App: React.FC = () => {
       if (!isUnlimited && !isStarterQuota) {
         try {
           await apiService.consumeCredit(currentUser.id, 'TREINO');
-          showToast("1 Crédito Utilizado", 'info');
+          showToast(t('credits.1_used'), 'info');
         } catch (e) {
           console.error("Erro ao consumir crédito", e);
           // Non-blocking? User already got the content. 
@@ -1728,7 +1722,7 @@ const App: React.FC = () => {
       }
 
       await fetchUserWorkouts(currentUser.id);
-      showToast("Treino gerado com sucesso!", 'success');
+      showToast(t('workout.generated_success'), 'success');
 
       // Limpa anexos após sucesso
       if (workoutPhotoPreview) URL.revokeObjectURL(workoutPhotoPreview);
@@ -1744,7 +1738,7 @@ const App: React.FC = () => {
       setShowWorkoutModal(true);
 
     } catch (err: any) {
-      showToast("Erro ao gerar treino: " + err.message, 'error');
+      showToast(t('workout.generate_error') + err.message, 'error');
     } finally {
       setGeneratingWorkout(false);
     }
@@ -1800,7 +1794,7 @@ const App: React.FC = () => {
       if (!isUnlimited && !isStarterQuota) {
         try {
           await apiService.consumeCredit(currentUser.id, 'DIETA');
-          showToast("1 Crédito Utilizado", 'info');
+          showToast(t('credits.1_used'), 'info');
         } catch (e) {
           console.error("Erro ao consumir crédito", e);
         }
@@ -1810,7 +1804,7 @@ const App: React.FC = () => {
       }
 
       await fetchUserDiets(currentUser.id);
-      showToast("Dieta gerada com sucesso!", 'success');
+      showToast(t('diet.generated_success'), 'success');
 
       // Limpa anexos após sucesso
       if (dietPhotoPreview) URL.revokeObjectURL(dietPhotoPreview);
@@ -1824,7 +1818,7 @@ const App: React.FC = () => {
       setShowDietModal(true);
 
     } catch (err: any) {
-      showToast("Erro ao gerar dieta: " + err.message, 'error');
+      showToast(t('diet.generate_error') + err.message, 'error');
     } finally {
       setGeneratingDiet(false);
     }
@@ -1836,12 +1830,12 @@ const App: React.FC = () => {
     // Pega o ID do treino atual (assumindo que é o primeiro da lista salva, já que o modal mostra ele)
     const currentWorkoutId = savedWorkouts[0]?.id;
     if (!currentWorkoutId) {
-      showToast('Nenhum treino encontrado para check-in.', 'error');
+      showToast(t('checkin.no_workout'), 'error');
       return;
     }
 
     if (!checkInDate) {
-      showToast('Selecione uma data para o check-in.', 'error');
+      showToast(t('checkin.select_date'), 'error');
       return;
     }
 
@@ -1851,7 +1845,7 @@ const App: React.FC = () => {
       const location = await getCurrentLocation(5000);
 
       await apiService.createCheckIn(currentUser.id, currentWorkoutId, checkInDate, checkInComment, undefined, location);
-      showToast('Check-in realizado com sucesso! 💪', 'success');
+      showToast(t('checkin.success'), 'success');
 
       // Force refresh of tracking data
       setCheckInUpdateTrigger(prev => prev + 1);
@@ -1859,7 +1853,7 @@ const App: React.FC = () => {
       setShowCheckInModal(false);
       setCheckInComment('');
     } catch (error) {
-      showToast('Erro ao realizar check-in. Tente novamente.', 'error');
+      showToast(t('checkin.error'), 'error');
     } finally {
       setCheckInLoading(false);
     }
@@ -1869,9 +1863,9 @@ const App: React.FC = () => {
     setPdfLoading(true);
     try {
       await shareAsPdf(elementId, title);
-      showToast('PDF gerado com sucesso!', 'success');
+      showToast(t('pdf.generated_success'), 'success');
     } catch (error) {
-      showToast('Erro ao gerar PDF.', 'error');
+      showToast(t('pdf.generate_error'), 'error');
     } finally {
       setPdfLoading(false);
     }
@@ -1879,8 +1873,8 @@ const App: React.FC = () => {
 
   const confirmDeleteWorkout = () => {
     triggerConfirm(
-      "Excluir Treino Atual?",
-      "Você perderá sua ficha de treino atual permanentemente. Deseja continuar?",
+      t('workout.delete_title'),
+      t('workout.delete_warning'),
       async () => {
         if (!currentUser || savedWorkouts.length === 0) return;
         const workoutId = savedWorkouts[0].id;
@@ -1891,9 +1885,9 @@ const App: React.FC = () => {
           setShowWorkoutModal(false);
           setViewingWorkoutHtml(null);
           setViewingDaysData(null);
-          showToast("Treino removido com sucesso.", 'success');
+          showToast(t('workout.deleted_success'), 'success');
         } catch (e) {
-          showToast("Erro ao remover treino.", 'error');
+          showToast(t('workout.delete_error'), 'error');
         }
       },
       true
@@ -1902,8 +1896,8 @@ const App: React.FC = () => {
 
   const confirmDeleteDiet = () => {
     triggerConfirm(
-      "Excluir Dieta Atual?",
-      "Você perderá seu plano nutricional atual permanentemente. Deseja continuar?",
+      t('diet.delete_title'),
+      t('diet.delete_warning'),
       async () => {
         if (!currentUser || savedDiets.length === 0) return;
         const dietId = savedDiets[0].id;
@@ -1913,9 +1907,9 @@ const App: React.FC = () => {
           setSavedDiets([]);
           setShowDietModal(false);
           setViewingDietHtml(null);
-          showToast("Dieta removida com sucesso.", 'success');
+          showToast(t('diet.deleted_success'), 'success');
         } catch (e) {
-          showToast("Erro ao remover dieta.", 'error');
+          showToast(t('diet.delete_error'), 'error');
         }
       },
       true
@@ -1946,14 +1940,14 @@ const App: React.FC = () => {
 
       // Update Local State immediately
       setViewingDaysData(daysDataStr);
-      showToast("Treino atualizado para Modo Interativo!", 'success');
+      showToast(t('workout.converted_success'), 'success');
 
       // Refresh background
       fetchUserWorkouts(currentUser.id);
 
     } catch (error) {
       console.error("Upgrade failed", error);
-      showToast("Falha ao converter treino. Tente novamente.", 'error');
+      showToast(t('workout.convert_error'), 'error');
     } finally {
       setUpgradingWorkout(false);
     }
@@ -2054,7 +2048,7 @@ const App: React.FC = () => {
             }}
             className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" /> <span className="hidden sm:inline">Voltar</span>
+            <ArrowLeft className="w-5 h-5" /> <span className="hidden sm:inline">{t('common.back')}</span>
           </button>
           <div className="flex gap-3">
             {!showDaySelector && (savedWorkouts.length > 0) && (
@@ -2062,7 +2056,7 @@ const App: React.FC = () => {
                 onClick={() => setShowDaySelector(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-lg text-white font-bold shadow-lg shadow-purple-900/20 transition-all scale-100 hover:scale-105 active:scale-95"
               >
-                <Dumbbell className="w-5 h-5" /> <span>Iniciar Treino</span>
+                <Dumbbell className="w-5 h-5" /> <span>{t('workout.start_workout')}</span>
               </button>
             )}
             <button
@@ -2071,7 +2065,7 @@ const App: React.FC = () => {
               className="px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white disabled:opacity-50 flex items-center gap-2"
             >
               {pdfLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
-              <span className="hidden sm:inline">{pdfLoading ? 'Gerando...' : 'Compartilhar'}</span>
+              <span className="hidden sm:inline">{pdfLoading ? t('common.generating') : t('common.share')}</span>
             </button>
             <button
               onClick={() => setShowCheckInModal(true)}
@@ -2092,7 +2086,7 @@ const App: React.FC = () => {
             )}
             {currentUser?.accessLevel !== 'READONLY' && (
               <button onClick={confirmDeleteWorkout} className="flex items-center gap-2 p-2 px-3 bg-red-600 hover:bg-red-500 rounded-lg text-white">
-                <Trash2 className="w-5 h-5" /> <span className="hidden sm:inline font-bold">Excluir</span>
+                <Trash2 className="w-5 h-5" /> <span className="hidden sm:inline font-bold">{t('common.delete')}</span>
               </button>
             )}
           </div>
@@ -2111,9 +2105,9 @@ const App: React.FC = () => {
                   <div className="flex justify-center mb-3">
                     <Sparkles className="w-10 h-10 text-amber-400 animate-pulse" />
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-2">Ativar Modo Interativo</h3>
+                  <h3 className="text-xl font-bold text-white mb-2">{t('workout.activate_interactive')}</h3>
                   <p className="text-slate-400 mb-6 max-w-md mx-auto">
-                    Este treino foi criado em uma versão anterior. A Inteligência Artificial pode ler o conteúdo e criar a ficha interativa automaticamente para você.
+                    {t('workout.activate_interactive_desc')}
                   </p>
                   <button
                     onClick={handleUpgradeWorkout}
@@ -2121,7 +2115,7 @@ const App: React.FC = () => {
                     className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-6 py-3 rounded-xl transition-all shadow-lg flex items-center gap-2 mx-auto"
                   >
                     {upgradingWorkout ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
-                    {upgradingWorkout ? "Atualizando..." : "Converter Agora (Grátis)"}
+                    {upgradingWorkout ? t('workout.converting') : t('workout.convert_now')}
                   </button>
                 </div>
               );
@@ -2148,9 +2142,9 @@ const App: React.FC = () => {
               <X className="w-6 h-6" />
             </button>
             <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-              <RefreshCw className="w-6 h-6 text-amber-400" /> Refazer Treino com IA
+              <RefreshCw className="w-6 h-6 text-amber-400" /> {t('workout.redo_with_ai')}
             </h3>
-            <p className="text-sm text-slate-400 mb-4">O que deve ser mudado?</p>
+            <p className="text-sm text-slate-400 mb-4">{t('common.what_should_change')}</p>
             <textarea
               className={`w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white focus:border-amber-500 outline-none h-32 resize-none ${(generatingWorkout || generatingDiet) ? 'opacity-50 cursor-not-allowed' : ''}`}
               placeholder="Ex: Quero um treino mais intenso, troque agachamento por leg press..."
@@ -2164,7 +2158,7 @@ const App: React.FC = () => {
               className="w-full mt-4 bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition-all flex justify-center items-center gap-2"
             >
               {generatingWorkout ? <Loader2 className="animate-spin w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
-              Refazer Agora
+              {t('common.redo_now')}
             </button>
           </div>
         </div>
@@ -2225,13 +2219,13 @@ const App: React.FC = () => {
           <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-full mb-3">
             <CheckCircle className="w-8 h-8" />
           </div>
-          <h3 className="text-2xl font-bold text-white">Check-in de Treino</h3>
-          <p className="text-slate-400 text-center text-sm">Registre que você concluiu este treino hoje!</p>
+          <h3 className="text-2xl font-bold text-white">{t('checkin.title')}</h3>
+          <p className="text-slate-400 text-center text-sm">{t('checkin.subtitle')}</p>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Data do Treino</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('checkin.date_label')}</label>
             <input
               type="date"
               className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -2241,7 +2235,7 @@ const App: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Comentário (Opcional)</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('checkin.comment_label')}</label>
             <textarea
               rows={3}
               placeholder="Como foi o treino? (ex: 'Senti um pouco de cansaço na última série')"
@@ -2257,7 +2251,7 @@ const App: React.FC = () => {
             className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
           >
             {checkInLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ThumbsUp className="w-5 h-5" />}
-            {checkInLoading ? "Enviando..." : "Confirmar Check-in"}
+            {checkInLoading ? t('common.sending') : t('checkin.confirm_button')}
           </button>
         </div>
       </div>
@@ -2275,13 +2269,13 @@ const App: React.FC = () => {
           <div className="p-3 bg-blue-500/20 text-blue-400 rounded-full mb-3">
             <Lock className="w-8 h-8" />
           </div>
-          <h3 className="text-2xl font-bold text-white">Alterar Senha</h3>
-          <p className="text-slate-400 text-center text-sm">Atualize sua senha de acesso</p>
+          <h3 className="text-2xl font-bold text-white">{t('auth.change_password')}</h3>
+          <p className="text-slate-400 text-center text-sm">{t('auth.update_access_password')}</p>
         </div>
 
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Senha Atual</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('auth.current_password')}</label>
             <input
               type="password"
               placeholder="Digite sua senha atual"
@@ -2293,7 +2287,7 @@ const App: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Nova Senha</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('auth.new_password')}</label>
             <input
               type="password"
               placeholder="Mínimo 6 caracteres"
@@ -2306,7 +2300,7 @@ const App: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Confirmar Nova Senha</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('auth.confirm_new_password')}</label>
             <input
               type="password"
               placeholder="Repita a nova senha"
@@ -2324,7 +2318,7 @@ const App: React.FC = () => {
             className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
           >
             {changePasswordLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
-            {changePasswordLoading ? "Salvando..." : "Alterar Senha"}
+            {changePasswordLoading ? t('common.saving') : t('auth.change_password')}
           </button>
         </form>
       </div>
@@ -2339,7 +2333,7 @@ const App: React.FC = () => {
             onClick={() => { setShowDietModal(false); setViewingDietHtml(null); resetDietForm(); }}
             className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" /> <span className="hidden sm:inline">Voltar</span>
+            <ArrowLeft className="w-5 h-5" /> <span className="hidden sm:inline">{t('common.back')}</span>
           </button>
           <div className="flex gap-3">
             <button
@@ -2348,7 +2342,7 @@ const App: React.FC = () => {
               className="px-3 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white disabled:opacity-50 flex items-center gap-2"
             >
               {pdfLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
-              <span className="hidden sm:inline">{pdfLoading ? 'Gerando...' : 'Compartilhar'}</span>
+              <span className="hidden sm:inline">{pdfLoading ? t('common.generating') : t('common.share')}</span>
             </button>
             {currentUser?.accessLevel !== 'READONLY' && (
               <button
@@ -2362,7 +2356,7 @@ const App: React.FC = () => {
             )}
             {currentUser?.accessLevel !== 'READONLY' && (
               <button onClick={confirmDeleteDiet} className="flex items-center gap-2 p-2 px-3 bg-red-600 hover:bg-red-500 rounded-lg text-white">
-                <Trash2 className="w-5 h-5" /> <span className="hidden sm:inline font-bold">Excluir</span>
+                <Trash2 className="w-5 h-5" /> <span className="hidden sm:inline font-bold">{t('common.delete')}</span>
               </button>
             )}
           </div>
@@ -2689,7 +2683,7 @@ const App: React.FC = () => {
                   <p className="text-sm font-bold text-white group-hover:text-blue-200 transition-colors">{currentUser?.name}</p>
                   <div className="flex items-center justify-end gap-1">
                     <p className="text-xs text-slate-400 capitalize">
-                      {currentUser?.role === 'admin' ? 'Administrador' : (currentUser?.role === 'personal' ? 'Personal Trainer' : 'Aluno')}
+                      {currentUser?.role === 'admin' ? t('profile.administrator') : (currentUser?.role === 'personal' ? t('profile.personal_trainer') : t('profile.student'))}
                     </p>
                     {/* Mobile Badge */}
                     {currentUser?.plan && (
@@ -2748,8 +2742,8 @@ const App: React.FC = () => {
                           <Camera className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">Alterar Foto</p>
-                          <p className="text-[10px] text-slate-400">Personalize seu perfil</p>
+                          <p className="text-sm font-bold text-white">{t('profile.change_photo')}</p>
+                          <p className="text-[10px] text-slate-400">{t('profile.customize_profile')}</p>
                         </div>
                       </button>
 
@@ -2761,8 +2755,8 @@ const App: React.FC = () => {
                           <Sparkles className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">Upgrade de Plano</p>
-                          <p className="text-[10px] text-slate-400">Desbloqueie recursos</p>
+                          <p className="text-sm font-bold text-white">{t('plans.upgrade_plan')}</p>
+                          <p className="text-[10px] text-slate-400">{t('plans.unlock_features')}</p>
                         </div>
                       </button>
 
@@ -2774,8 +2768,8 @@ const App: React.FC = () => {
                           <Coins className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">Meus Créditos</p>
-                          <p className="text-[10px] text-slate-400">Recarga e Histórico</p>
+                          <p className="text-sm font-bold text-white">{t('credits.my_credits')}</p>
+                          <p className="text-[10px] text-slate-400">{t('credits.recharge_history')}</p>
                         </div>
                       </button>
                       <button
@@ -2786,8 +2780,8 @@ const App: React.FC = () => {
                           <ClipboardList className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">Meu Perfil de Treino</p>
-                          <p className="text-[10px] text-slate-400">Ficha de Avaliação (IA)</p>
+                          <p className="text-sm font-bold text-white">{t('menu.training_profile')}</p>
+                          <p className="text-[10px] text-slate-400">{t('menu.assessment_ai')}</p>
                         </div>
                       </button>
 
@@ -2799,8 +2793,8 @@ const App: React.FC = () => {
                           <ImageIcon className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">Minha Evolução</p>
-                          <p className="text-[10px] text-slate-400">Fotos comparativas</p>
+                          <p className="text-sm font-bold text-white">{t('menu.my_evolution')}</p>
+                          <p className="text-[10px] text-slate-400">{t('menu.compare_photos')}</p>
                         </div>
                       </button>
 
@@ -2812,8 +2806,8 @@ const App: React.FC = () => {
                           <Lock className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">Alterar Senha</p>
-                          <p className="text-[10px] text-slate-400">Atualizar credenciais</p>
+                          <p className="text-sm font-bold text-white">{t('auth.change_password')}</p>
+                          <p className="text-[10px] text-slate-400">{t('auth.update_credentials')}</p>
                         </div>
                       </button>
 
@@ -2830,7 +2824,7 @@ const App: React.FC = () => {
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-emerald-500/10 text-emerald-400 hover:text-emerald-300 transition-colors"
                       >
                         <MessageCircle className="w-4 h-4" />
-                        <span className="text-sm font-medium">Falar no WhatsApp</span>
+                        <span className="text-sm font-medium">{t('menu.whatsapp_contact')}</span>
                       </a>
 
                       <button
@@ -2842,7 +2836,7 @@ const App: React.FC = () => {
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-blue-500/10 hover:text-blue-400 text-slate-300 transition-colors"
                       >
                         <HelpCircle className="w-4 h-4" />
-                        <span className="text-sm font-medium">Ver Tutorial</span>
+                        <span className="text-sm font-medium">{t('menu.view_tutorial')}</span>
                       </button>
 
                       <button
@@ -2850,7 +2844,7 @@ const App: React.FC = () => {
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-500/10 hover:text-red-400 text-slate-300 transition-colors"
                       >
                         <LogOut className="w-4 h-4" />
-                        <span className="text-sm font-medium">Sair da Conta</span>
+                        <span className="text-sm font-medium">{t('auth.logout')}</span>
                       </button>
 
                       <div className="h-px bg-slate-700/50 my-1"></div>
@@ -2860,7 +2854,7 @@ const App: React.FC = () => {
                         className="w-full flex items-center justify-center gap-2 px-3 py-2 mt-2 rounded-xl text-slate-600 hover:text-red-400 hover:bg-slate-700/30 transition-all group/delete"
                       >
                         <Trash2 className="w-3 h-3 group-hover/delete:scale-110 transition-transform" />
-                        <span className="text-[10px] font-medium uppercase tracking-wider">Excluir Conta</span>
+                        <span className="text-[10px] font-medium uppercase tracking-wider">{t('account.delete_account')}</span>
                       </button>
                     </div>
                   </div>
@@ -2948,9 +2942,9 @@ const App: React.FC = () => {
 
             <div className="text-center mb-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-semibold uppercase mb-4 border border-blue-500/20">
-                <Sparkles className="w-3 h-3" /> Sua Área de Treino
+                <Sparkles className="w-3 h-3" /> {t('home.your_area')}
               </div>
-              <h2 className="text-3xl md:text-5xl font-bold text-white">Olá! <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">O que vamos fazer hoje?</span></h2>
+              <h2 className="text-3xl md:text-5xl font-bold text-white">{t('home.greeting')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">{t('home.what_today')}</span></h2>
             </div>
 
             {/* Weekly Check-in Tracker */}
@@ -2972,7 +2966,7 @@ const App: React.FC = () => {
                 className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-amber-500/30 hover:bg-amber-600/10 hover:border-amber-500 h-full min-h-[160px] group"
               >
                 <div className="p-4 bg-amber-500 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Trophy className="w-8 h-8" /></div>
-                <div className="text-center"><h3 className="text-amber-500 font-bold text-xl">Minhas Conquistas</h3><p className="text-slate-400 text-xs mt-1">Ver medalhas e metas</p></div>
+                <div className="text-center"><h3 className="text-amber-500 font-bold text-xl">{t('home.my_achievements')}</h3><p className="text-slate-400 text-xs mt-1">{t('home.badges_goals')}</p></div>
               </button>
 
               {/* AULAS EM GRUPO - NOVO */}
@@ -2981,7 +2975,7 @@ const App: React.FC = () => {
                 className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
               >
                 <div className="p-4 bg-emerald-500 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Calendar className="w-8 h-8" /></div>
-                <div className="text-center"><h3 className="text-emerald-500 font-bold text-xl">Aulas em Grupo</h3><p className="text-slate-400 text-xs mt-1">Ver agenda e reservar</p></div>
+                <div className="text-center"><h3 className="text-emerald-500 font-bold text-xl">{t('home.group_classes')}</h3><p className="text-slate-400 text-xs mt-1">{t('home.view_schedule')}</p></div>
               </button>
 
               {/* OUTRAS OPÇÕES DO GRID SERÃO INSERIDAS AQUI - REPARANDO O ERRO DE SINTAXE */}
@@ -2989,7 +2983,7 @@ const App: React.FC = () => {
               {loadingWorkouts ? (
                 <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-dashed border-2 border-slate-700/50 h-full min-h-[160px] animate-pulse">
                   <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
-                  <span className="text-slate-500 text-xs">Buscando treinos...</span>
+                  <span className="text-slate-500 text-xs">{t('workout.loading_workouts')}</span>
                 </div>
               ) : (
                 savedWorkouts.length > 0 ? (
@@ -2998,13 +2992,13 @@ const App: React.FC = () => {
                     className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
                   >
                     <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Calendar className="w-8 h-8" /></div>
-                    <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Ver Meu Treino</h3><p className="text-slate-400 text-xs mt-1">Ficha ativa disponível</p></div>
+                    <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">{t('workout.view_my_workout')}</h3><p className="text-slate-400 text-xs mt-1">{t('workout.active_plan')}</p></div>
                   </button>
                 ) : (
                   currentUser?.accessLevel === 'READONLY' ? (
                     <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-2 border-slate-700/30 h-full min-h-[160px] opacity-50">
                       <div className="p-4 bg-slate-800 rounded-full text-slate-500"><Lock className="w-8 h-8" /></div>
-                      <div className="text-center"><h3 className="text-slate-500 font-bold text-xl">Peça seu Treino</h3><p className="text-slate-500 text-xs mt-1">Aguarde seu professor</p></div>
+                      <div className="text-center"><h3 className="text-slate-500 font-bold text-xl">{t('workout.ask_your_trainer')}</h3><p className="text-slate-500 text-xs mt-1">{t('workout.wait_trainer')}</p></div>
                     </div>
                   ) : (
                     <button
@@ -3041,7 +3035,7 @@ const App: React.FC = () => {
                       className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-blue-500/30 hover:bg-blue-600/10 hover:border-blue-500 h-full min-h-[160px] group"
                     >
                       <div className="p-4 bg-blue-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Dumbbell className="w-8 h-8" /></div>
-                      <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">Gerar Treino IA</h3><p className="text-slate-400 text-xs mt-1">Crie sua ficha personalizada</p></div>
+                      <div className="text-center"><h3 className="text-blue-400 font-bold text-xl">{t('workout.generate_ai')}</h3><p className="text-slate-400 text-xs mt-1">{t('workout.create_plan')}</p></div>
                     </button>
                   )
                 )
@@ -3056,14 +3050,14 @@ const App: React.FC = () => {
                   <AlertTriangle className="w-8 h-8" />
                 </div>
                 <div className="flex-grow text-center md:text-left">
-                  <h3 className="text-xl font-bold text-red-400">Restrição Médica Detectada</h3>
-                  <p className="text-slate-300 text-sm">Identificamos dor no peito em sua avaliação. <strong>Não inicie exercícios sem liberação médica.</strong></p>
+                  <h3 className="text-xl font-bold text-red-400">{t('home.medical_alert')}</h3>
+                  <p className="text-slate-300 text-sm" dangerouslySetInnerHTML={{ __html: t('home.medical_alert_desc') }} />
                 </div>
                 <button
                   onClick={() => setShowAnamnesisModal(true)}
                   className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-500/20 whitespace-nowrap"
                 >
-                  Revisar Avaliação
+                  {t('home.review_assessment')}
                 </button>
               </div>
             )}
@@ -3071,11 +3065,20 @@ const App: React.FC = () => {
             {/* Grid de Dieta e outros */}
             <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
 
+              {/* CARD DE ANÁLISE DE PRATO */}
+              <button
+                onClick={() => setShowMealAnalysis(true)}
+                className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-orange-500/30 hover:bg-orange-600/10 hover:border-orange-500 h-full min-h-[160px] group"
+              >
+                <div className="p-4 bg-orange-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Camera className="w-8 h-8" /></div>
+                <div className="text-center"><h3 className="text-orange-400 font-bold text-xl">Analisar Prato</h3><p className="text-slate-400 text-xs mt-1">Descubra calorias e macros</p></div>
+              </button>
+
               {/* CARD DE DIETA DINÂMICO */}
               {loadingDiets ? (
                 <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-dashed border-2 border-slate-700/50 h-full min-h-[160px] animate-pulse">
                   <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
-                  <span className="text-slate-500 text-xs">Buscando dietas...</span>
+                  <span className="text-slate-500 text-xs">{t('diet.loading_diets')}</span>
                 </div>
               ) : (
                 savedDiets.length > 0 ? (
@@ -3084,13 +3087,13 @@ const App: React.FC = () => {
                     className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
                   >
                     <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Utensils className="w-8 h-8" /></div>
-                    <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">Ver Minha Dieta</h3><p className="text-slate-400 text-xs mt-1">Plano nutricional ativo</p></div>
+                    <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">{t('diet.view_my_diet')}</h3><p className="text-slate-400 text-xs mt-1">{t('diet.active_plan')}</p></div>
                   </button>
                 ) : (
                   currentUser?.accessLevel === 'READONLY' ? (
                     <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 border-2 border-slate-700 bg-slate-800/50 h-full min-h-[160px] cursor-not-allowed opacity-70">
                       <div className="p-4 bg-slate-700 rounded-full text-slate-400 shadow-lg"><Lock className="w-8 h-8" /></div>
-                      <div className="text-center"><h3 className="text-slate-400 font-bold text-xl">Gerar Dieta</h3><p className="text-slate-500 text-xs mt-1">Consulte seu Professor</p></div>
+                      <div className="text-center"><h3 className="text-slate-400 font-bold text-xl">{t('diet.generate_ai')}</h3><p className="text-slate-500 text-xs mt-1">{t('diet.consult_trainer')}</p></div>
                     </div>
                   ) : (
                     <button
@@ -3098,7 +3101,7 @@ const App: React.FC = () => {
                       className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center gap-4 transition-all border-2 border-emerald-500/30 hover:bg-emerald-600/10 hover:border-emerald-500 h-full min-h-[160px] group"
                     >
                       <div className="p-4 bg-emerald-600 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform"><Utensils className="w-8 h-8" /></div>
-                      <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">Gerar Dieta IA</h3><p className="text-slate-400 text-xs mt-1">Crie seu cardápio ideal</p></div>
+                      <div className="text-center"><h3 className="text-emerald-400 font-bold text-xl">{t('diet.generate_ai')}</h3><p className="text-slate-400 text-xs mt-1">{t('diet.create_menu')}</p></div>
                     </button>
                   )
                 )
@@ -3114,8 +3117,8 @@ const App: React.FC = () => {
                   <HelpCircle className="w-8 h-8" />
                 </div>
                 <div className="text-center">
-                  <h3 className="text-white font-bold text-xl">Análise Livre</h3>
-                  <p className="text-slate-400 text-xs mt-1">Exercício não listado? Envie o vídeo aqui.</p>
+                  <h3 className="text-white font-bold text-xl">{t('analysis.free_analysis')}</h3>
+                  <p className="text-slate-400 text-xs mt-1">{t('analysis.free_analysis_desc')}</p>
                 </div>
               </button>
             </div>
@@ -3129,7 +3132,7 @@ const App: React.FC = () => {
                   onClick={() => handleExerciseToggle(postureExercise.id)}
                 >
                   <div className={`p-3 rounded-full text-white shadow-lg transition-transform ${hasPostureAccess ? 'bg-emerald-600 group-hover:scale-110' : 'bg-slate-700'}`}><ScanLine className="w-5 h-5" /></div>
-                  <div className="text-left"><h3 className="text-white font-bold text-lg">{postureExercise.name}</h3><p className="text-slate-400 text-xs">Biofeedback Postural</p></div>
+                  <div className="text-left"><h3 className="text-white font-bold text-lg">{postureExercise.name}</h3><p className="text-slate-400 text-xs">{t('analysis.biofeedback')}</p></div>
                 </button>
               )}
 
@@ -3141,7 +3144,7 @@ const App: React.FC = () => {
                   onClick={() => handleExerciseToggle(bodyCompExercise.id)}
                 >
                   <div className={`p-3 rounded-full text-white shadow-lg transition-transform ${hasBodyCompAccess ? 'bg-violet-600 group-hover:scale-110' : 'bg-slate-700'}`}><Scale className="w-5 h-5" /></div>
-                  <div className="text-left"><h3 className="text-white font-bold text-lg">{bodyCompExercise.name}</h3><p className="text-slate-400 text-xs">Biotipo & % Gordura</p></div>
+                  <div className="text-left"><h3 className="text-white font-bold text-lg">{bodyCompExercise.name}</h3><p className="text-slate-400 text-xs">{t('analysis.biotype_fat')}</p></div>
                 </button>
               )}
 
@@ -3153,7 +3156,7 @@ const App: React.FC = () => {
                 onClick={() => canAccessEvolution && setShowEvolutionPhotosModal(true)}
               >
                 <div className={`p-3 rounded-full text-white shadow-lg transition-transform ${canAccessEvolution ? 'bg-blue-600 group-hover:scale-110' : 'bg-slate-700'}`}><ImageIcon className="w-5 h-5" /></div>
-                <div className="text-left"><h3 className="text-white font-bold text-lg">Fotos Evolução</h3><p className="text-slate-400 text-xs">{canAccessEvolution ? 'Comparativo Visual' : 'Recurso Bloqueado'}</p></div>
+                <div className="text-left"><h3 className="text-white font-bold text-lg">{t('home.evolution_photos')}</h3><p className="text-slate-400 text-xs">{canAccessEvolution ? t('home.visual_compare') : t('home.locked_feature')}</p></div>
               </button>
             </div>
 
@@ -3465,6 +3468,17 @@ const App: React.FC = () => {
           </div>
         )
       }
+
+      {/* --- MEAL ANALYSIS MODAL --- */}
+      {currentUser && (
+        <MealAnalysis
+          isOpen={showMealAnalysis}
+          onClose={() => setShowMealAnalysis(false)}
+          userId={currentUser.id}
+          userRole={currentUser.role}
+          showToast={showToast}
+        />
+      )}
 
       < SubscriptionModal
         isOpen={showPlansModal}
