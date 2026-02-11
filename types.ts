@@ -553,4 +553,13 @@ export interface MealAnalysisResult {
   plateDescription: string; // Brief description of what's on the plate
   tips: string[];      // Nutritional tips from AI
   motivation: string;  // Motivational message
+  dietAdherence?: {
+    dailyCaloriesTarget: number;
+    dailyProteinTarget: number;
+    dailyCarbsTarget: number;
+    dailyFatsTarget: number;
+    mealCaloriesPercentage: number;  // % das calorias diárias que esse prato representa
+    verdict: string;                 // ex: "Esse prato está alinhado com sua dieta!"
+    suggestions: string[];           // sugestões para alinhar melhor com a dieta
+  };
 }

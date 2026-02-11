@@ -1,11 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MealAnalysisResult } from '../types';
+import { MealAnalysisResult, DietPlan, DietPlanV2 } from '../types';
 import { analyzeMealPhoto } from '../services/geminiService';
 import {
     X, Camera, Loader2, Sparkles, Flame, ArrowLeft,
     Beef, Wheat, Droplets, Leaf, RefreshCw, Upload,
-    TrendingUp, Heart, Lightbulb, ChevronRight
+    TrendingUp, Heart, Lightbulb, ChevronRight, Target,
+    CheckCircle2, AlertTriangle
 } from 'lucide-react';
 
 interface MealAnalysisProps {
@@ -14,6 +15,7 @@ interface MealAnalysisProps {
     userId: string;
     userRole: string;
     showToast: (message: string, type: 'info' | 'success' | 'error') => void;
+    dietPlan?: DietPlan | null;
 }
 
 const FOOD_EMOJIS = ['🥗', '🍎', '🥩', '🍚', '🥑', '🥕', '🍗', '🥦', '🍳', '🧀'];
@@ -28,7 +30,7 @@ const ANALYZING_MESSAGES = [
 ];
 
 export const MealAnalysis: React.FC<MealAnalysisProps> = ({
-    isOpen, onClose, userId, userRole, showToast
+    isOpen, onClose, userId, userRole, showToast, dietPlan
 }) => {
     const { t } = useTranslation();
     const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -38,6 +40,27 @@ export const MealAnalysis: React.FC<MealAnalysisProps> = ({
     const [analyzingMsgIndex, setAnalyzingMsgIndex] = useState(0);
     const [scoreAnimated, setScoreAnimated] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Extrair info da dieta ativa (V2 JSON ou fallback)
+    const dietInfo = useMemo(() => {
+        if (!dietPlan) return null;
+        try {
+            if (dietPlan.daysData) {
+                const v2: DietPlanV2 = JSON.parse(dietPlan.daysData);
+                if (v2.summary) {
+                    return {
+                        totalCalories: v2.summary.totalCalories || 0,
+                        protein: v2.summary.protein || 0,
+                        carbs: v2.summary.carbohydrates || 0,
+                        fats: v2.summary.fats || 0
+                    };
+                }
+            }
+        } catch (e) {
+            console.warn('Não foi possível parsear daysData da dieta:', e);
+        }
+        return null;
+    }, [dietPlan]);
 
     // Cycle through analyzing messages
     useEffect(() => {
@@ -85,7 +108,8 @@ export const MealAnalysis: React.FC<MealAnalysisProps> = ({
         setAnalyzing(true);
         setAnalyzingMsgIndex(0);
         try {
-            const analysisResult = await analyzeMealPhoto(photoFile, userId, userRole);
+            const dietHtmlFallback = (!dietInfo && dietPlan?.content) ? dietPlan.content : null;
+            const analysisResult = await analyzeMealPhoto(photoFile, userId, userRole, dietInfo || null, dietHtmlFallback);
             setResult(analysisResult);
         } catch (error: any) {
             showToast(error.message || 'Erro ao analisar o prato.', 'error');
@@ -459,6 +483,79 @@ export const MealAnalysis: React.FC<MealAnalysisProps> = ({
                                             <p className="text-slate-300 text-sm leading-relaxed">{tip}</p>
                                         </div>
                                     ))}
+                                </div>
+                            )}
+
+                            {/* Diet Adherence Section */}
+                            {result.dietAdherence && (
+                                <div className="glass-panel rounded-2xl p-5 border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-indigo-500/5 space-y-4">
+                                    <h4 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+                                        <Target className="w-4 h-4 text-purple-400" /> Aderência à Dieta
+                                    </h4>
+
+                                    {/* Calorie bar */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-slate-300">Calorias deste prato</span>
+                                            <span className="text-white font-bold">
+                                                {result.totalCalories} / {result.dietAdherence.dailyCaloriesTarget} kcal
+                                                <span className="text-purple-400 ml-1 text-xs">({result.dietAdherence.mealCaloriesPercentage}%)</span>
+                                            </span>
+                                        </div>
+                                        <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full rounded-full transition-all duration-1000 ease-out"
+                                                style={{
+                                                    width: `${Math.min(result.dietAdherence.mealCaloriesPercentage, 100)}%`,
+                                                    background: result.dietAdherence.mealCaloriesPercentage > 50
+                                                        ? 'linear-gradient(90deg, #F59E0B, #EF4444)'
+                                                        : 'linear-gradient(90deg, #8B5CF6, #6366F1)'
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Macro comparison mini-grid */}
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {[
+                                            { label: 'Proteína', meal: result.protein, target: result.dietAdherence.dailyProteinTarget, color: 'text-red-400' },
+                                            { label: 'Carbos', meal: result.carbs, target: result.dietAdherence.dailyCarbsTarget, color: 'text-amber-400' },
+                                            { label: 'Gorduras', meal: result.fats, target: result.dietAdherence.dailyFatsTarget, color: 'text-orange-400' },
+                                        ].map((m, i) => (
+                                            <div key={i} className="flex flex-col items-center p-2 rounded-xl bg-slate-800/60 border border-slate-700/50">
+                                                <span className={`text-xs font-bold ${m.color}`}>{m.label}</span>
+                                                <span className="text-white font-bold text-sm">{m.meal}g</span>
+                                                <span className="text-slate-500 text-[10px]">de {m.target}g/dia</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* AI Verdict */}
+                                    <div className={`p-3 rounded-xl flex items-start gap-3 ${result.dietAdherence.mealCaloriesPercentage <= 40
+                                        ? 'bg-emerald-500/10 border border-emerald-500/20'
+                                        : result.dietAdherence.mealCaloriesPercentage <= 60
+                                            ? 'bg-amber-500/10 border border-amber-500/20'
+                                            : 'bg-red-500/10 border border-red-500/20'
+                                        }`}>
+                                        {result.dietAdherence.mealCaloriesPercentage <= 40 ? (
+                                            <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+                                        ) : (
+                                            <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                                        )}
+                                        <p className="text-slate-300 text-sm leading-relaxed">{result.dietAdherence.verdict}</p>
+                                    </div>
+
+                                    {/* Suggestions */}
+                                    {result.dietAdherence.suggestions && result.dietAdherence.suggestions.length > 0 && (
+                                        <div className="space-y-1.5">
+                                            {result.dietAdherence.suggestions.map((sug, i) => (
+                                                <div key={i} className="flex items-start gap-2 text-sm">
+                                                    <ChevronRight className="w-3.5 h-3.5 text-purple-400 mt-0.5 flex-shrink-0" />
+                                                    <span className="text-slate-400">{sug}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
